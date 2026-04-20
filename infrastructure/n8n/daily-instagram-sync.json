@@ -1,0 +1,30 @@
+{
+  "name": "daily-instagram-sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }] }
+      },
+      "name": "CRON 06h00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_WEBHOOK_BASE_URL }}/api/meta/sync",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "POST /api/meta/sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "CRON 06h00 UTC": { "main": [[{ "node": "POST /api/meta/sync", "type": "main", "index": 0 }]] }
+  }
+}
