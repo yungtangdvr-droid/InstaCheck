@@ -1,180 +1,18 @@
-export type { Database } from './supabase'
+// ============================================================
+// Creator Hub — Types partagés
+// ============================================================
 
-// ─── Raw ingestion ────────────────────────────────────────────────────────────
+// --- Utilitaires ---
 
-export type TRawInstagramAccountDaily = {
-  account_id: string
-  date: string
-  followers_count: number
-  reach: number
-  impressions: number
-  synced_at: string
-}
+export type ActionResult<T> = { data: T; error: null } | { data: null; error: string }
 
-export type TRawInstagramMedia = {
-  media_id: string
-  account_id: string
-  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
-  caption: string | null
-  permalink: string
-  timestamp: string
-  raw_json: Record<string, unknown>
-}
+// --- Enums / Constantes ---
 
-export type TRawInstagramMediaInsights = {
-  media_id: string
-  metric_name: string
-  value: number
-  period: string
-  synced_at: string
-}
+export type MediaType = 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | 'REEL' | 'STORY'
 
-export type TRawPapermarkEvent = {
-  event_id: string
-  asset_id: string
-  event_type: 'link.viewed' | 'link.completed'
-  viewer_id: string
-  duration_ms: number | null
-  occurred_at: string
-}
+export type BrandStatus = 'cold' | 'warm' | 'intro' | 'active'
 
-export type TRawUmamiEvent = {
-  event_id: string
-  session_id: string
-  url: string
-  event_name: string
-  referrer: string | null
-  occurred_at: string
-}
-
-export type TRawWatchlistEvent = {
-  id: string
-  url: string
-  change_summary: string
-  detected_at: string
-}
-
-// ─── Core business ────────────────────────────────────────────────────────────
-
-export interface Account {
-  id: string
-  instagram_id: string
-  username: string
-  avatar_url: string | null
-  created_at: string
-}
-
-export interface Post {
-  id: string
-  account_id: string
-  media_id: string
-  media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
-  caption: string | null
-  permalink: string
-  posted_at: string
-}
-
-export interface PostMetricsDaily {
-  id: string
-  post_id: string
-  date: string
-  reach: number
-  impressions: number
-  saves: number
-  shares: number
-  likes: number
-  comments: number
-  profile_visits: number
-  follower_delta: number
-}
-
-export interface PostTag {
-  id: string
-  post_id: string
-  tag: string
-  created_at: string
-}
-
-export interface ContentTheme {
-  id: string
-  name: string
-  description: string | null
-  tags: string[]
-}
-
-export type TContentRecommendationType = 'replicate' | 'adapt' | 'drop'
-
-export interface ContentRecommendation {
-  id: string
-  post_id: string
-  type: TContentRecommendationType
-  reason: string
-  created_at: string
-}
-
-// ─── CRM ─────────────────────────────────────────────────────────────────────
-
-export type TBrandStatus = 'cold' | 'warm' | 'intro' | 'active'
-
-export interface Brand {
-  id: string
-  name: string
-  website: string | null
-  country: string | null
-  category: string | null
-  premium_level: string | null
-  aesthetic_fit_score: number | null
-  business_fit_score: number | null
-  status: TBrandStatus
-  notes: string | null
-  created_at: string
-}
-
-export interface Agency {
-  id: string
-  name: string
-  website: string | null
-  country: string | null
-  notes: string | null
-  created_at: string
-}
-
-export type TCompanyType = 'brand' | 'agency'
-
-export interface Contact {
-  id: string
-  full_name: string
-  email: string | null
-  title: string | null
-  company_id: string | null
-  company_type: TCompanyType | null
-  linkedin_url: string | null
-  instagram_handle: string | null
-  warmness: number
-  last_contact_at: string | null
-  next_follow_up_at: string | null
-  notes: string | null
-}
-
-export interface BrandContact {
-  brand_id: string
-  contact_id: string
-}
-
-export type TTouchpointType = 'email' | 'dm' | 'call' | 'meeting' | 'other'
-
-export interface Touchpoint {
-  id: string
-  contact_id: string
-  brand_id: string | null
-  type: TTouchpointType
-  note: string | null
-  occurred_at: string
-}
-
-// ─── Deals ────────────────────────────────────────────────────────────────────
-
-export type TDealStage =
+export type DealStage =
   | 'target_identified'
   | 'outreach_drafted'
   | 'outreach_sent'
@@ -187,136 +25,185 @@ export type TDealStage =
   | 'lost'
   | 'dormant'
 
-export interface Opportunity {
-  id: string
-  name: string
-  brand_id: string | null
-  contact_id: string | null
-  collab_type: string | null
-  estimated_value: number | null
-  currency: string
-  stage: TDealStage
-  probability: number
-  expected_close_at: string | null
-  last_activity_at: string | null
-  next_action: string | null
-  deck_id: string | null
-}
+export type AssetType = 'creator_deck' | 'case_study' | 'concept' | 'proposal' | 'media_kit' | 'pitch'
 
-export interface OpportunityStageHistory {
-  id: string
-  opportunity_id: string
-  stage: TDealStage
-  changed_at: string
-}
+export type TaskStatus = 'todo' | 'done' | 'snoozed'
 
-// ─── Assets ───────────────────────────────────────────────────────────────────
+export type TouchpointType = 'email' | 'dm' | 'call' | 'meeting' | 'other'
 
-export type TAssetType = 'creator_deck' | 'case_study' | 'concept' | 'proposal' | 'media_kit' | 'pitch'
-export type TAssetEventType = 'opened' | 'completed' | 'clicked'
+export type CompanyType = 'brand' | 'agency'
 
-export interface Asset {
-  id: string
-  name: string
-  type: TAssetType
-  papermark_link_id: string | null
-  papermark_link_url: string | null
-  created_at: string
-}
+export type ContentRecommendationType = 'replicate' | 'adapt' | 'drop'
 
-export interface AssetEvent {
-  id: string
-  asset_id: string
-  event_type: TAssetEventType
-  viewer_fingerprint: string | null
-  duration_ms: number | null
-  occurred_at: string
-}
+export type AutomationStatus = 'success' | 'failed' | 'skipped'
 
-// ─── Tasks ────────────────────────────────────────────────────────────────────
+// --- Scoring ---
 
-export type TTaskStatus = 'todo' | 'done' | 'snoozed'
-
-export interface Task {
-  id: string
-  label: string
-  status: TTaskStatus
-  due_at: string | null
-  linked_brand_id: string | null
-  linked_opportunity_id: string | null
-  linked_contact_id: string | null
-  created_at: string
-}
-
-// ─── Automations ──────────────────────────────────────────────────────────────
-
-export type TAutomationStatus = 'success' | 'failed' | 'skipped'
-
-export interface AutomationRun {
-  id: string
-  automation_name: string
-  status: TAutomationStatus
-  result_summary: string | null
-  ran_at: string
-}
-
-export interface WeeklySummary {
-  id: string
-  week_start: string
-  reach_delta: number
-  saves_delta: number
-  new_leads: number
-  deals_moved: number
-  deck_opens: number
-  created_at: string
-}
-
-// ─── Watchlist ────────────────────────────────────────────────────────────────
-
-export interface BrandWatchlist {
-  id: string
-  brand_id: string
-  url: string
-  label: string | null
-  last_change_at: string | null
-  active: boolean
-}
-
-// ─── Scoring ─────────────────────────────────────────────────────────────────
+export const POST_SCORE_WEIGHTS = {
+  saves:         0.35,
+  shares:        0.30,
+  comments:      0.15,
+  likes:         0.10,
+  profileVisits: 0.10,
+} as const
 
 export type TPostScore = {
-  postId: string
-  score: number
+  postId:   string
+  score:    number
   baseline: number
+  delta:    number
 }
 
 export type TBrandFitScore = {
-  brandId: string
-  category: number
-  aesthetic: number
-  budget: number
-  contactExists: number
-  recentSignals: number
-  total: number
+  brandId:          string
+  categoryScore:    number
+  aestheticScore:   number
+  budgetScore:      number
+  contactScore:     number
+  signalScore:      number
+  total:            number
 }
 
-export type TOpportunityHealth = {
-  opportunityId: string
-  score: number
-  daysSinceActivity: number
-  deckOpened: boolean
-  replyReceived: boolean
+export type TOpportunityHealthScore = {
+  opportunityId:   string
+  recencyPenalty:  number
+  deckBonus:       number
+  replyBonus:      number
+  valueScore:      number
+  probability:     number
+  total:           number
 }
 
-// ─── Server Actions ───────────────────────────────────────────────────────────
+// --- Instagram Graph API ---
 
-export type ActionResult<T> = { data: T; error: null } | { data: null; error: string }
+export type IGAccountFields = {
+  id:              string
+  username:        string
+  biography:       string
+  followers_count: number
+  media_count:     number
+  profile_picture_url?: string
+}
 
-// ─── Webhooks ─────────────────────────────────────────────────────────────────
+export type IGMediaFields = {
+  id:            string
+  media_type:    MediaType
+  caption?:      string
+  permalink:     string
+  timestamp:     string
+  thumbnail_url?: string
+  media_url?:    string
+}
+
+export type IGMediaInsight = {
+  name:   string
+  period: string
+  values: Array<{ value: number; end_time?: string }>
+  title:  string
+  id:     string
+}
+
+export type IGInsightsResponse = {
+  data: IGMediaInsight[]
+}
+
+// --- Sync results ---
+
+export type SyncAccountResult = {
+  accountId:   string
+  username:    string
+  insertedRows: number
+}
+
+export type SyncMediaResult = {
+  total:   number
+  created: number
+  updated: number
+}
+
+export type SyncInsightsResult = {
+  mediaId:       string
+  metricsStored: number
+}
+
+export type FullSyncResult = {
+  account:  SyncAccountResult
+  media:    SyncMediaResult
+  insights: SyncInsightsResult[]
+  errors:   string[]
+  durationMs: number
+}
+
+// --- Entités métier (vues frontales) ---
+
+export interface Brand {
+  id:                string
+  name:              string
+  website?:          string
+  country?:          string
+  category?:         string
+  premiumLevel:      number
+  aestheticFitScore: number
+  businessFitScore:  number
+  status:            BrandStatus
+  notes?:            string
+  createdAt:         string
+}
+
+export interface Contact {
+  id:              string
+  fullName:        string
+  email?:          string
+  title?:          string
+  companyId?:      string
+  companyType?:    CompanyType
+  linkedinUrl?:    string
+  instagramHandle?: string
+  warmness:        number
+  lastContactAt?:  string
+  nextFollowUpAt?: string
+  notes?:          string
+}
+
+export interface Opportunity {
+  id:              string
+  name:            string
+  brandId?:        string
+  contactId?:      string
+  collabType?:     string
+  estimatedValue?: number
+  currency:        string
+  stage:           DealStage
+  probability:     number
+  expectedCloseAt?: string
+  lastActivityAt:  string
+  nextAction?:     string
+  deckId?:         string
+}
+
+export interface Task {
+  id:                  string
+  label:               string
+  status:              TaskStatus
+  dueAt?:              string
+  linkedBrandId?:      string
+  linkedOpportunityId?: string
+  linkedContactId?:    string
+  createdAt:           string
+}
+
+// --- n8n webhook payloads ---
+
+export type N8nSyncTriggerPayload = {
+  automation: string
+  triggeredAt: string
+}
+
+// --- Papermark webhook ---
 
 export type PapermarkWebhookPayload = {
-  event: 'link.viewed' | 'link.completed'
-  linkId: string
+  event:    'link.viewed' | 'link.completed'
+  linkId:   string
   viewerId: string
   duration?: number
   timestamp: string

@@ -1,155 +1,563 @@
-// Fichier généré automatiquement via :
-// pnpm supabase gen types typescript --local > packages/types/supabase.ts
-// Ne pas modifier manuellement — régénérer après chaque migration.
+// Types générés depuis le schéma Supabase
+// Régénérer avec : pnpm db:types
 
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+type Row<T extends Record<string, unknown>> = T
+type Insert<T extends Record<string, unknown>> = T
+type Update<T extends Record<string, unknown>> = Partial<T>
 
 export interface Database {
   public: {
     Tables: {
+      raw_instagram_account_daily: {
+        Row: Row<{
+          id:              string
+          account_id:      string
+          date:            string
+          followers_count: number | null
+          reach:           number | null
+          impressions:     number | null
+          synced_at:       string
+        }>
+        Insert: Insert<{
+          id?:             string
+          account_id:      string
+          date:            string
+          followers_count?: number | null
+          reach?:          number | null
+          impressions?:    number | null
+          synced_at?:      string
+        }>
+        Update: Update<Database['public']['Tables']['raw_instagram_account_daily']['Insert']>
+        Relationships: []
+      }
+      raw_instagram_media: {
+        Row: Row<{
+          id:         string
+          media_id:   string
+          account_id: string
+          media_type: string | null
+          caption:    string | null
+          permalink:  string | null
+          timestamp:  string | null
+          raw_json:   Json | null
+          synced_at:  string
+        }>
+        Insert: Insert<{
+          id?:        string
+          media_id:   string
+          account_id: string
+          media_type?: string | null
+          caption?:   string | null
+          permalink?: string | null
+          timestamp?: string | null
+          raw_json?:  Json | null
+          synced_at?: string
+        }>
+        Update: Update<Database['public']['Tables']['raw_instagram_media']['Insert']>
+        Relationships: []
+      }
+      raw_instagram_media_insights: {
+        Row: Row<{
+          id:          string
+          media_id:    string
+          metric_name: string
+          value:       number | null
+          period:      string | null
+          synced_at:   string
+        }>
+        Insert: Insert<{
+          id?:         string
+          media_id:    string
+          metric_name: string
+          value?:      number | null
+          period?:     string | null
+          synced_at?:  string
+        }>
+        Update: Update<Database['public']['Tables']['raw_instagram_media_insights']['Insert']>
+        Relationships: []
+      }
+      raw_papermark_events: {
+        Row: Row<{
+          id:          string
+          event_id:    string
+          asset_id:    string
+          event_type:  string
+          viewer_id:   string | null
+          duration_ms: number | null
+          occurred_at: string
+        }>
+        Insert: Insert<{
+          id?:         string
+          event_id:    string
+          asset_id:    string
+          event_type:  string
+          viewer_id?:  string | null
+          duration_ms?: number | null
+          occurred_at: string
+        }>
+        Update: Update<Database['public']['Tables']['raw_papermark_events']['Insert']>
+        Relationships: []
+      }
+      raw_umami_events: {
+        Row: Row<{
+          id:          string
+          event_id:    string
+          session_id:  string | null
+          url:         string | null
+          event_name:  string | null
+          referrer:    string | null
+          occurred_at: string
+        }>
+        Insert: Insert<{
+          id?:         string
+          event_id:    string
+          session_id?: string | null
+          url?:        string | null
+          event_name?: string | null
+          referrer?:   string | null
+          occurred_at: string
+        }>
+        Update: Update<Database['public']['Tables']['raw_umami_events']['Insert']>
+        Relationships: []
+      }
+      raw_watchlist_events: {
+        Row: Row<{
+          id:             string
+          url:            string
+          change_summary: string | null
+          detected_at:    string
+        }>
+        Insert: Insert<{
+          id?:             string
+          url:             string
+          change_summary?: string | null
+          detected_at:     string
+        }>
+        Update: Update<Database['public']['Tables']['raw_watchlist_events']['Insert']>
+        Relationships: []
+      }
       accounts: {
-        Row: {
-          id: string
+        Row: Row<{
+          id:           string
           instagram_id: string
-          username: string
-          avatar_url: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
+          username:     string
+          avatar_url:   string | null
+          created_at:   string
+        }>
+        Insert: Insert<{
+          id?:          string
           instagram_id: string
-          username: string
-          avatar_url?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          instagram_id?: string
-          username?: string
-          avatar_url?: string | null
-          created_at?: string
-        }
+          username:     string
+          avatar_url?:  string | null
+          created_at?:  string
+        }>
+        Update: Update<Database['public']['Tables']['accounts']['Insert']>
+        Relationships: []
       }
       posts: {
-        Row: {
-          id: string
+        Row: Row<{
+          id:         string
           account_id: string
-          media_id: string
-          media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
-          caption: string | null
-          permalink: string
-          posted_at: string
-        }
-        Insert: {
-          id?: string
+          media_id:   string
+          media_type: string
+          caption:    string | null
+          permalink:  string | null
+          posted_at:  string | null
+        }>
+        Insert: Insert<{
+          id?:        string
           account_id: string
-          media_id: string
-          media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
-          caption?: string | null
-          permalink: string
-          posted_at: string
-        }
-        Update: {
-          id?: string
-          account_id?: string
-          media_id?: string
-          media_type?: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
-          caption?: string | null
-          permalink?: string
-          posted_at?: string
-        }
+          media_id:   string
+          media_type: string
+          caption?:   string | null
+          permalink?: string | null
+          posted_at?: string | null
+        }>
+        Update: Update<Database['public']['Tables']['posts']['Insert']>
+        Relationships: []
+      }
+      post_metrics_daily: {
+        Row: Row<{
+          id:             string
+          post_id:        string
+          date:           string
+          reach:          number
+          impressions:    number
+          saves:          number
+          shares:         number
+          likes:          number
+          comments:       number
+          profile_visits: number
+          follower_delta: number
+        }>
+        Insert: Insert<{
+          id?:             string
+          post_id:         string
+          date:            string
+          reach?:          number
+          impressions?:    number
+          saves?:          number
+          shares?:         number
+          likes?:          number
+          comments?:       number
+          profile_visits?: number
+          follower_delta?: number
+        }>
+        Update: Update<Database['public']['Tables']['post_metrics_daily']['Insert']>
+        Relationships: []
+      }
+      post_tags: {
+        Row: Row<{
+          id:         string
+          post_id:    string
+          tag:        string
+          created_at: string
+        }>
+        Insert: Insert<{
+          id?:        string
+          post_id:    string
+          tag:        string
+          created_at?: string
+        }>
+        Update: Update<Database['public']['Tables']['post_tags']['Insert']>
+        Relationships: []
+      }
+      content_themes: {
+        Row: Row<{
+          id:          string
+          name:        string
+          description: string | null
+          tags:        string[]
+        }>
+        Insert: Insert<{
+          id?:          string
+          name:         string
+          description?: string | null
+          tags?:        string[]
+        }>
+        Update: Update<Database['public']['Tables']['content_themes']['Insert']>
+        Relationships: []
+      }
+      content_recommendations: {
+        Row: Row<{
+          id:         string
+          post_id:    string | null
+          type:       string
+          reason:     string | null
+          created_at: string
+        }>
+        Insert: Insert<{
+          id?:        string
+          post_id?:   string | null
+          type:       string
+          reason?:    string | null
+          created_at?: string
+        }>
+        Update: Update<Database['public']['Tables']['content_recommendations']['Insert']>
+        Relationships: []
       }
       brands: {
-        Row: {
-          id: string
-          name: string
-          website: string | null
-          country: string | null
-          category: string | null
-          premium_level: string | null
-          aesthetic_fit_score: number | null
-          business_fit_score: number | null
-          status: 'cold' | 'warm' | 'intro' | 'active'
-          notes: string | null
+        Row: Row<{
+          id:                  string
+          name:                string
+          website:             string | null
+          country:             string | null
+          category:            string | null
+          premium_level:       number
+          aesthetic_fit_score: number
+          business_fit_score:  number
+          status:              string
+          notes:               string | null
+          created_at:          string
+        }>
+        Insert: Insert<{
+          id?:                  string
+          name:                 string
+          website?:             string | null
+          country?:             string | null
+          category?:            string | null
+          premium_level?:       number
+          aesthetic_fit_score?: number
+          business_fit_score?:  number
+          status?:              string
+          notes?:               string | null
+          created_at?:          string
+        }>
+        Update: Update<Database['public']['Tables']['brands']['Insert']>
+        Relationships: []
+      }
+      agencies: {
+        Row: Row<{
+          id:         string
+          name:       string
+          website:    string | null
+          country:    string | null
+          notes:      string | null
           created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          website?: string | null
-          country?: string | null
-          category?: string | null
-          premium_level?: string | null
-          aesthetic_fit_score?: number | null
-          business_fit_score?: number | null
-          status?: 'cold' | 'warm' | 'intro' | 'active'
-          notes?: string | null
+        }>
+        Insert: Insert<{
+          id?:       string
+          name:      string
+          website?:  string | null
+          country?:  string | null
+          notes?:    string | null
           created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          website?: string | null
-          country?: string | null
-          category?: string | null
-          premium_level?: string | null
-          aesthetic_fit_score?: number | null
-          business_fit_score?: number | null
-          status?: 'cold' | 'warm' | 'intro' | 'active'
-          notes?: string | null
-          created_at?: string
-        }
+        }>
+        Update: Update<Database['public']['Tables']['agencies']['Insert']>
+        Relationships: []
+      }
+      contacts: {
+        Row: Row<{
+          id:                string
+          full_name:         string
+          email:             string | null
+          title:             string | null
+          company_id:        string | null
+          company_type:      string | null
+          linkedin_url:      string | null
+          instagram_handle:  string | null
+          warmness:          number
+          last_contact_at:   string | null
+          next_follow_up_at: string | null
+          notes:             string | null
+        }>
+        Insert: Insert<{
+          id?:                string
+          full_name:          string
+          email?:             string | null
+          title?:             string | null
+          company_id?:        string | null
+          company_type?:      string | null
+          linkedin_url?:      string | null
+          instagram_handle?:  string | null
+          warmness?:          number
+          last_contact_at?:   string | null
+          next_follow_up_at?: string | null
+          notes?:             string | null
+        }>
+        Update: Update<Database['public']['Tables']['contacts']['Insert']>
+        Relationships: []
+      }
+      brand_contacts: {
+        Row: Row<{
+          brand_id:   string
+          contact_id: string
+        }>
+        Insert: Insert<{
+          brand_id:   string
+          contact_id: string
+        }>
+        Update: Update<Database['public']['Tables']['brand_contacts']['Insert']>
+        Relationships: []
+      }
+      touchpoints: {
+        Row: Row<{
+          id:          string
+          contact_id:  string | null
+          brand_id:    string | null
+          type:        string
+          note:        string | null
+          occurred_at: string
+        }>
+        Insert: Insert<{
+          id?:         string
+          contact_id?: string | null
+          brand_id?:   string | null
+          type:        string
+          note?:       string | null
+          occurred_at?: string
+        }>
+        Update: Update<Database['public']['Tables']['touchpoints']['Insert']>
+        Relationships: []
       }
       opportunities: {
-        Row: {
-          id: string
-          name: string
-          brand_id: string | null
-          contact_id: string | null
-          collab_type: string | null
-          estimated_value: number | null
-          currency: string
-          stage: string
-          probability: number
+        Row: Row<{
+          id:               string
+          name:             string
+          brand_id:         string | null
+          contact_id:       string | null
+          collab_type:      string | null
+          estimated_value:  number | null
+          currency:         string
+          stage:            string
+          probability:      number
           expected_close_at: string | null
-          last_activity_at: string | null
-          next_action: string | null
-          deck_id: string | null
-        }
-        Insert: {
-          id?: string
-          name: string
-          brand_id?: string | null
-          contact_id?: string | null
-          collab_type?: string | null
-          estimated_value?: number | null
-          currency?: string
-          stage?: string
-          probability?: number
+          last_activity_at:  string
+          next_action:       string | null
+          deck_id:           string | null
+        }>
+        Insert: Insert<{
+          id?:               string
+          name:              string
+          brand_id?:         string | null
+          contact_id?:       string | null
+          collab_type?:      string | null
+          estimated_value?:  number | null
+          currency?:         string
+          stage?:            string
+          probability?:      number
           expected_close_at?: string | null
-          last_activity_at?: string | null
-          next_action?: string | null
-          deck_id?: string | null
-        }
-        Update: {
-          id?: string
-          name?: string
-          brand_id?: string | null
-          contact_id?: string | null
-          collab_type?: string | null
-          estimated_value?: number | null
-          currency?: string
-          stage?: string
-          probability?: number
-          expected_close_at?: string | null
-          last_activity_at?: string | null
-          next_action?: string | null
-          deck_id?: string | null
-        }
+          last_activity_at?:  string
+          next_action?:       string | null
+          deck_id?:           string | null
+        }>
+        Update: Update<Database['public']['Tables']['opportunities']['Insert']>
+        Relationships: []
+      }
+      opportunity_stage_history: {
+        Row: Row<{
+          id:             string
+          opportunity_id: string
+          stage:          string
+          changed_at:     string
+        }>
+        Insert: Insert<{
+          id?:             string
+          opportunity_id:  string
+          stage:           string
+          changed_at?:     string
+        }>
+        Update: Update<Database['public']['Tables']['opportunity_stage_history']['Insert']>
+        Relationships: []
+      }
+      assets: {
+        Row: Row<{
+          id:                 string
+          name:               string
+          type:               string
+          papermark_link_id:  string | null
+          papermark_link_url: string | null
+          created_at:         string
+        }>
+        Insert: Insert<{
+          id?:                 string
+          name:                string
+          type:                string
+          papermark_link_id?:  string | null
+          papermark_link_url?: string | null
+          created_at?:         string
+        }>
+        Update: Update<Database['public']['Tables']['assets']['Insert']>
+        Relationships: []
+      }
+      asset_events: {
+        Row: Row<{
+          id:                 string
+          asset_id:           string
+          event_type:         string
+          viewer_fingerprint: string | null
+          duration_ms:        number | null
+          occurred_at:        string
+        }>
+        Insert: Insert<{
+          id?:                 string
+          asset_id:            string
+          event_type:          string
+          viewer_fingerprint?: string | null
+          duration_ms?:        number | null
+          occurred_at:         string
+        }>
+        Update: Update<Database['public']['Tables']['asset_events']['Insert']>
+        Relationships: []
+      }
+      tasks: {
+        Row: Row<{
+          id:                     string
+          label:                  string
+          status:                 string
+          due_at:                 string | null
+          linked_brand_id:        string | null
+          linked_opportunity_id:  string | null
+          linked_contact_id:      string | null
+          created_at:             string
+        }>
+        Insert: Insert<{
+          id?:                     string
+          label:                   string
+          status?:                 string
+          due_at?:                 string | null
+          linked_brand_id?:        string | null
+          linked_opportunity_id?:  string | null
+          linked_contact_id?:      string | null
+          created_at?:             string
+        }>
+        Update: Update<Database['public']['Tables']['tasks']['Insert']>
+        Relationships: []
+      }
+      automation_runs: {
+        Row: Row<{
+          id:               string
+          automation_name:  string
+          status:           string
+          result_summary:   string | null
+          ran_at:           string
+        }>
+        Insert: Insert<{
+          id?:              string
+          automation_name:  string
+          status:           string
+          result_summary?:  string | null
+          ran_at?:          string
+        }>
+        Update: Update<Database['public']['Tables']['automation_runs']['Insert']>
+        Relationships: []
+      }
+      weekly_summaries: {
+        Row: Row<{
+          id:           string
+          week_start:   string
+          reach_delta:  number
+          saves_delta:  number
+          new_leads:    number
+          deals_moved:  number
+          deck_opens:   number
+          created_at:   string
+        }>
+        Insert: Insert<{
+          id?:          string
+          week_start:   string
+          reach_delta?: number
+          saves_delta?: number
+          new_leads?:   number
+          deals_moved?: number
+          deck_opens?:  number
+          created_at?:  string
+        }>
+        Update: Update<Database['public']['Tables']['weekly_summaries']['Insert']>
+        Relationships: []
+      }
+      brand_watchlists: {
+        Row: Row<{
+          id:             string
+          brand_id:       string | null
+          url:            string
+          label:          string | null
+          last_change_at: string | null
+          active:         boolean
+        }>
+        Insert: Insert<{
+          id?:             string
+          brand_id?:       string | null
+          url:             string
+          label?:          string | null
+          last_change_at?: string | null
+          active?:         boolean
+        }>
+        Update: Update<Database['public']['Tables']['brand_watchlists']['Insert']>
+        Relationships: []
       }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Views:          Record<string, never>
+    Functions:      Record<string, never>
+    Enums:          Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }

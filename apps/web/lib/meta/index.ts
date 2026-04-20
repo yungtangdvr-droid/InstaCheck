@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '../../types/supabase'
-import type { FullSyncResult } from '../../types/index'
+import type { Database } from '@creator-hub/types/supabase'
+import type { FullSyncResult } from '@creator-hub/types'
 import { syncAccount } from './sync-account'
 import { syncMedia } from './sync-media'
 import { syncInsightsForAllPosts } from './sync-insights'
@@ -11,20 +11,18 @@ export { syncMedia } from './sync-media'
 export { syncInsightsForMedia, syncInsightsForAllPosts } from './sync-insights'
 
 export async function runFullSync(config: {
-  supabaseUrl:    string
-  supabaseKey:    string
-  igUserId:       string
-  accessToken:    string
+  supabaseUrl:  string
+  supabaseKey:  string
+  igUserId:     string
+  accessToken:  string
 }): Promise<FullSyncResult> {
   const start = Date.now()
   const errors: string[] = []
 
   const supabase = createClient<Database>(config.supabaseUrl, config.supabaseKey)
 
-  // 1. Sync account + daily snapshot
   const accountResult = await syncAccount(supabase, config.igUserId, config.accessToken)
 
-  // 2. Get the accounts row UUID for FK references
   const { data: accountRow } = await supabase
     .from('accounts')
     .select('id')
@@ -33,7 +31,6 @@ export async function runFullSync(config: {
 
   if (!accountRow) throw new Error('Account row not found after sync')
 
-  // 3. Sync all media
   const mediaResult = await syncMedia(
     supabase,
     config.igUserId,
@@ -41,7 +38,6 @@ export async function runFullSync(config: {
     accountRow.id
   )
 
-  // 4. Sync insights for all posts
   let insightsResults: FullSyncResult['insights'] = []
   try {
     insightsResults = await syncInsightsForAllPosts(

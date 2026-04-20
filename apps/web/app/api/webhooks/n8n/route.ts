@@ -1,12 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { type NextRequest } from 'next/server'
+import type { N8nSyncTriggerPayload } from '@creator-hub/types'
 
-// Sprint 8 — implémentation complète
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = request.headers.get('authorization')?.replace('Bearer ', '')
+export const runtime = 'nodejs'
 
-  if (apiKey !== process.env.N8N_API_KEY) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get('authorization')
+  const apiKey     = process.env.N8N_API_KEY
+
+  if (!apiKey || authHeader !== `Bearer ${apiKey}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return NextResponse.json({ received: true })
+  let payload: N8nSyncTriggerPayload
+  try {
+    payload = await request.json() as N8nSyncTriggerPayload
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  console.log(`[n8n webhook] automation=${payload.automation} triggeredAt=${payload.triggeredAt}`)
+
+  return Response.json({ ok: true, received: payload.automation })
 }

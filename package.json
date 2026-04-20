@@ -1,15 +1,20 @@
 {
   "name": "creator-hub",
   "private": true,
-  "version": "0.1.0",
-  "packageManager": "pnpm@9.0.0",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
   "scripts": {
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
-    "type-check": "pnpm --filter web type-check"
+    "type-check": "pnpm --filter web type-check",
+    "db:migrate": "pnpm supabase db push",
+    "db:types": "pnpm supabase gen types typescript --local > packages/types/supabase.ts"
   },
   "devDependencies": {
-    "typescript": "^5.4.5"
+    "typescript": "^5.8.3"
   }
 }
