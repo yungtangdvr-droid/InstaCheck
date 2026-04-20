@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: public
+    database: postgres
+    schema: public
+    tables:
+      - name: posts
+      - name: post_metrics_daily
+      - name: post_tags
+      - name: brands
+      - name: contacts
+      - name: touchpoints
+      - name: opportunities
+      - name: opportunity_stage_history
+      - name: assets
+      - name: asset_events
+      - name: tasks
+      - name: raw_instagram_account_daily
+      - name: raw_instagram_media
+      - name: raw_instagram_media_insights
