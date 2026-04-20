@@ -1,0 +1,134 @@
+{
+  "name": "daily-instagram-sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON 06:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/meta/sync",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "http-sync",
+      "name": "POST /api/meta/sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true
+          },
+          "conditions": [
+            {
+              "id": "check-ok",
+              "leftValue": "={{ $json.body.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Sync réussi ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json.body.result;\nconst summary = [\n  `✅ Instagram sync terminé`,\n  `Compte: @${result.account.username}`,\n  `Médias: ${result.media.total} (${result.media.created} créés, ${result.media.updated} mis à jour)`,\n  `Insights: ${result.insights.length} médias traités`,\n  `Durée: ${(result.durationMs / 1000).toFixed(1)}s`\n].join('\\n');\n\nreturn [{ json: { summary, result } }];"
+      },
+      "id": "format-success",
+      "name": "Formater succès",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const statusCode = $input.first().json.statusCode;\nconst error = $input.first().json.body?.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Instagram sync échoué: ${error}` } }];"
+      },
+      "id": "format-error",
+      "name": "Formater erreur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "CRON 06:00 UTC": {
+      "main": [
+        [{ "node": "POST /api/meta/sync", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST /api/meta/sync": {
+      "main": [
+        [{ "node": "Sync réussi ?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sync réussi ?": {
+      "main": [
+        [{ "node": "Formater succès", "type": "main", "index": 0 }],
+        [{ "node": "Formater erreur", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "creator-hub"
+  },
+  "tags": [{ "name": "instagram", "createdAt": "2026-04-20" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-20T00:00:00.000Z",
+  "versionId": "1"
+}
