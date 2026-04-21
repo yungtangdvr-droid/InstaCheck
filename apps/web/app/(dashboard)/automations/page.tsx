@@ -25,8 +25,7 @@ const CANONICAL_META: Record<string, { description: string; note?: string }> = {
     description: 'CRON quotidien · opportunities sans activité +7j',
   },
   'brand-watch-digest': {
-    description: 'CRON vendredi 08:00 · veille marques',
-    note: 'Not yet wired — watchlist product logic lands in Sprint 9.',
+    description: 'CRON vendredi 08:00 · digest veille marques',
   },
   'scoring-refresh': {
     description: 'CRON dimanche 06:00 · recalcul scores dbt',
