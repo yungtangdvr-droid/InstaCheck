@@ -192,6 +192,48 @@ export interface Task {
   createdAt:           string
 }
 
+// --- Content Lab ---
+
+export interface ContentLabPost {
+  id: string
+  mediaId: string
+  mediaType: string
+  caption: string | null
+  permalink: string | null
+  postedAt: string | null
+  metrics: {
+    saves: number
+    shares: number
+    comments: number
+    likes: number
+    profileVisits: number
+    reach: number
+  }
+  tags: string[]
+  score: number
+}
+
+// PROVISIONAL: inline-computed until mart_theme_performance dbt mart is available
+export interface ThemeAggregate {
+  themeName: string
+  postCount: number
+  avgSaves: number
+  avgReach: number
+}
+
+export interface ContentRecommendation {
+  id: string
+  postId: string | null
+  type: ContentRecommendationType
+  reason: string | null
+  createdAt: string
+  post?: {
+    caption: string | null
+    mediaType: string
+    permalink: string | null
+  }
+}
+
 // --- n8n webhook payloads ---
 
 export type N8nSyncTriggerPayload = {
