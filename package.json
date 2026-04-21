@@ -1,0 +1,10 @@
+{
+  "name": "creator-hub",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @creator-hub/web dev",
+    "build": "pnpm --filter @creator-hub/web build",
+    "lint": "pnpm --filter @creator-hub/web lint"
+  }
+}
