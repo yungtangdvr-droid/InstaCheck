@@ -554,6 +554,62 @@ export interface Database {
         Update: Update<Database['public']['Tables']['brand_watchlists']['Insert']>
         Relationships: []
       }
+      attribution_rules: {
+        Row: Row<{
+          id:          string
+          label:       string
+          match_type:  string
+          pattern:     string
+          target_type: string
+          target_id:   string
+          priority:    number
+          active:      boolean
+          created_at:  string
+        }>
+        Insert: Insert<{
+          id?:         string
+          label:       string
+          match_type:  string
+          pattern:     string
+          target_type: string
+          target_id:   string
+          priority?:   number
+          active?:     boolean
+          created_at?: string
+        }>
+        Update: Update<Database['public']['Tables']['attribution_rules']['Insert']>
+        Relationships: []
+      }
+      attribution_events: {
+        Row: Row<{
+          id:             string
+          raw_event_id:   string
+          rule_id:        string | null
+          opportunity_id: string | null
+          brand_id:       string | null
+          asset_id:       string | null
+          matched_by:     string
+          url:            string
+          referrer:       string | null
+          event_name:     string | null
+          occurred_at:    string
+        }>
+        Insert: Insert<{
+          id?:             string
+          raw_event_id:    string
+          rule_id?:        string | null
+          opportunity_id?: string | null
+          brand_id?:       string | null
+          asset_id?:       string | null
+          matched_by:      string
+          url:             string
+          referrer?:       string | null
+          event_name?:     string | null
+          occurred_at:     string
+        }>
+        Update: Update<Database['public']['Tables']['attribution_events']['Insert']>
+        Relationships: []
+      }
     }
     Views:          Record<string, never>
     Functions:      Record<string, never>

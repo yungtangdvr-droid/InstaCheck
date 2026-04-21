@@ -11,6 +11,7 @@ import { ASSET_TYPE_LABEL } from '@/features/assets/utils'
 import { AssetEditor } from '@/components/assets/AssetEditor'
 import { OpenEventFeed } from '@/components/assets/OpenEventFeed'
 import { RelanceStatus } from '@/components/assets/RelanceStatus'
+import { AssetTrafficBlock } from '@/components/attribution/AssetTrafficBlock'
 import { DEAL_STAGE_BADGE, DEAL_STAGE_LABEL, formatMoney } from '@/features/deals/utils'
 
 export default async function AssetDetailPage({
@@ -67,6 +68,8 @@ export default async function AssetDetailPage({
         <h2 className="text-sm font-medium text-neutral-300">Événements</h2>
         <OpenEventFeed events={events} />
       </section>
+
+      <AssetTrafficBlock assetId={id} />
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-neutral-300">Opportunités liées</h2>

@@ -16,6 +16,7 @@ import { DealTaskInline } from '@/components/deals/DealTaskInline'
 import { DealTimeline } from '@/components/deals/DealTimeline'
 import { StageDropdown } from '@/components/deals/StageDropdown'
 import { DealDeckPicker } from '@/components/assets/DealDeckPicker'
+import { OpportunityTrafficBlock } from '@/components/attribution/OpportunityTrafficBlock'
 import {
   DEAL_STAGE_BADGE,
   DEAL_STAGE_LABEL,
@@ -120,6 +121,8 @@ export default async function DealDetailPage({
           linkedContactId={opportunity.contactId}
         />
       </section>
+
+      <OpportunityTrafficBlock opportunityId={opportunity.id} />
     </div>
   )
 }
