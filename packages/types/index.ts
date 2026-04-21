@@ -349,6 +349,51 @@ export type PapermarkWebhookPayload = {
   timestamp: string
 }
 
+// --- Assets / Deck Tracking (Sprint 6) ---
+
+export type AssetEventType = 'opened' | 'completed' | 'clicked'
+
+export interface Asset {
+  id:                string
+  name:              string
+  type:              AssetType
+  papermarkLinkId?:  string
+  papermarkLinkUrl?: string
+  createdAt:         string
+}
+
+export interface AssetEvent {
+  id:                string
+  assetId:           string
+  eventType:         AssetEventType
+  viewerFingerprint: string | null
+  durationMs:        number | null
+  occurredAt:        string
+}
+
+export interface AssetListRow extends Asset {
+  eventsCount:              number
+  openedCount:              number
+  lastEventAt:              string | null
+  linkedOpportunitiesCount: number
+}
+
+export type TAssetInput = {
+  name:              string
+  type:              AssetType
+  papermarkLinkId?:  string
+  papermarkLinkUrl?: string
+}
+
+export type TRelanceStatus = {
+  openedCount:    number
+  completedCount: number
+  lastEventAt:    string | null
+  relanceTaskId:  string | null
+  relanceDueAt:   string | null
+  relanceDone:    boolean
+}
+
 // --- Analytics (Sprint 2) ---
 
 export type TAnalyticsPeriod = 7 | 30 | 90

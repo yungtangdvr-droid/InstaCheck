@@ -10,10 +10,12 @@ import {
   getOpportunityTasks,
   listBrandOptions,
 } from '@/features/deals/queries'
+import { listAssetOptions } from '@/features/assets/queries'
 import { DealEditor } from '@/components/deals/DealEditor'
 import { DealTaskInline } from '@/components/deals/DealTaskInline'
 import { DealTimeline } from '@/components/deals/DealTimeline'
 import { StageDropdown } from '@/components/deals/StageDropdown'
+import { DealDeckPicker } from '@/components/assets/DealDeckPicker'
 import {
   DEAL_STAGE_BADGE,
   DEAL_STAGE_LABEL,
@@ -32,13 +34,14 @@ export default async function DealDetailPage({
   const opportunity = await getOpportunity(supabase, id)
   if (!opportunity) notFound()
 
-  const [history, tasks, brandOptions, brandName, contactName, deckName] = await Promise.all([
+  const [history, tasks, brandOptions, brandName, contactName, deckName, assetOptions] = await Promise.all([
     getOpportunityStageHistory(supabase, id),
     getOpportunityTasks(supabase, id),
     listBrandOptions(supabase),
     opportunity.brandId   ? getBrandName(supabase, opportunity.brandId)     : Promise.resolve(null),
     opportunity.contactId ? getContactName(supabase, opportunity.contactId) : Promise.resolve(null),
     opportunity.deckId    ? getAssetName(supabase, opportunity.deckId)      : Promise.resolve(null),
+    listAssetOptions(supabase),
   ])
 
   return (
@@ -92,11 +95,15 @@ export default async function DealDetailPage({
 
       <DealEditor opportunity={opportunity} brandOptions={brandOptions} />
 
-      {opportunity.deckId && (
-        <section className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm">
-          <p className="text-xs uppercase tracking-wide text-neutral-500">Deck lié</p>
-          <p className="mt-1 text-neutral-200">{deckName ?? opportunity.deckId}</p>
-        </section>
+      <DealDeckPicker
+        opportunityId={opportunity.id}
+        currentDeckId={opportunity.deckId}
+        assetOptions={assetOptions}
+      />
+      {opportunity.deckId && deckName && (
+        <p className="-mt-4 text-xs text-neutral-500">
+          Actuellement : <span className="text-neutral-300">{deckName}</span>
+        </p>
       )}
 
       <section className="space-y-3">
