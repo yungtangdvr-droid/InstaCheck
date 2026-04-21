@@ -192,6 +192,66 @@ export interface Task {
   createdAt:           string
 }
 
+// --- CRM (Sprint 4) ---
+
+export interface Touchpoint {
+  id:         string
+  contactId:  string | null
+  brandId:    string | null
+  type:       TouchpointType
+  note:       string | null
+  occurredAt: string
+}
+
+export interface BrandListRow extends Brand {
+  contactsCount:    number
+  openTasksCount:   number
+  lastTouchpointAt: string | null
+}
+
+export interface ContactListRow extends Contact {
+  brandName: string | null
+}
+
+export type TBrandInput = {
+  name:               string
+  website?:           string
+  country?:           string
+  category?:          string
+  aestheticFitScore?: number
+  businessFitScore?:  number
+  status?:            BrandStatus
+  notes?:             string
+}
+
+export type TContactInput = {
+  fullName:         string
+  email?:           string
+  title?:           string
+  companyId?:       string
+  companyType?:     CompanyType
+  linkedinUrl?:     string
+  instagramHandle?: string
+  warmness?:        number
+  nextFollowUpAt?:  string
+  notes?:           string
+}
+
+export type TTouchpointInput = {
+  type:        TouchpointType
+  note?:       string
+  contactId?:  string
+  brandId?:    string
+  occurredAt?: string
+}
+
+export type TTaskInput = {
+  label:           string
+  dueAt?:          string
+  linkedBrandId?:  string
+  linkedContactId?: string
+}
+
 // --- Content Lab ---
 
 export interface ContentLabPost {
