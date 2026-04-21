@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { AnalyticsCharts } from '@/features/analytics/AnalyticsCharts'
 
 export default async function AnalyticsPage() {
   const supabase = await createServerSupabaseClient()
@@ -33,16 +34,10 @@ export default async function AnalyticsPage() {
           }
           badge={recentRun?.status}
         />
-        <StatCard label="Sprint" value="1 — Ingestion" />
+        <StatCard label="Sprint" value="2 — Analytics" />
       </div>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-sm text-neutral-400">
-        <p className="font-medium text-white">Sprint 2 — Dashboard Analytics</p>
-        <p className="mt-1">
-          Les graphiques reach / saves / shares et la table posts arriveront au Sprint 2.
-          Les données sont déjà ingérées via <code className="text-neutral-300">/api/meta/sync</code>.
-        </p>
-      </div>
+      <AnalyticsCharts />
     </div>
   )
 }
