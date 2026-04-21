@@ -176,7 +176,7 @@ export interface Opportunity {
   stage:           DealStage
   probability:     number
   expectedCloseAt?: string
-  lastActivityAt:  string
+  lastActivityAt?: string
   nextAction?:     string
   deckId?:         string
 }
@@ -250,6 +250,44 @@ export type TTaskInput = {
   dueAt?:          string
   linkedBrandId?:  string
   linkedContactId?: string
+}
+
+// --- Deals (Sprint 5) ---
+
+export interface OpportunityStageEvent {
+  id:            string
+  opportunityId: string
+  stage:         DealStage
+  changedAt:     string
+}
+
+export interface OpportunityListRow extends Opportunity {
+  brandName:      string | null
+  contactName:    string | null
+  openTasksCount: number
+  hasDeck:        boolean
+}
+
+export type TOpportunityInput = {
+  name:             string
+  brandId?:         string
+  contactId?:       string
+  collabType?:      string
+  estimatedValue?:  number
+  currency?:        string
+  stage?:           DealStage
+  probability?:     number
+  expectedCloseAt?: string
+  nextAction?:      string
+  deckId?:          string
+}
+
+export type TOpportunityTaskInput = {
+  label:                string
+  dueAt?:               string
+  linkedOpportunityId:  string
+  linkedBrandId?:       string
+  linkedContactId?:     string
 }
 
 // --- Content Lab ---
