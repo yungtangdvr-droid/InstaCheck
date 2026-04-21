@@ -208,3 +208,48 @@ export type PapermarkWebhookPayload = {
   duration?: number
   timestamp: string
 }
+
+// --- Analytics (Sprint 2) ---
+
+export type TAnalyticsPeriod = 7 | 30 | 90
+
+export type TDailyMetricPoint = {
+  date:     string   // ISO date YYYY-MM-DD
+  reach:    number
+  saves:    number
+  shares:   number
+  likes:    number
+  comments: number
+}
+
+export type TFormatSummary = {
+  mediaType: string
+  count:     number
+  reach:     number
+  saves:     number
+  shares:    number
+}
+
+export type TPostingWindow = {
+  dayOfWeek: number   // 0 = Sun … 6 = Sat
+  hour:      number   // 0–23
+  savesAvg:  number
+  count:     number
+}
+
+export type TTopPost = {
+  id:            string
+  mediaId:       string
+  mediaType:     string
+  caption:       string | null
+  permalink:     string | null
+  postedAt:      string | null
+  reach:         number
+  saves:         number
+  shares:        number
+  likes:         number
+  comments:      number
+  profileVisits: number
+  // provisional score: saves-weighted 0–100 until mart_post_performance (dbt) is built
+  score:         number
+}
