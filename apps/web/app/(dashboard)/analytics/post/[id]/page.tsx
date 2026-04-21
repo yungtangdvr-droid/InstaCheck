@@ -2,15 +2,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ReachChart } from '@/components/charts/ReachChart'
+import { FORMAT_LABEL } from '@/features/analytics/utils'
 import type { TDailyMetricPoint } from '@creator-hub/types'
-
-const FORMAT_LABEL: Record<string, string> = {
-  IMAGE:          'Image',
-  VIDEO:          'Vidéo',
-  CAROUSEL_ALBUM: 'Carousel',
-  REEL:           'Reel',
-  STORY:          'Story',
-}
 
 export default async function PostDetailPage({
   params,
@@ -107,16 +100,14 @@ export default async function PostDetailPage({
       </div>
 
       {/* Reach over time */}
-      {reachSeries.length > 0 && (
+      {reachSeries.length > 0 ? (
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
           <h2 className="mb-4 text-sm font-medium text-neutral-300">
             Reach dans le temps
           </h2>
           <ReachChart data={reachSeries} />
         </div>
-      )}
-
-      {reachSeries.length === 0 && (
+      ) : (
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-sm text-neutral-500">
           Aucune métrique journalière disponible pour ce post.
         </div>

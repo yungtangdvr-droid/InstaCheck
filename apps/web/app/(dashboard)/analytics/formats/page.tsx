@@ -3,15 +3,8 @@ import { PeriodFilter } from '@/components/analytics/PeriodFilter'
 import { FormatMatrix } from '@/components/charts/FormatMatrix'
 import { BestWindowHeatmap } from '@/components/charts/BestWindowHeatmap'
 import { getFormatBreakdown, getPostingWindows } from '@/features/analytics/get-analytics-data'
-import type { TAnalyticsPeriod } from '@creator-hub/types'
+import { parsePeriod } from '@/features/analytics/utils'
 import Link from 'next/link'
-
-const VALID_PERIODS = [7, 30, 90] as const
-
-function parsePeriod(raw: string | undefined): TAnalyticsPeriod {
-  const n = parseInt(raw ?? '', 10)
-  return (VALID_PERIODS as readonly number[]).includes(n) ? (n as TAnalyticsPeriod) : 30
-}
 
 export default async function FormatsPage({
   searchParams,

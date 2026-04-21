@@ -4,15 +4,8 @@ import { ReachChart } from '@/components/charts/ReachChart'
 import { SavesChart } from '@/components/charts/SavesChart'
 import { PostExplorer } from '@/components/charts/PostExplorer'
 import { getReachSeries, getTopPosts } from '@/features/analytics/get-analytics-data'
-import type { TAnalyticsPeriod } from '@creator-hub/types'
+import { parsePeriod } from '@/features/analytics/utils'
 import Link from 'next/link'
-
-const VALID_PERIODS = [7, 30, 90] as const
-
-function parsePeriod(raw: string | undefined): TAnalyticsPeriod {
-  const n = parseInt(raw ?? '', 10)
-  return (VALID_PERIODS as readonly number[]).includes(n) ? (n as TAnalyticsPeriod) : 30
-}
 
 export default async function AnalyticsPage({
   searchParams,
@@ -32,7 +25,7 @@ export default async function AnalyticsPage({
   ] = await Promise.all([
     supabase
       .from('automation_runs')
-      .select('ran_at, status, result_summary')
+      .select('ran_at, status')
       .eq('automation_name', 'daily-instagram-sync')
       .order('ran_at', { ascending: false })
       .limit(1)

@@ -44,9 +44,8 @@ export function BestWindowHeatmap({ data }: Props) {
             <span className="w-9 flex-shrink-0 text-right text-[10px] text-neutral-500">{day}</span>
             <div className="flex flex-1 gap-px">
               {HOURS.map(hour => {
-                const val      = lookup.get(`${dayIdx}-${hour}`) ?? 0
-                const alpha    = val / maxSaves
                 const savesAvg = lookup.get(`${dayIdx}-${hour}`) ?? 0
+                const alpha    = savesAvg / maxSaves
                 return (
                   <div
                     key={hour}

@@ -1,16 +1,9 @@
 'use client'
 import Link from 'next/link'
+import { FORMAT_LABEL } from '@/features/analytics/utils'
 import type { TTopPost } from '@creator-hub/types'
 
 type Props = { posts: TTopPost[] }
-
-const FORMAT_LABEL: Record<string, string> = {
-  IMAGE:          'Image',
-  VIDEO:          'Vidéo',
-  CAROUSEL_ALBUM: 'Carousel',
-  REEL:           'Reel',
-  STORY:          'Story',
-}
 
 function ScoreBadge({ score }: { score: number }) {
   const cls =

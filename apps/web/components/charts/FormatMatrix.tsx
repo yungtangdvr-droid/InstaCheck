@@ -9,17 +9,10 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import { FORMAT_LABEL } from '@/features/analytics/utils'
 import type { TFormatSummary } from '@creator-hub/types'
 
 type Props = { data: TFormatSummary[] }
-
-const FORMAT_LABEL: Record<string, string> = {
-  IMAGE:          'Image',
-  VIDEO:          'Vidéo',
-  CAROUSEL_ALBUM: 'Carousel',
-  REEL:           'Reel',
-  STORY:          'Story',
-}
 
 export function FormatMatrix({ data }: Props) {
   if (data.length === 0) {
