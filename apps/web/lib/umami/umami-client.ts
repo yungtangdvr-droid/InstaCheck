@@ -1,4 +1,4 @@
-import type { TUmamiEvent, TUmamiFetchParams } from '../../types/index'
+import type { TUmamiEvent, TUmamiFetchParams } from '@creator-hub/types'
 
 export type UmamiClientConfig = {
   apiUrl:    string
@@ -79,4 +79,12 @@ export async function fetchEvents(
   const payload = (await res.json()) as UmamiEventsApiResponse | UmamiEventsApiRow[]
   const rows = Array.isArray(payload) ? payload : (payload.data ?? [])
   return rows.map((row) => normalizeRow(row, config.websiteId))
+}
+
+export function umamiConfigFromEnv(): UmamiClientConfig | null {
+  const apiUrl    = process.env.UMAMI_API_URL
+  const apiKey    = process.env.UMAMI_API_KEY
+  const websiteId = process.env.UMAMI_WEBSITE_ID
+  if (!apiUrl || !apiKey || !websiteId) return null
+  return { apiUrl, apiKey, websiteId }
 }

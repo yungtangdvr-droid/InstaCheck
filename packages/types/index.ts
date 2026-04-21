@@ -438,3 +438,80 @@ export type TTopPost = {
   // provisional score: saves-weighted 0–100 until mart_post_performance (dbt) is built
   score:         number
 }
+
+// --- Umami + Attribution (Sprint 7) ---
+
+export type TUmamiEvent = {
+  id:             string
+  websiteId:      string
+  sessionId:      string | null
+  createdAt:      string
+  urlPath:        string
+  urlQuery:       string | null
+  referrerDomain: string | null
+  referrerPath:   string | null
+  eventName:      string | null
+}
+
+export type TUmamiFetchParams = {
+  startAt: number // ms since epoch
+  endAt:   number
+  limit?:  number
+}
+
+export type AttributionMatchType  = 'url_pattern' | 'utm_source' | 'referrer' | 'asset_link_url'
+export type AttributionTargetType = 'opportunity' | 'brand' | 'asset'
+
+export interface AttributionRule {
+  id:         string
+  label:      string
+  matchType:  AttributionMatchType
+  pattern:    string
+  targetType: AttributionTargetType
+  targetId:   string
+  priority:   number
+  active:     boolean
+  createdAt:  string
+}
+
+export interface AttributionEvent {
+  id:            string
+  rawEventId:    string
+  ruleId:        string | null
+  opportunityId: string | null
+  brandId:       string | null
+  assetId:       string | null
+  matchedBy:     AttributionMatchType
+  url:           string
+  referrer:      string | null
+  eventName:     string | null
+  occurredAt:    string
+}
+
+export type TAttributionRuleInput = {
+  label:      string
+  matchType:  AttributionMatchType
+  pattern:    string
+  targetType: AttributionTargetType
+  targetId:   string
+  priority?:  number
+  active?:    boolean
+}
+
+export type TTrafficOverviewRow = {
+  key:              string
+  kind:             'referrer' | 'url' | 'utm_source'
+  clicks:           number
+  attributedClicks: number
+  sampleUrl:        string | null
+}
+
+export type TUmamiSyncSummary = {
+  fetched:      number
+  inserted:     number
+  resolved:     number
+  ambiguous:    number
+  windowStart:  string
+  windowEnd:    string
+  durationMs:   number
+}
