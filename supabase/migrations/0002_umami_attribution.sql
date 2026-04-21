@@ -39,12 +39,9 @@ create table attribution_events (
   referrer       text,
   event_name     text,
   occurred_at    timestamptz not null,
-  unique (raw_event_id, rule_id)
+  -- Canonical single-winner model: at most one attribution per raw event.
+  unique (raw_event_id)
 );
-
-create unique index attribution_events_raw_implicit_unique
-  on attribution_events (raw_event_id)
-  where rule_id is null;
 
 create index on attribution_events (opportunity_id, occurred_at desc);
 create index on attribution_events (brand_id,        occurred_at desc);

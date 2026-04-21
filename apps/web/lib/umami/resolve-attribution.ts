@@ -17,7 +17,6 @@ type Supabase = SupabaseClient<Database>
 
 type RawRow = Database['public']['Tables']['raw_umami_events']['Row']
 type AttrInsert = Database['public']['Tables']['attribution_events']['Insert']
-type AttrRow = Database['public']['Tables']['attribution_events']['Row']
 
 const RESOLVE_LOOKBACK_DAYS = 7
 const RESOLVE_LOOKBACK_MS = RESOLVE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
@@ -36,7 +35,7 @@ export async function resolveAttribution(
     .select('occurred_at')
     .order('occurred_at', { ascending: false })
     .limit(1)
-    .maybeSingle<Pick<AttrRow, 'occurred_at'>>()
+    .maybeSingle<{ occurred_at: string }>()
 
   const sinceIso = latestResolved?.occurred_at
     ? new Date(new Date(latestResolved.occurred_at).getTime() - RESOLVE_LOOKBACK_MS).toISOString()
@@ -54,13 +53,10 @@ export async function resolveAttribution(
 
   const { data: existing } = await supabase
     .from('attribution_events')
-    .select('raw_event_id, rule_id')
+    .select('raw_event_id')
     .in('raw_event_id', rawIds)
 
-  const existingKeys = new Set<string>()
-  for (const row of existing ?? []) {
-    existingKeys.add(`${row.raw_event_id}::${row.rule_id ?? 'IMPLICIT'}`)
-  }
+  const alreadyResolved = new Set<string>((existing ?? []).map((r) => r.raw_event_id))
 
   const { data: ruleRows } = await supabase
     .from('attribution_rules')
@@ -99,34 +95,34 @@ export async function resolveAttribution(
   let ambiguous = 0
 
   for (const raw of raws as RawRow[]) {
+    if (alreadyResolved.has(raw.id)) continue
+
     const rawMatching: RawEventForMatching = {
       url:      raw.url ?? '',
       referrer: raw.referrer,
     }
 
-    const explicitInsertsForRaw: AttrInsert[] = []
+    // Single-winner: rules are pre-sorted priority DESC, created_at ASC.
+    // First match wins; ties broken deterministically by order.
+    let winner: RuleForMatching | null = null
     for (const rule of rules) {
-      if (!ruleMatches(rawMatching, rule)) continue
-      const key = `${raw.id}::${rule.id}`
-      if (existingKeys.has(key)) continue
-      explicitInsertsForRaw.push(buildInsert(raw, rule))
-      existingKeys.add(key)
+      if (ruleMatches(rawMatching, rule)) {
+        winner = rule
+        break
+      }
     }
 
-    if (explicitInsertsForRaw.length > 0) {
-      inserts.push(...explicitInsertsForRaw)
+    if (winner) {
+      inserts.push(buildExplicitInsert(raw, winner))
       continue
     }
 
-    const implicitKey = `${raw.id}::IMPLICIT`
-    if (existingKeys.has(implicitKey)) continue
-
+    // Implicit fallback: exact normalized URL equality against a single asset.
     const normalized = normalizeUrl(raw.url)
     if (!normalized) continue
     const candidates = assetByNormalizedUrl.get(normalized) ?? []
     if (candidates.length === 1) {
       inserts.push(buildImplicitInsert(raw, candidates[0]))
-      existingKeys.add(implicitKey)
     } else if (candidates.length > 1) {
       ambiguous += 1
     }
@@ -140,7 +136,7 @@ export async function resolveAttribution(
     const slice = inserts.slice(i, i + CHUNK)
     const { data } = await supabase
       .from('attribution_events')
-      .upsert(slice, { onConflict: 'raw_event_id,rule_id', ignoreDuplicates: true })
+      .upsert(slice, { onConflict: 'raw_event_id', ignoreDuplicates: true })
       .select('id')
     resolved += data?.length ?? 0
   }
@@ -148,7 +144,7 @@ export async function resolveAttribution(
   return { resolved, ambiguous }
 }
 
-function buildInsert(raw: RawRow, rule: RuleForMatching): AttrInsert {
+function buildExplicitInsert(raw: RawRow, rule: RuleForMatching): AttrInsert {
   return {
     raw_event_id:   raw.id,
     rule_id:        rule.id,
