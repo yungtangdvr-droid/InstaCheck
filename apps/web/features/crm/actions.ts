@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import type { Database } from '@creator-hub/types/supabase'
 import type {
   ActionResult,
   TaskStatus,
@@ -11,6 +12,11 @@ import type {
   TTaskInput,
   TTouchpointInput,
 } from '@creator-hub/types'
+
+type BrandInsert   = Database['public']['Tables']['brands']['Insert']
+type BrandUpdate   = Database['public']['Tables']['brands']['Update']
+type ContactInsert = Database['public']['Tables']['contacts']['Insert']
+type ContactUpdate = Database['public']['Tables']['contacts']['Update']
 
 // ─── Brands ───────────────────────────────────────────────────────────────────
 
@@ -21,18 +27,20 @@ export async function createBrand(
   if (!name) return { data: null, error: 'Name is required' }
 
   const supabase = await createServerSupabaseClient()
+  const payload: BrandInsert = {
+    name,
+    website:  input.website?.trim() || null,
+    country:  input.country?.trim() || null,
+    category: input.category?.trim() || null,
+    status:   input.status ?? 'cold',
+    notes:    input.notes?.trim() || null,
+  }
+  if (input.aestheticFitScore !== undefined) payload.aesthetic_fit_score = input.aestheticFitScore
+  if (input.businessFitScore  !== undefined) payload.business_fit_score  = input.businessFitScore
+
   const { data, error } = await supabase
     .from('brands')
-    .insert({
-      name,
-      website:             input.website?.trim() || null,
-      country:             input.country?.trim() || null,
-      category:            input.category?.trim() || null,
-      aesthetic_fit_score: input.aestheticFitScore ?? null,
-      business_fit_score:  input.businessFitScore ?? null,
-      status:              input.status ?? 'cold',
-      notes:               input.notes?.trim() || null,
-    })
+    .insert(payload)
     .select('id')
     .single()
 
@@ -49,7 +57,7 @@ export async function updateBrand(
   if (!id) return { data: null, error: 'Missing id' }
 
   const supabase = await createServerSupabaseClient()
-  const update: Record<string, unknown> = {}
+  const update: BrandUpdate = {}
   if (patch.name              !== undefined) update.name                = patch.name.trim()
   if (patch.website           !== undefined) update.website             = patch.website?.trim() || null
   if (patch.country           !== undefined) update.country             = patch.country?.trim() || null
@@ -86,20 +94,22 @@ export async function createContact(
   if (!fullName) return { data: null, error: 'Full name is required' }
 
   const supabase = await createServerSupabaseClient()
+  const payload: ContactInsert = {
+    full_name:         fullName,
+    email:             input.email?.trim() || null,
+    title:             input.title?.trim() || null,
+    company_id:        input.companyId ?? linkToBrandId ?? null,
+    company_type:      input.companyType ?? (linkToBrandId ? 'brand' : null),
+    linkedin_url:      input.linkedinUrl?.trim() || null,
+    instagram_handle:  input.instagramHandle?.trim() || null,
+    warmness:          input.warmness ?? 0,
+    next_follow_up_at: input.nextFollowUpAt || null,
+    notes:             input.notes?.trim() || null,
+  }
+
   const { data, error } = await supabase
     .from('contacts')
-    .insert({
-      full_name:         fullName,
-      email:             input.email?.trim() || null,
-      title:             input.title?.trim() || null,
-      company_id:        input.companyId ?? linkToBrandId ?? null,
-      company_type:      input.companyType ?? (linkToBrandId ? 'brand' : null),
-      linkedin_url:      input.linkedinUrl?.trim() || null,
-      instagram_handle:  input.instagramHandle?.trim() || null,
-      warmness:          input.warmness ?? 0,
-      next_follow_up_at: input.nextFollowUpAt || null,
-      notes:             input.notes?.trim() || null,
-    })
+    .insert(payload)
     .select('id')
     .single()
 
@@ -126,7 +136,7 @@ export async function updateContact(
   if (!id) return { data: null, error: 'Missing id' }
 
   const supabase = await createServerSupabaseClient()
-  const update: Record<string, unknown> = {}
+  const update: ContactUpdate = {}
   if (patch.fullName        !== undefined) update.full_name         = patch.fullName.trim()
   if (patch.email           !== undefined) update.email             = patch.email?.trim() || null
   if (patch.title           !== undefined) update.title             = patch.title?.trim() || null
