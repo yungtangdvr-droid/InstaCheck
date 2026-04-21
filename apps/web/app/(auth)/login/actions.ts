@@ -1,7 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 type ActionResult = { data: null; error: string } | { data: true; error: null }
 
@@ -9,7 +9,7 @@ export async function login(formData: FormData): Promise<ActionResult> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const supabase = await createServerClient()
+  const supabase = await createServerSupabaseClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) return { data: null, error: error.message }
@@ -18,7 +18,7 @@ export async function login(formData: FormData): Promise<ActionResult> {
 }
 
 export async function logout(): Promise<void> {
-  const supabase = await createServerClient()
+  const supabase = await createServerSupabaseClient()
   await supabase.auth.signOut()
   redirect('/login')
 }
