@@ -2,9 +2,12 @@ import { type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'crypto'
 import type { Database } from '@creator-hub/types/supabase'
-import type { PapermarkWebhookPayload } from '@creator-hub/types'
+import type { AutomationStatus, PapermarkWebhookPayload } from '@creator-hub/types'
+import { logAutomationRun } from '@/features/automations/queries'
 
 export const runtime = 'nodejs'
+
+const AUTOMATION_NAME = 'papermark-open-alert'
 
 function verifySignature(body: string, signature: string, secret: string): boolean {
   const expected = createHmac('sha256', secret).update(body).digest('hex')
@@ -45,6 +48,12 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!asset) {
+    await logAutomationRun(
+      supabase,
+      AUTOMATION_NAME,
+      'skipped',
+      `event=${payload.event} linkId=${payload.linkId} reason=asset_not_found`,
+    )
     return Response.json({ ok: true, skipped: 'asset not found' })
   }
 
@@ -118,6 +127,15 @@ export async function POST(request: NextRequest) {
       })
     }
   }
+
+  const status: AutomationStatus = existingEvent ? 'skipped' : 'success'
+  const reason  = existingEvent ? 'duplicate' : 'processed'
+  await logAutomationRun(
+    supabase,
+    AUTOMATION_NAME,
+    status,
+    `event=${payload.event} linkId=${payload.linkId} reason=${reason}`,
+  )
 
   return Response.json({ ok: true })
 }

@@ -515,3 +515,83 @@ export type TUmamiSyncSummary = {
   windowEnd:    string
   durationMs:   number
 }
+
+// --- Automations & Reports (Sprint 8) ---
+
+export type CanonicalAutomationName =
+  | 'daily-instagram-sync'
+  | 'weekly-creator-report'
+  | 'papermark-open-alert'
+  | 'followup-reminder'
+  | 'opportunity-stale-alert'
+  | 'brand-watch-digest'
+  | 'scoring-refresh'
+
+export const CANONICAL_AUTOMATIONS: ReadonlyArray<CanonicalAutomationName> = [
+  'daily-instagram-sync',
+  'weekly-creator-report',
+  'papermark-open-alert',
+  'followup-reminder',
+  'opportunity-stale-alert',
+  'brand-watch-digest',
+  'scoring-refresh',
+] as const
+
+export interface AutomationRun {
+  id:             string
+  automationName: string
+  status:         AutomationStatus
+  resultSummary:  string | null
+  ranAt:          string
+}
+
+export interface AutomationSummary {
+  name:        string
+  canonical:   boolean
+  lastRun:     AutomationRun | null
+  lastSuccess: AutomationRun | null
+  lastFailure: AutomationRun | null
+  runs7d:      { success: number; failed: number; skipped: number }
+}
+
+export interface WeeklySummary {
+  id:          string
+  weekStart:   string
+  reachDelta:  number
+  savesDelta:  number
+  newLeads:    number
+  dealsMoved:  number
+  deckOpens:   number
+  createdAt:   string
+}
+
+export type TWeeklyReportInput = {
+  weekStart?: string  // ISO date (Monday). Defaults to current ISO week.
+}
+
+export type TWeeklyReportResult = {
+  weekStart:   string
+  reachDelta:  number
+  savesDelta:  number
+  newLeads:    number
+  dealsMoved:  number
+  deckOpens:   number
+  upserted:    boolean
+}
+
+export type TStaleOpportunitiesResult = {
+  staleCount:        number
+  tasksCreated:      number
+  skippedAsDuplicate: number
+}
+
+export type TFollowupRemindersResult = {
+  dueToday: Array<{
+    id:                  string
+    label:               string
+    dueAt:               string | null
+    linkedBrandId:       string | null
+    linkedOpportunityId: string | null
+    linkedContactId:     string | null
+  }>
+}
