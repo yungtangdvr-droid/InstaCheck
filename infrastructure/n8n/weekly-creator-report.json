@@ -1,0 +1,77 @@
+{
+  "name": "weekly-creator-report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON Monday 08:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/automations/weekly-report",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization",  "value": "=Bearer {{ $env.N8N_API_KEY }}" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 120000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "http-weekly-report",
+      "name": "POST /api/automations/weekly-report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nif (body && body.ok) {\n  const r = body.result;\n  const summary = [\n    `📊 Weekly report ${r.weekStart}`,\n    `Reach Δ ${r.reachDelta}`,\n    `Saves Δ ${r.savesDelta}`,\n    `New leads ${r.newLeads} · Deals moved ${r.dealsMoved} · Deck opens ${r.deckOpens}`\n  ].join('\\n');\n  return [{ json: { summary, result: r } }];\n}\nreturn [{ json: { summary: `❌ Weekly report failed: ${body && body.error}`, error: body && body.error } }];"
+      },
+      "id": "format-result",
+      "name": "Format result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "CRON Monday 08:00 UTC": {
+      "main": [[{ "node": "POST /api/automations/weekly-report", "type": "main", "index": 0 }]]
+    },
+    "POST /api/automations/weekly-report": {
+      "main": [[{ "node": "Format result", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": false, "instanceId": "creator-hub" },
+  "tags": [{ "name": "reports", "createdAt": "2026-04-21" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-21T00:00:00.000Z",
+  "versionId": "1"
+}

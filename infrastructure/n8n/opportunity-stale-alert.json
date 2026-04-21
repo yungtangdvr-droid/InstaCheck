@@ -1,0 +1,77 @@
+{
+  "name": "opportunity-stale-alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON 07:30 UTC daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/automations/stale-opportunities",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization",  "value": "=Bearer {{ $env.N8N_API_KEY }}" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "timeout": 60000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "http-stale",
+      "name": "POST /api/automations/stale-opportunities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nif (!body || !body.ok) {\n  return [{ json: { summary: `❌ Stale check failed: ${body && body.error}` } }];\n}\nconst r = body.result;\nreturn [{ json: { summary: `📣 ${r.staleCount} stale opportunities · ${r.tasksCreated} new tasks · ${r.skippedAsDuplicate} dupes`, result: r } }];"
+      },
+      "id": "format-result",
+      "name": "Format result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "CRON 07:30 UTC daily": {
+      "main": [[{ "node": "POST /api/automations/stale-opportunities", "type": "main", "index": 0 }]]
+    },
+    "POST /api/automations/stale-opportunities": {
+      "main": [[{ "node": "Format result", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": false, "instanceId": "creator-hub" },
+  "tags": [{ "name": "deals", "createdAt": "2026-04-21" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-21T00:00:00.000Z",
+  "versionId": "1"
+}

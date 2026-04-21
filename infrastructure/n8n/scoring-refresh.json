@@ -1,0 +1,77 @@
+{
+  "name": "scoring-refresh",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON Sunday 06:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /opt/creator-hub/infrastructure/dbt && dbt run --profiles-dir ."
+      },
+      "id": "dbt-run",
+      "name": "dbt run",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization",  "value": "=Bearer {{ $env.N8N_API_KEY }}" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"automation\": \"scoring-refresh\",\n  \"triggeredAt\": \"{{ $now.toISO() }}\",\n  \"status\": \"={{ $json.exitCode === 0 ? 'success' : 'failed' }}\",\n  \"summary\": \"={{ 'exit=' + $json.exitCode + ' stdoutBytes=' + ($json.stdout || '').length }}\"\n}",
+        "options": {
+          "timeout": 30000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "http-log",
+      "name": "POST /api/webhooks/n8n",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "CRON Sunday 06:00 UTC": {
+      "main": [[{ "node": "dbt run", "type": "main", "index": 0 }]]
+    },
+    "dbt run": {
+      "main": [[{ "node": "POST /api/webhooks/n8n", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": false, "instanceId": "creator-hub" },
+  "tags": [{ "name": "dbt", "createdAt": "2026-04-21" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-21T00:00:00.000Z",
+  "versionId": "1"
+}
