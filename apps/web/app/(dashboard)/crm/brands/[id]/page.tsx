@@ -15,6 +15,7 @@ import { NewContactInline } from '@/components/crm/NewContactInline'
 import { TaskInline } from '@/components/crm/TaskInline'
 import { TouchpointComposer } from '@/components/crm/TouchpointComposer'
 import { BrandTrafficBlock } from '@/components/attribution/BrandTrafficBlock'
+import { BrandWatchBlock } from '@/components/brand-watch/BrandWatchBlock'
 import { BRAND_STATUS_BADGE, BRAND_STATUS_LABEL } from '@/features/crm/utils'
 
 export default async function BrandDetailPage({
@@ -96,6 +97,8 @@ export default async function BrandDetailPage({
       </section>
 
       <BrandTrafficBlock brandId={brand.id} />
+
+      <BrandWatchBlock brandId={brand.id} />
     </div>
   )
 }

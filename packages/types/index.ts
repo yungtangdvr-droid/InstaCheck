@@ -595,3 +595,72 @@ export type TFollowupRemindersResult = {
     linkedContactId:     string | null
   }>
 }
+
+// --- Brand Watch (Sprint 9) ---
+
+export interface BrandWatchlist {
+  id:           string
+  brandId:      string
+  url:          string
+  label:        string | null
+  lastChangeAt: string | null
+  active:       boolean
+}
+
+export interface WatchlistListRow extends BrandWatchlist {
+  brandName:   string
+  eventsCount: number
+  lastEventAt: string | null
+}
+
+export type TWatchlistInput = {
+  brandId: string
+  url:     string
+  label?:  string
+  active?: boolean
+}
+
+export interface WatchlistEvent {
+  id:            string
+  url:           string
+  changeSummary: string | null
+  detectedAt:    string
+}
+
+export type ReviewQueueStatus = 'matched' | 'unmatched' | 'ambiguous'
+
+export interface ReviewQueueCandidate {
+  watchlistId: string
+  brandId:     string
+  brandName:   string
+  label:       string | null
+}
+
+export interface ReviewQueueRow {
+  event:      WatchlistEvent
+  status:     ReviewQueueStatus
+  candidates: ReviewQueueCandidate[]   // length 0 when unmatched, 1 when matched, 2+ when ambiguous
+}
+
+export type TBrandWatchDigestResult = {
+  windowDays:      number
+  totalEvents:     number
+  matchedEvents:   number
+  ambiguousEvents: number
+  unmatchedEvents: number
+  activeWatches:   number
+}
+
+export type ChangedetectionWebhookPayload = {
+  url:               string
+  watch_uuid?:       string
+  current_snapshot?: string
+  diff?:             string
+  change_summary?:   string
+  detected_at?:      string
+}
+
+export type TEventToTaskResult = {
+  taskId:  string
+  deduped: boolean
+}
