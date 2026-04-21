@@ -50,13 +50,26 @@ export async function POST(request: NextRequest) {
 
   const eventType = payload.event === 'link.viewed' ? 'opened' : 'completed'
 
-  await supabase.from('asset_events').insert({
-    asset_id:           asset.id,
-    event_type:         eventType,
-    viewer_fingerprint: payload.viewerId,
-    duration_ms:        payload.duration ?? null,
-    occurred_at:        payload.timestamp,
-  })
+  // Explicit dedup: identical (asset, event_type, viewer, timestamp) tuples are
+  // treated as webhook retries. Papermark can replay on 5xx / network errors.
+  const { data: existingEvent } = await supabase
+    .from('asset_events')
+    .select('id')
+    .eq('asset_id', asset.id)
+    .eq('event_type', eventType)
+    .eq('occurred_at', payload.timestamp)
+    .eq('viewer_fingerprint', payload.viewerId)
+    .maybeSingle()
+
+  if (!existingEvent) {
+    await supabase.from('asset_events').insert({
+      asset_id:           asset.id,
+      event_type:         eventType,
+      viewer_fingerprint: payload.viewerId,
+      duration_ms:        payload.duration ?? null,
+      occurred_at:        payload.timestamp,
+    })
+  }
 
   // Use upsert with ignoreDuplicates to avoid duplicate events
   await supabase.from('raw_papermark_events').upsert(
@@ -71,7 +84,7 @@ export async function POST(request: NextRequest) {
     { onConflict: 'event_id', ignoreDuplicates: true }
   )
 
-  if (payload.event === 'link.viewed') {
+  if (payload.event === 'link.viewed' && !existingEvent) {
     const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data: opportunity } = await supabase
@@ -80,12 +93,30 @@ export async function POST(request: NextRequest) {
       .eq('deck_id', asset.id)
       .maybeSingle()
 
-    await supabase.from('tasks').insert({
-      label:                 'Relancer suite à ouverture du deck',
-      status:                'todo',
-      due_at:                dueAt,
-      linked_opportunity_id: opportunity?.id ?? null,
-    })
+    // Avoid piling up relance tasks when multiple opens land within a day.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    let relanceExists = false
+
+    if (opportunity?.id) {
+      const { data: recent } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('linked_opportunity_id', opportunity.id)
+        .eq('status', 'todo')
+        .ilike('label', 'Relancer suite%')
+        .gte('created_at', since)
+        .limit(1)
+      relanceExists = !!recent && recent.length > 0
+    }
+
+    if (!relanceExists) {
+      await supabase.from('tasks').insert({
+        label:                 'Relancer suite à ouverture du deck',
+        status:                'todo',
+        due_at:                dueAt,
+        linked_opportunity_id: opportunity?.id ?? null,
+      })
+    }
   }
 
   return Response.json({ ok: true })
