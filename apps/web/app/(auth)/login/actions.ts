@@ -1,7 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createServerSupabaseClient as createServerClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 type ActionResult = { data: null; error: string } | { data: true; error: null }
 
