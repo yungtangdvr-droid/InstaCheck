@@ -1,6 +1,39 @@
 # MASTER PROMPT — Creator Hub Instagram
-# Version: v1 | Owner: Tanguy / Yugnat999 | 2026-04-20
+# Version: v1.1 | Owner: Tanguy / Yugnat999 | 2026-04-20 (refocus 2026-04-22)
 # Usage: colle ce fichier dans Claude Code en début de session, ou place-le à la racine du repo sous le nom CLAUDE.md
+
+---
+
+## REFOCUS NOTICE (2026-04-22) — LIRE EN PREMIER
+
+Le produit est officiellement recentré : **Creator Analytics Hub**.
+Sur les 7 questions opérateur ci-dessous, seules **les questions 1 et 2** sont en scope actif. Les questions 3 à 7 (marques, relances, decks, opportunités, signaux éditoriaux côté business) sont **gelées** mais pas supprimées.
+
+### Scope primaire (développement actif)
+
+- Ingestion Instagram (`lib/meta/`, tables `raw_instagram_*`, `posts`, `post_metrics_daily`)
+- Module 1 — Analytics Dashboard (`/analytics`, `/analytics/formats`, `/analytics/post/[id]`)
+- Module 2 — Content Lab (`/content-lab`, `/content-lab/hypothesis/[id]`)
+
+### Scope gelé / secondaire (ne pas étendre, ne pas supprimer)
+
+- Module 3 — Brand CRM (`/crm`)
+- Module 4 — Deal Pipeline (`/deals`)
+- Module 5 — Deck Tracking (`/assets`, webhooks Papermark)
+- Attribution (`/attribution`, intégration Umami)
+- Module 6 — Automations (`/automations`)
+- Brand Watch (`/brand-watch`, changedetection.io)
+- Cal.com (`lib/calcom/`)
+
+### Conséquences pour Claude Code
+
+1. La nav du dashboard n'expose désormais que **Analytics** et **Content Lab**. Les routes gelées restent accessibles par URL directe mais ne reçoivent plus de nouvelles features.
+2. Les sprints 4 à 9 du plan ci-dessous sont **en pause**. Aucun nouveau code, aucune nouvelle migration, aucun nouveau webhook ne doit être ajouté pour les modules gelés.
+3. La règle d'or « Si une feature n'est pas dans les 6 modules MVP, elle n'existe pas encore » devient : **« Si une feature n'est pas dans Analytics Dashboard ou Content Lab, elle n'existe pas encore. »**
+4. Les tables Supabase et les types TypeScript des modules gelés restent en place pour ne pas bloquer un dégel ultérieur. Ne pas écrire dans ces tables depuis le code applicatif tant que le dégel n'est pas annoncé.
+5. La stack technique (Next.js, Supabase, Meta SDK, n8n, dbt, etc.) reste identique. Papermark, Umami, changedetection.io et Cal.com ne sont plus prioritaires mais ne doivent pas être désinstallés.
+
+Toute section ci-dessous qui décrit un module gelé reste de la documentation historique : la lire pour le contexte, ne pas la prendre comme prochaine tâche.
 
 ---
 

@@ -6,7 +6,9 @@ import type {
 
 // ─── Post performance score ───────────────────────────────────────────────────
 
-const POST_WEIGHTS = {
+// Canonical weights for post performance scoring. Single source of truth —
+// imported by analytics aggregations and content-lab recommendations.
+export const POST_SCORE_WEIGHTS = {
   saves:         0.35,
   shares:        0.30,
   comments:      0.15,
@@ -14,7 +16,7 @@ const POST_WEIGHTS = {
   profileVisits: 0.10,
 } as const
 
-type PostMetrics = {
+export type TPostMetrics = {
   saves: number
   shares: number
   comments: number
@@ -22,18 +24,18 @@ type PostMetrics = {
   profileVisits: number
 }
 
-type BaselineMetrics = PostMetrics
+type BaselineMetrics = TPostMetrics
 
-export function scorePost(metrics: PostMetrics, baseline: BaselineMetrics): TPostScore {
+export function scorePost(metrics: TPostMetrics, baseline: BaselineMetrics): TPostScore {
   const normalize = (value: number, base: number) =>
     base === 0 ? 0 : Math.min(value / base, 2)
 
   const raw =
-    POST_WEIGHTS.saves         * normalize(metrics.saves, baseline.saves) +
-    POST_WEIGHTS.shares        * normalize(metrics.shares, baseline.shares) +
-    POST_WEIGHTS.comments      * normalize(metrics.comments, baseline.comments) +
-    POST_WEIGHTS.likes         * normalize(metrics.likes, baseline.likes) +
-    POST_WEIGHTS.profileVisits * normalize(metrics.profileVisits, baseline.profileVisits)
+    POST_SCORE_WEIGHTS.saves         * normalize(metrics.saves,         baseline.saves) +
+    POST_SCORE_WEIGHTS.shares        * normalize(metrics.shares,        baseline.shares) +
+    POST_SCORE_WEIGHTS.comments      * normalize(metrics.comments,      baseline.comments) +
+    POST_SCORE_WEIGHTS.likes         * normalize(metrics.likes,         baseline.likes) +
+    POST_SCORE_WEIGHTS.profileVisits * normalize(metrics.profileVisits, baseline.profileVisits)
 
   const baselineValue = 50
   const score = Math.round(Math.min(raw, 1) * 100)

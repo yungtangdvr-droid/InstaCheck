@@ -1,22 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { ContentLabPost } from '@creator-hub/types'
+import { scorePost } from '@creator-hub/scoring'
 import { ReplicablePostCard } from './ReplicablePostCard'
-
-// Mirrors @creator-hub/scoring scorePost weights.
-// Wire via tsconfig paths once @creator-hub/scoring is added to web app dependencies.
-function computeScore(
-  m: { saves: number; shares: number; comments: number; likes: number; profileVisits: number },
-  b: { saves: number; shares: number; comments: number; likes: number; profileVisits: number },
-): number {
-  const n = (v: number, base: number) => (base === 0 ? 0 : Math.min(v / base, 2))
-  const raw =
-    0.35 * n(m.saves, b.saves) +
-    0.30 * n(m.shares, b.shares) +
-    0.15 * n(m.comments, b.comments) +
-    0.10 * n(m.likes, b.likes) +
-    0.10 * n(m.profileVisits, b.profileVisits)
-  return Math.round(Math.min(raw, 1) * 100)
-}
 
 const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   .toISOString()
@@ -102,7 +87,7 @@ export async function WhatToDoNext() {
       postedAt:  p.posted_at,
       metrics:   m,
       tags:      tagMap.get(p.id) ?? [],
-      score:     computeScore(m, baseline),
+      score:     scorePost(m, baseline).score,
     }
   })
 

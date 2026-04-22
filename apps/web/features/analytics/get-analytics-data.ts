@@ -8,7 +8,7 @@ import type {
   TPostingWindow,
   TTopPost,
 } from '@creator-hub/types'
-import { POST_SCORE_WEIGHTS } from '@creator-hub/types'
+import { POST_SCORE_WEIGHTS } from '@creator-hub/scoring'
 
 type Supabase = SupabaseClient<Database>
 
