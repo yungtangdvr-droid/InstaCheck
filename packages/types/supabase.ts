@@ -393,6 +393,7 @@ export interface Database {
           last_activity_at:  string
           next_action:       string | null
           deck_id:           string | null
+          booking_url:       string | null
         }>
         Insert: Insert<{
           id?:               string
@@ -408,6 +409,7 @@ export interface Database {
           last_activity_at?:  string
           next_action?:       string | null
           deck_id?:           string | null
+          booking_url?:       string | null
         }>
         Update: Update<Database['public']['Tables']['opportunities']['Insert']>
         Relationships: []

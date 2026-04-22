@@ -26,6 +26,7 @@ function mapOpportunity(row: Database['public']['Tables']['opportunities']['Row'
     lastActivityAt:  row.last_activity_at ?? undefined,
     nextAction:      row.next_action ?? undefined,
     deckId:          row.deck_id ?? undefined,
+    bookingUrl:      row.booking_url ?? undefined,
   }
 }
 
