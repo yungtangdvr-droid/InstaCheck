@@ -1,5 +1,3 @@
-// Sprint 3: read-only scaffold.
-// Full editing (change type, update reason, link/unlink post) is deferred to Sprint 4.
 import type { ContentRecommendation, ContentRecommendationType } from '@creator-hub/types'
 
 const TYPE_CONFIG: Record<
@@ -75,9 +73,6 @@ export function HypothesisEditor({
         </p>
       </div>
 
-      <p className="border-t border-neutral-800 pt-3 text-xs text-neutral-600">
-        Édition complète disponible en Sprint 4.
-      </p>
     </div>
   )
 }

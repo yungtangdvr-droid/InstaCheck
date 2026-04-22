@@ -73,7 +73,7 @@ export function PostExplorer({ posts }: Props) {
       </table>
       <p className="border-t border-neutral-800 bg-neutral-900/50 px-4 py-2 text-xs text-neutral-600">
         * Score provisoire (pondération saves/shares/comments/likes/profile_visits) —
-        sera remplacé par <code>mart_post_performance</code> (dbt Sprint 3+)
+        sera remplacé par <code>mart_post_performance</code> (dbt) une fois branché.
       </p>
     </div>
   )

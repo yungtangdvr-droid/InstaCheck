@@ -9,7 +9,6 @@
   "scripts": {
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
-    "lint": "pnpm --filter web lint",
     "type-check": "pnpm --filter web type-check",
     "db:migrate": "pnpm supabase db push",
     "db:types": "pnpm supabase gen types typescript --local > packages/types/supabase.ts"

@@ -1,4 +1,8 @@
-import type { TPostScore, TBrandFitScore, TOpportunityHealth } from '@creator-hub/types'
+import type {
+  TPostScore,
+  TBrandFitScore,
+  TOpportunityHealthScore,
+} from '@creator-hub/types'
 
 // ─── Post performance score ───────────────────────────────────────────────────
 
@@ -20,7 +24,7 @@ type PostMetrics = {
 
 type BaselineMetrics = PostMetrics
 
-export function scorePost(metrics: PostMetrics, baseline: BaselineMetrics): TPostScore & { postId: string } {
+export function scorePost(metrics: PostMetrics, baseline: BaselineMetrics): TPostScore {
   const normalize = (value: number, base: number) =>
     base === 0 ? 0 : Math.min(value / base, 2)
 
@@ -31,10 +35,14 @@ export function scorePost(metrics: PostMetrics, baseline: BaselineMetrics): TPos
     POST_WEIGHTS.likes         * normalize(metrics.likes, baseline.likes) +
     POST_WEIGHTS.profileVisits * normalize(metrics.profileVisits, baseline.profileVisits)
 
+  const baselineValue = 50
+  const score = Math.round(Math.min(raw, 1) * 100)
+
   return {
-    postId: '',
-    score: Math.round(Math.min(raw, 1) * 100),
-    baseline: 50,
+    postId:   '',
+    score,
+    baseline: baselineValue,
+    delta:    score - baselineValue,
   }
 }
 
@@ -59,13 +67,13 @@ export function scoreBrandFit(input: BrandFitInput): TBrandFitScore {
     input.recentSignals
 
   return {
-    brandId: input.brandId,
-    category: input.categoryMatch,
-    aesthetic: input.aestheticProximity,
-    budget: input.budgetPlausibility,
-    contactExists: contactScore,
-    recentSignals: input.recentSignals,
-    total: Math.min(total, 100),
+    brandId:        input.brandId,
+    categoryScore:  input.categoryMatch,
+    aestheticScore: input.aestheticProximity,
+    budgetScore:    input.budgetPlausibility,
+    contactScore,
+    signalScore:    input.recentSignals,
+    total:          Math.min(total, 100),
   }
 }
 
@@ -80,20 +88,23 @@ type OpportunityHealthInput = {
   probability: number
 }
 
-export function scoreOpportunityHealth(input: OpportunityHealthInput): TOpportunityHealth {
-  let score = 50
+export function scoreOpportunityHealth(input: OpportunityHealthInput): TOpportunityHealthScore {
+  const recencyPenalty = -input.daysSinceLastActivity
+  const deckBonus      = input.deckOpened   ? 20 : 0
+  const replyBonus     = input.replyReceived ? 30 : 0
+  const valueScore     = Math.log10(Math.max(input.estimatedValue, 1)) * 2
+  const probabilityAdj = (input.probability - 50) * 0.3
 
-  score -= input.daysSinceLastActivity
-  if (input.deckOpened) score += 20
-  if (input.replyReceived) score += 30
-  score += Math.log10(Math.max(input.estimatedValue, 1)) * 2
-  score += (input.probability - 50) * 0.3
+  const raw   = 50 + recencyPenalty + deckBonus + replyBonus + valueScore + probabilityAdj
+  const total = Math.max(0, Math.min(100, Math.round(raw)))
 
   return {
     opportunityId: input.opportunityId,
-    score: Math.max(0, Math.min(100, Math.round(score))),
-    daysSinceActivity: input.daysSinceLastActivity,
-    deckOpened: input.deckOpened,
-    replyReceived: input.replyReceived,
+    recencyPenalty,
+    deckBonus,
+    replyBonus,
+    valueScore,
+    probability:   input.probability,
+    total,
   }
 }
