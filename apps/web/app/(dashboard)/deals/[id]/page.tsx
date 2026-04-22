@@ -85,6 +85,16 @@ export default async function DealDetailPage({
             {opportunity.expectedCloseAt && (
               <span>cible {formatDate(opportunity.expectedCloseAt)}</span>
             )}
+            {opportunity.bookingUrl && (
+              <a
+                href={opportunity.bookingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-neutral-300"
+              >
+                Book a call ↗
+              </a>
+            )}
           </div>
         </div>
         <StageDropdown

@@ -179,6 +179,7 @@ export interface Opportunity {
   lastActivityAt?: string
   nextAction?:     string
   deckId?:         string
+  bookingUrl?:     string
 }
 
 export interface Task {
