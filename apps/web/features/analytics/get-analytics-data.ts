@@ -179,7 +179,7 @@ export async function getPostingWindows(
  *
  * NOTE: provisional — uses POST_SCORE_WEIGHTS directly against raw totals,
  * normalised to 0–100 within the current dataset.
- * Will be replaced by mart_post_performance (dbt) in Sprint 3+.
+ * Will be replaced by mart_post_performance (dbt) once the mart is wired in.
  */
 export async function getTopPosts(
   supabase: Supabase,
