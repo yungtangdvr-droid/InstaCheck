@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: mart_post_performance
+    description: >
+      One row per Instagram post with a weighted performance score against a
+      rolling-30d per-format baseline. Self-excluding baseline so a single
+      outlier doesn't drag its own score down. Timezone derivations come
+      from stg_posts (Europe/Paris).
+    columns:
+      - name: post_id
+        description: Primary key. Matches stg_posts.post_id.
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_posts')
+                field: post_id
+      - name: media_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']
+      - name: performance_score
+        description: Weighted score vs format baseline, clamped 0–100.
+        tests: [not_null]
+      - name: baseline_score
+        description: >
+          Score a perfectly-average post of this format would receive. Equal
+          to 50 while weights sum to 1. Exposed so callers compare score vs
+          baseline directly instead of hard-coding the constant.
+        tests: [not_null]
+      - name: score_delta
+        description: performance_score − baseline_score.
+      - name: in_last_7d
+        tests: [not_null]
+      - name: in_last_30d
+        tests: [not_null]
+      - name: in_last_90d
+        tests: [not_null]
+      - name: posted_dow
+        description: ISO day-of-week in Europe/Paris (1=Monday, 7=Sunday).
+      - name: posted_hour
+        description: Hour-of-day 0-23 in Europe/Paris.
+
+  - name: mart_format_performance
+    description: >
+      Aggregate of mart_post_performance by (media_type, period_days).
+      Averages are per-post. `top_post_id` is the highest-scoring post of
+      that format in the period (null if no posts).
+    columns:
+      - name: media_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']
+      - name: period_days
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [7, 30, 90]
+                quote: false
+      - name: post_count
+        tests: [not_null]
+      - name: baseline_score
+        description: Per-format baseline score (50). Carried forward for UI.
+      - name: avg_score
+        description: Mean performance_score of posts in this (format, period).
+
+  - name: mart_theme_performance
+    description: >
+      Aggregate of mart_post_performance by (theme_name, period_days).
+      `theme_name` resolves to content_themes.name when any theme's `tags`
+      array contains the post tag, else falls back to the raw tag. A post
+      whose tags resolve to multiple themes appears once per theme. Includes
+      `low_sample_flag` and `sample_size_confidence` so the UI can grey out
+      themes with too few posts to be meaningful.
+    columns:
+      - name: theme_name
+        tests: [not_null]
+      - name: period_days
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [7, 30, 90]
+                quote: false
+      - name: is_mapped_theme
+        description: >
+          True if theme_name resolved to a content_themes row; false if it
+          is a raw-tag fallback.
+        tests: [not_null]
+      - name: post_count
+        tests: [not_null]
+      - name: low_sample_flag
+        description: True when post_count < 3.
+        tests: [not_null]
+      - name: sample_size_confidence
+        description: Linear 0–1 ramp (post_count / 3, capped at 1).
+        tests: [not_null]
+
+  - name: mart_best_posting_windows
+    description: >
+      Avg performance per (day_of_week, hour, media_type, period_days).
+      TIMEZONE — Europe/Paris. Day-of-week is ISO (1=Monday…7=Sunday).
+      `media_type = NULL` row is the "all formats" rollup for that
+      (period, dow, hour). `sample_confidence` = post_count / total posts
+      in the same (period_days, media_type) slice.
+    columns:
+      - name: period_days
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [7, 30, 90]
+                quote: false
+      - name: day_of_week
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+                quote: false
+      - name: hour
+        tests: [not_null]
+      - name: media_type
+        description: Instagram media_type, or NULL for the all-formats row.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']
+                quote: true
+      - name: post_count
+        tests: [not_null]
+      - name: sample_confidence
+        tests: [not_null]
+      - name: low_sample_flag
+        tests: [not_null]

@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: stg_posts
+    description: >
+      Typed view over public.posts. Adds Europe/Paris local-time derivatives
+      (`posted_at_local`, `posted_dow`, `posted_hour`) and rolling-window
+      membership flags (`in_last_7d/30d/90d`) used by every downstream mart.
+    columns:
+      - name: post_id
+        description: Primary key of public.posts.
+        tests: [not_null, unique]
+      - name: account_id
+        tests: [not_null]
+      - name: media_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']
+      - name: posted_at
+        tests: [not_null]
+      - name: posted_dow
+        description: ISO day-of-week in Europe/Paris (1=Monday, 7=Sunday).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
+                quote: false
+      - name: posted_hour
+        description: Hour-of-day 0-23 in Europe/Paris.
+        tests: [not_null]
+
+  - name: stg_post_metrics_daily
+    description: >
+      Per-post aggregation of public.post_metrics_daily (all history). One row
+      per post that has at least one metric row.
+    columns:
+      - name: post_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_posts')
+                field: post_id
+      - name: total_saves
+        tests: [not_null]
+      - name: total_reach
+        tests: [not_null]
+
+  - name: stg_post_tags
+    description: >
+      Normalised (post_id, tag) pairs. Tags lower-cased and trimmed; empty
+      tags dropped.
+    columns:
+      - name: post_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_posts')
+                field: post_id
+      - name: tag
+        tests: [not_null]
+
+  - name: stg_content_themes
+    description: >
+      Theme definitions with a lower-cased tag array so overlap detection
+      against stg_post_tags is case-insensitive.
+    columns:
+      - name: theme_id
+        tests: [not_null, unique]
+      - name: theme_name
+        tests: [not_null, unique]
