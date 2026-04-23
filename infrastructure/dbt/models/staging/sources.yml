@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: public
+    schema: public
+    description: >
+      Creator Hub operational tables exposed to dbt. Only entities relevant to
+      the active Analytics + Content Lab scope are declared here. Frozen
+      modules (CRM, deals, assets, attribution, automations, brand-watch) are
+      intentionally excluded until they are unfrozen.
+    tables:
+      - name: posts
+        description: One Instagram post per row.
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: media_id
+            tests: [not_null]
+          - name: media_type
+            tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']
+          - name: posted_at
+            tests: [not_null]
+      - name: post_metrics_daily
+        description: Daily Instagram insights snapshot per post.
+        columns:
+          - name: post_id
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('public', 'posts')
+                    field: id
+          - name: date
+            tests: [not_null]
+      - name: post_tags
+        description: Manual editorial tags attached to posts.
+        columns:
+          - name: post_id
+            tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('public', 'posts')
+                    field: id
+          - name: tag
+            tests: [not_null]
+      - name: content_themes
+        description: Editorial themes that group one or more tags.
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: name
+            tests: [not_null, unique]
+
+      # ── Frozen-module sources ─────────────────────────────────────────
+      # Declared only because mart_brand_pipeline (frozen) still
+      # references them. No tests, no staging model — do not extend.
+      - name: brands
+      - name: opportunities
