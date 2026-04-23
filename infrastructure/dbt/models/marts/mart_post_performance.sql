@@ -40,6 +40,7 @@ joined as (
   select
     p.post_id,
     p.account_id,
+    p.media_id,
     p.media_type,
     p.caption,
     p.permalink,
@@ -142,6 +143,7 @@ ratio_scored as (
 select
   post_id,
   account_id,
+  media_id,
   media_type,
   caption,
   permalink,

@@ -613,7 +613,114 @@ export interface Database {
         Relationships: []
       }
     }
-    Views:          Record<string, never>
+    Views: {
+      // dbt mart surfaces. These are read-only views defined in
+      // supabase/migrations/0004_mart_views.sql that forward `select *`
+      // from marts.mart_*. Shape must stay in sync with
+      // infrastructure/dbt/models/marts/*.sql.
+      v_mart_post_performance: {
+        Row: Row<{
+          post_id:                  string
+          account_id:               string
+          media_id:                 string
+          media_type:               string
+          caption:                  string | null
+          permalink:                string | null
+          posted_at:                string | null
+          posted_at_local:          string | null
+          posted_date_local:        string | null
+          posted_dow:               number | null
+          posted_hour:              number | null
+          in_last_7d:               boolean
+          in_last_30d:              boolean
+          in_last_90d:              boolean
+          tags:                     string[]
+          theme_names:              string[]
+          total_reach:              number
+          total_impressions:        number
+          total_saves:              number
+          total_shares:             number
+          total_likes:              number
+          total_comments:           number
+          total_profile_visits:     number
+          baseline_saves:           number | null
+          baseline_shares:          number | null
+          baseline_comments:        number | null
+          baseline_likes:           number | null
+          baseline_profile_visits:  number | null
+          format_sample_size:       number
+          performance_score:        number
+          baseline_score:           number
+          score_delta:              number
+        }>
+        Relationships: []
+      }
+      v_mart_format_performance: {
+        Row: Row<{
+          media_type:                  string
+          period_days:                 number
+          post_count:                  number
+          total_reach:                 number
+          total_saves:                 number
+          total_shares:                number
+          total_likes:                 number
+          total_comments:              number
+          total_profile_visits:        number
+          avg_reach_per_post:          number
+          avg_saves_per_post:          number
+          avg_shares_per_post:         number
+          avg_likes_per_post:          number
+          avg_comments_per_post:       number
+          avg_profile_visits_per_post: number
+          avg_score:                   number
+          baseline_score:              number
+          top_post_id:                 string | null
+          top_post_score:              number | null
+        }>
+        Relationships: []
+      }
+      v_mart_theme_performance: {
+        Row: Row<{
+          theme_name:              string
+          theme_id:                string | null
+          is_mapped_theme:         boolean
+          period_days:             number
+          post_count:              number
+          total_saves:             number
+          total_reach:             number
+          total_shares:            number
+          total_likes:             number
+          total_comments:          number
+          avg_saves_per_post:      number
+          avg_reach_per_post:      number
+          avg_score:               number
+          baseline_score:          number
+          last_posted_at:          string | null
+          top_post_id:             string | null
+          top_post_score:          number | null
+          low_sample_flag:         boolean
+          sample_size_confidence:  number
+        }>
+        Relationships: []
+      }
+      v_mart_best_posting_windows: {
+        Row: Row<{
+          // day_of_week is ISO 1–7 (1 = Monday … 7 = Sunday) in Europe/Paris.
+          // The app converts to 0–6 Sunday-first in getPostingWindows.
+          period_days:       number
+          day_of_week:       number
+          hour:              number
+          media_type:        string | null
+          post_count:        number
+          avg_saves:         number
+          avg_reach:         number
+          avg_score:         number
+          sample_confidence: number
+          low_sample_flag:   boolean
+        }>
+        Relationships: []
+      }
+    }
     Functions:      Record<string, never>
     Enums:          Record<string, never>
     CompositeTypes: Record<string, never>
