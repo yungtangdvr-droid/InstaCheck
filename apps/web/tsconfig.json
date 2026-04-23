@@ -21,7 +21,8 @@
     "paths": {
       "@/*": ["./*"],
       "@creator-hub/types": ["../../packages/types/index.ts"],
-      "@creator-hub/types/supabase": ["../../packages/types/supabase.ts"]
+      "@creator-hub/types/supabase": ["../../packages/types/supabase.ts"],
+      "@creator-hub/scoring": ["../../packages/scoring/index.ts"]
     }
   },
   "include": [

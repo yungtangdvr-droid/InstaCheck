@@ -38,14 +38,8 @@ export type ContentRecommendationType = 'replicate' | 'adapt' | 'drop'
 export type AutomationStatus = 'success' | 'failed' | 'skipped'
 
 // --- Scoring ---
-
-export const POST_SCORE_WEIGHTS = {
-  saves:         0.35,
-  shares:        0.30,
-  comments:      0.15,
-  likes:         0.10,
-  profileVisits: 0.10,
-} as const
+// POST_SCORE_WEIGHTS lives in @creator-hub/scoring (single source of truth).
+// This module owns scoring TYPES only — runtime weights are exported from scoring.
 
 export type TPostScore = {
   postId:   string

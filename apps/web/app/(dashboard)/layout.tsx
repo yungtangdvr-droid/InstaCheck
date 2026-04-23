@@ -2,15 +2,12 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
+// Refocus 2026-04-22: only Analytics and Content Lab are surfaced in the nav.
+// Frozen routes (crm, deals, assets, attribution, brand-watch, automations) still
+// resolve by direct URL but are not advertised. See CLAUDE.md and MASTER_PROMPT_CREATOR_HUB.md.
 const NAV = [
   { href: '/analytics',   label: 'Analytics' },
   { href: '/content-lab', label: 'Content Lab' },
-  { href: '/crm',         label: 'CRM' },
-  { href: '/deals',       label: 'Deals' },
-  { href: '/assets',      label: 'Decks' },
-  { href: '/attribution', label: 'Attribution' },
-  { href: '/brand-watch', label: 'Brand Watch' },
-  { href: '/automations', label: 'Automations' },
 ]
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
