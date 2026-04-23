@@ -32,6 +32,15 @@ next-env.d.ts
 .supabase/
 supabase/.temp/
 
+# dbt artifacts
+infrastructure/dbt/target/
+infrastructure/dbt/dbt_packages/
+infrastructure/dbt/logs/
+infrastructure/dbt/.user.yml
+
+# local web logs
+apps/web/logs/
+
 # OS
 .DS_Store
 Thumbs.db

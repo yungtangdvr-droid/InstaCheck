@@ -22,11 +22,11 @@ export async function ThemePerformanceTable() {
   }
 
   const aggregates: ThemeAggregate[] = data.map(r => ({
-    themeName:     r.theme_name,
-    postCount:     r.post_count,
-    avgSaves:      r.avg_saves_per_post,
-    avgReach:      r.avg_reach_per_post,
-    lowSampleFlag: r.low_sample_flag,
+    themeName:     r.theme_name ?? '',
+    postCount:     r.post_count ?? 0,
+    avgSaves:      r.avg_saves_per_post ?? 0,
+    avgReach:      r.avg_reach_per_post ?? 0,
+    lowSampleFlag: r.low_sample_flag ?? false,
   }))
 
   return (

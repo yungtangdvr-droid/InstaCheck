@@ -25,22 +25,22 @@ export async function WhatToDoNext() {
   }
 
   const top3: ContentLabPost[] = data.map(r => ({
-    id:        r.post_id,
-    mediaId:   r.media_id,
-    mediaType: r.media_type,
+    id:        r.post_id    ?? '',
+    mediaId:   r.media_id   ?? '',
+    mediaType: r.media_type ?? 'UNKNOWN',
     caption:   r.caption,
     permalink: r.permalink,
     postedAt:  r.posted_at,
     metrics: {
-      saves:         r.total_saves,
-      shares:        r.total_shares,
-      comments:      r.total_comments,
-      likes:         r.total_likes,
-      profileVisits: r.total_profile_visits,
-      reach:         r.total_reach,
+      saves:         Number(r.total_saves          ?? 0),
+      shares:        Number(r.total_shares         ?? 0),
+      comments:      Number(r.total_comments       ?? 0),
+      likes:         Number(r.total_likes          ?? 0),
+      profileVisits: Number(r.total_profile_visits ?? 0),
+      reach:         Number(r.total_reach          ?? 0),
     },
-    tags:  r.tags,
-    score: r.performance_score,
+    tags:  r.tags ?? [],
+    score: r.performance_score ?? 0,
   }))
 
   return (

@@ -83,11 +83,11 @@ export async function getFormatBreakdown(
   if (error) return { data: null, error: error.message }
 
   const result: TFormatSummary[] = (data ?? []).map(r => ({
-    mediaType: r.media_type,
-    count:     r.post_count,
-    reach:     r.total_reach,
-    saves:     r.total_saves,
-    shares:    r.total_shares,
+    mediaType: r.media_type     ?? 'UNKNOWN',
+    count:     r.post_count     ?? 0,
+    reach:     Number(r.total_reach  ?? 0),
+    saves:     Number(r.total_saves  ?? 0),
+    shares:    Number(r.total_shares ?? 0),
   }))
 
   return { data: result, error: null }
@@ -113,10 +113,10 @@ export async function getPostingWindows(
   if (error) return { data: null, error: error.message }
 
   const result: TPostingWindow[] = (data ?? []).map(r => ({
-    dayOfWeek: isoDowToSundayFirst(r.day_of_week),
-    hour:      r.hour,
-    savesAvg:  r.avg_saves,
-    count:     r.post_count,
+    dayOfWeek: isoDowToSundayFirst(r.day_of_week ?? 1),
+    hour:      r.hour       ?? 0,
+    savesAvg:  r.avg_saves  ?? 0,
+    count:     r.post_count ?? 0,
   }))
 
   return { data: result, error: null }
@@ -146,19 +146,19 @@ export async function getTopPosts(
   if (error) return { data: null, error: error.message }
 
   const result: TTopPost[] = (data ?? []).map(r => ({
-    id:            r.post_id,
-    mediaId:       r.media_id,
-    mediaType:     r.media_type,
+    id:            r.post_id    ?? '',
+    mediaId:       r.media_id   ?? '',
+    mediaType:     r.media_type ?? 'UNKNOWN',
     caption:       r.caption,
     permalink:     r.permalink,
     postedAt:      r.posted_at,
-    reach:         r.total_reach,
-    saves:         r.total_saves,
-    shares:        r.total_shares,
-    likes:         r.total_likes,
-    comments:      r.total_comments,
-    profileVisits: r.total_profile_visits,
-    score:         r.performance_score,
+    reach:         Number(r.total_reach          ?? 0),
+    saves:         Number(r.total_saves          ?? 0),
+    shares:        Number(r.total_shares         ?? 0),
+    likes:         Number(r.total_likes          ?? 0),
+    comments:      Number(r.total_comments       ?? 0),
+    profileVisits: Number(r.total_profile_visits ?? 0),
+    score:         r.performance_score ?? 0,
   }))
 
   return { data: result, error: null }
