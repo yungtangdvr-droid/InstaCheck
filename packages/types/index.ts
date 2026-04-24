@@ -306,12 +306,13 @@ export interface ContentLabPost {
   score: number
 }
 
-// PROVISIONAL: inline-computed until mart_theme_performance dbt mart is available
 export interface ThemeAggregate {
   themeName: string
   postCount: number
   avgSaves: number
   avgReach: number
+  // From mart_theme_performance. True when post_count < 3; UI greys the row.
+  lowSampleFlag?: boolean
 }
 
 export interface ContentRecommendation {
@@ -411,7 +412,9 @@ export type TFormatSummary = {
 }
 
 export type TPostingWindow = {
-  dayOfWeek: number   // 0 = Sun … 6 = Sat
+  // 0 = Sun … 6 = Sat (JS Date.getDay convention). The mart emits ISO
+  // 1–7 and the analytics fetcher remaps it; see isoDowToSundayFirst.
+  dayOfWeek: number
   hour:      number   // 0–23
   savesAvg:  number
   count:     number
@@ -430,7 +433,7 @@ export type TTopPost = {
   likes:         number
   comments:      number
   profileVisits: number
-  // provisional score: saves-weighted 0–100 until mart_post_performance (dbt) is built
+  // Baseline-relative 0–100 score from mart_post_performance (avg ≈ 50).
   score:         number
 }
 

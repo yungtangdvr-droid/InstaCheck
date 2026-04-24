@@ -17,6 +17,10 @@ models:
               arguments:
                 to: ref('stg_posts')
                 field: post_id
+      - name: media_id
+        description: Instagram media id carried from stg_posts so downstream
+          callers can deep-link without a secondary join on public.posts.
+        tests: [not_null]
       - name: media_type
         tests:
           - not_null

@@ -8,7 +8,7 @@ import type {
   TPostingWindow,
   TTopPost,
 } from '@creator-hub/types'
-import { POST_SCORE_WEIGHTS } from '@creator-hub/scoring'
+import { isoDowToSundayFirst } from './utils'
 
 type Supabase = SupabaseClient<Database>
 
@@ -18,10 +18,16 @@ function periodStart(period: TAnalyticsPeriod): string {
   return d.toISOString().split('T')[0]
 }
 
+function periodFlagColumn(period: TAnalyticsPeriod): 'in_last_7d' | 'in_last_30d' | 'in_last_90d' {
+  if (period === 7)  return 'in_last_7d'
+  if (period === 30) return 'in_last_30d'
+  return 'in_last_90d'
+}
+
 /**
  * Daily totals for reach, saves, shares, likes, comments within the period.
  * Aggregates all posts per date.
- * Data source: post_metrics_daily (real data from Sprint 1 ingestion).
+ * Data source: post_metrics_daily (no mart covers a per-day series yet).
  */
 export async function getReachSeries(
   supabase: Supabase,
@@ -62,205 +68,98 @@ export async function getReachSeries(
 }
 
 /**
- * Aggregate reach/saves/shares grouped by media_type for posts published in the period.
- * Two-query join in JS because FK relationships are not declared in generated types.
+ * Aggregate reach/saves/shares grouped by media_type for posts in the period.
+ * Reads mart_format_performance (v_mart_format_performance).
  */
 export async function getFormatBreakdown(
   supabase: Supabase,
   period: TAnalyticsPeriod,
 ): Promise<ActionResult<TFormatSummary[]>> {
-  const from = periodStart(period)
+  const { data, error } = await supabase
+    .from('v_mart_format_performance')
+    .select('media_type, post_count, total_reach, total_saves, total_shares')
+    .eq('period_days', period)
 
-  const { data: posts, error: postsErr } = await supabase
-    .from('posts')
-    .select('id, media_type')
-    .gte('posted_at', from)
+  if (error) return { data: null, error: error.message }
 
-  if (postsErr) return { data: null, error: postsErr.message }
-  if (!posts || posts.length === 0) return { data: [], error: null }
-
-  const postIds     = posts.map(p => p.id)
-  const typeByPost  = new Map(posts.map(p => [p.id, p.media_type]))
-  const countByType = new Map<string, number>()
-  for (const p of posts) {
-    countByType.set(p.media_type, (countByType.get(p.media_type) ?? 0) + 1)
-  }
-
-  const { data: metrics, error: metricsErr } = await supabase
-    .from('post_metrics_daily')
-    .select('post_id, reach, saves, shares')
-    .in('post_id', postIds)
-
-  if (metricsErr) return { data: null, error: metricsErr.message }
-
-  const byFormat = new Map<string, TFormatSummary>()
-  for (const m of metrics ?? []) {
-    const type = typeByPost.get(m.post_id) ?? 'UNKNOWN'
-    const existing = byFormat.get(type)
-    if (existing) {
-      existing.reach  += m.reach  ?? 0
-      existing.saves  += m.saves  ?? 0
-      existing.shares += m.shares ?? 0
-    } else {
-      byFormat.set(type, {
-        mediaType: type,
-        count:     countByType.get(type) ?? 0,
-        reach:     m.reach  ?? 0,
-        saves:     m.saves  ?? 0,
-        shares:    m.shares ?? 0,
-      })
-    }
-  }
-
-  return { data: Array.from(byFormat.values()), error: null }
-}
-
-/**
- * Average saves per (day-of-week × hour) based on posts published in the period.
- * Used to populate the BestWindowHeatmap.
- */
-export async function getPostingWindows(
-  supabase: Supabase,
-  period: TAnalyticsPeriod,
-): Promise<ActionResult<TPostingWindow[]>> {
-  const from = periodStart(period)
-
-  const { data: posts, error: postsErr } = await supabase
-    .from('posts')
-    .select('id, posted_at')
-    .gte('posted_at', from)
-    .not('posted_at', 'is', null)
-
-  if (postsErr) return { data: null, error: postsErr.message }
-  if (!posts || posts.length === 0) return { data: [], error: null }
-
-  const postIds    = posts.map(p => p.id)
-  const timeByPost = new Map(posts.map(p => [p.id, p.posted_at!]))
-
-  const { data: metrics, error: metricsErr } = await supabase
-    .from('post_metrics_daily')
-    .select('post_id, saves')
-    .in('post_id', postIds)
-
-  if (metricsErr) return { data: null, error: metricsErr.message }
-
-  const windows = new Map<string, { dayOfWeek: number; hour: number; totalSaves: number; count: number }>()
-  for (const m of metrics ?? []) {
-    const postedAt = timeByPost.get(m.post_id)
-    if (!postedAt) continue
-    const d   = new Date(postedAt)
-    const key = `${d.getDay()}-${d.getHours()}`
-    const existing = windows.get(key)
-    if (existing) {
-      existing.totalSaves += m.saves ?? 0
-      existing.count      += 1
-    } else {
-      windows.set(key, {
-        dayOfWeek:  d.getDay(),
-        hour:       d.getHours(),
-        totalSaves: m.saves ?? 0,
-        count:      1,
-      })
-    }
-  }
-
-  const result: TPostingWindow[] = Array.from(windows.values()).map(w => ({
-    dayOfWeek: w.dayOfWeek,
-    hour:      w.hour,
-    savesAvg:  w.count > 0 ? w.totalSaves / w.count : 0,
-    count:     w.count,
+  const result: TFormatSummary[] = (data ?? []).map(r => ({
+    mediaType: r.media_type     ?? 'UNKNOWN',
+    count:     r.post_count     ?? 0,
+    reach:     Number(r.total_reach  ?? 0),
+    saves:     Number(r.total_saves  ?? 0),
+    shares:    Number(r.total_shares ?? 0),
   }))
 
   return { data: result, error: null }
 }
 
 /**
- * Top posts by provisional weighted score.
- *
- * NOTE: provisional — uses POST_SCORE_WEIGHTS directly against raw totals,
- * normalised to 0–100 within the current dataset.
- * Will be replaced by mart_post_performance (dbt) once the mart is wired in.
+ * Average saves per (day-of-week × hour) for posts in the period.
+ * Reads the all-formats rollup row (media_type IS NULL) from
+ * mart_best_posting_windows. Day-of-week is remapped from ISO 1–7
+ * (Mon–Sun, Europe/Paris) to 0–6 Sun-first to match BestWindowHeatmap
+ * and TPostingWindow. Remap lives only here — not in the component.
+ */
+export async function getPostingWindows(
+  supabase: Supabase,
+  period: TAnalyticsPeriod,
+): Promise<ActionResult<TPostingWindow[]>> {
+  const { data, error } = await supabase
+    .from('v_mart_best_posting_windows')
+    .select('day_of_week, hour, avg_saves, post_count, media_type')
+    .eq('period_days', period)
+    .is('media_type', null)
+
+  if (error) return { data: null, error: error.message }
+
+  const result: TPostingWindow[] = (data ?? []).map(r => ({
+    dayOfWeek: isoDowToSundayFirst(r.day_of_week ?? 1),
+    hour:      r.hour       ?? 0,
+    savesAvg:  r.avg_saves  ?? 0,
+    count:     r.post_count ?? 0,
+  }))
+
+  return { data: result, error: null }
+}
+
+/**
+ * Top posts by weighted performance score.
+ * Reads mart_post_performance (v_mart_post_performance) filtered by the
+ * period's rolling-window flag. Score is baseline-relative 0–100 (avg ≈ 50)
+ * — no longer the dataset-max normalization the provisional JS used.
  */
 export async function getTopPosts(
   supabase: Supabase,
   period: TAnalyticsPeriod,
   limit = 20,
 ): Promise<ActionResult<TTopPost[]>> {
-  const from = periodStart(period)
+  const flag = periodFlagColumn(period)
 
-  const { data: posts, error: postsErr } = await supabase
-    .from('posts')
-    .select('id, media_id, media_type, caption, permalink, posted_at')
-    .gte('posted_at', from)
+  const { data, error } = await supabase
+    .from('v_mart_post_performance')
+    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, performance_score')
+    .eq(flag, true)
+    .order('performance_score', { ascending: false })
+    .order('post_id', { ascending: true })
+    .limit(limit)
 
-  if (postsErr) return { data: null, error: postsErr.message }
-  if (!posts || posts.length === 0) return { data: [], error: null }
+  if (error) return { data: null, error: error.message }
 
-  const postIds = posts.map(p => p.id)
+  const result: TTopPost[] = (data ?? []).map(r => ({
+    id:            r.post_id    ?? '',
+    mediaId:       r.media_id   ?? '',
+    mediaType:     r.media_type ?? 'UNKNOWN',
+    caption:       r.caption,
+    permalink:     r.permalink,
+    postedAt:      r.posted_at,
+    reach:         Number(r.total_reach          ?? 0),
+    saves:         Number(r.total_saves          ?? 0),
+    shares:        Number(r.total_shares         ?? 0),
+    likes:         Number(r.total_likes          ?? 0),
+    comments:      Number(r.total_comments       ?? 0),
+    profileVisits: Number(r.total_profile_visits ?? 0),
+    score:         r.performance_score ?? 0,
+  }))
 
-  const { data: metrics, error: metricsErr } = await supabase
-    .from('post_metrics_daily')
-    .select('post_id, reach, saves, shares, likes, comments, profile_visits')
-    .in('post_id', postIds)
-
-  if (metricsErr) return { data: null, error: metricsErr.message }
-
-  const totals = new Map<string, {
-    reach: number; saves: number; shares: number
-    likes: number; comments: number; profileVisits: number
-  }>()
-
-  for (const m of metrics ?? []) {
-    const t = totals.get(m.post_id)
-    if (t) {
-      t.reach         += m.reach          ?? 0
-      t.saves         += m.saves          ?? 0
-      t.shares        += m.shares         ?? 0
-      t.likes         += m.likes          ?? 0
-      t.comments      += m.comments       ?? 0
-      t.profileVisits += m.profile_visits ?? 0
-    } else {
-      totals.set(m.post_id, {
-        reach:         m.reach          ?? 0,
-        saves:         m.saves          ?? 0,
-        shares:        m.shares         ?? 0,
-        likes:         m.likes          ?? 0,
-        comments:      m.comments       ?? 0,
-        profileVisits: m.profile_visits ?? 0,
-      })
-    }
-  }
-
-  const combined: TTopPost[] = posts.map(p => {
-    const t = totals.get(p.id) ?? { reach: 0, saves: 0, shares: 0, likes: 0, comments: 0, profileVisits: 0 }
-    const rawScore =
-      t.saves         * POST_SCORE_WEIGHTS.saves +
-      t.shares        * POST_SCORE_WEIGHTS.shares +
-      t.comments      * POST_SCORE_WEIGHTS.comments +
-      t.likes         * POST_SCORE_WEIGHTS.likes +
-      t.profileVisits * POST_SCORE_WEIGHTS.profileVisits
-    return {
-      id:            p.id,
-      mediaId:       p.media_id,
-      mediaType:     p.media_type,
-      caption:       p.caption,
-      permalink:     p.permalink,
-      postedAt:      p.posted_at,
-      reach:         t.reach,
-      saves:         t.saves,
-      shares:        t.shares,
-      likes:         t.likes,
-      comments:      t.comments,
-      profileVisits: t.profileVisits,
-      score:         rawScore,
-    }
-  })
-
-  const maxRaw = Math.max(...combined.map(p => p.score), 1)
-  for (const p of combined) {
-    p.score = Math.round((p.score / maxRaw) * 100)
-  }
-  combined.sort((a, b) => b.score - a.score)
-
-  return { data: combined.slice(0, limit), error: null }
+  return { data: result, error: null }
 }
