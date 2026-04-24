@@ -9,15 +9,12 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { TDailyMetricPoint } from '@creator-hub/types'
+import { fmtK } from '@/features/analytics/utils'
 
 type Props = { data: TDailyMetricPoint[] }
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
-}
-
-function fmtK(v: number) {
-  return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)
 }
 
 export function ReachChart({ data }: Props) {

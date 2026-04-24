@@ -306,6 +306,8 @@ export interface ContentLabPost {
   }
   tags: string[]
   score: number
+  scoreDelta: number
+  savesMultiplier: number | null
 }
 
 export interface ThemeAggregate {
@@ -416,27 +418,37 @@ export type TFormatSummary = {
 export type TPostingWindow = {
   // 0 = Sun … 6 = Sat (JS Date.getDay convention). The mart emits ISO
   // 1–7 and the analytics fetcher remaps it; see isoDowToSundayFirst.
-  dayOfWeek: number
-  hour:      number   // 0–23
-  savesAvg:  number
-  count:     number
+  dayOfWeek:        number
+  hour:             number   // 0–23
+  savesAvg:         number
+  count:            number
+  // post_count / total_posts in the same (period, media_type) slice.
+  sampleConfidence: number
+  // Mart flag: true when post_count < 2. UI should de-emphasize or exclude.
+  lowSample:        boolean
 }
 
 export type TTopPost = {
-  id:            string
-  mediaId:       string
-  mediaType:     string
-  caption:       string | null
-  permalink:     string | null
-  postedAt:      string | null
-  reach:         number
-  saves:         number
-  shares:        number
-  likes:         number
-  comments:      number
-  profileVisits: number
+  id:               string
+  mediaId:          string
+  mediaType:        string
+  caption:          string | null
+  permalink:        string | null
+  postedAt:         string | null
+  reach:            number
+  saves:            number
+  shares:           number
+  likes:            number
+  comments:         number
+  profileVisits:    number
   // Baseline-relative 0–100 score from mart_post_performance (avg ≈ 50).
-  score:         number
+  // Kept for transparency; the explorer surfaces scoreDelta + multiplier
+  // because the upstream score saturates at 100 for many posts.
+  score:            number
+  // performance_score − baseline_score (≈ 50). Signed, unclamped display.
+  scoreDelta:       number
+  // total_saves / baseline_saves. Null when the format has no 30d baseline.
+  savesMultiplier:  number | null
 }
 
 // --- Umami + Attribution (Sprint 7) ---

@@ -7,7 +7,7 @@ export async function WhatToDoNext() {
 
   const { data, error } = await supabase
     .from('v_mart_post_performance')
-    .select('post_id, media_id, media_type, caption, permalink, posted_at, tags, total_saves, total_shares, total_comments, total_likes, total_profile_visits, total_reach, performance_score')
+    .select('post_id, media_id, media_type, caption, permalink, posted_at, tags, total_saves, total_shares, total_comments, total_likes, total_profile_visits, total_reach, performance_score, score_delta, baseline_saves')
     .eq('in_last_30d', true)
     .order('performance_score', { ascending: false })
     .order('post_id', { ascending: true })
@@ -24,24 +24,33 @@ export async function WhatToDoNext() {
     )
   }
 
-  const top3: ContentLabPost[] = data.map(r => ({
-    id:        r.post_id    ?? '',
-    mediaId:   r.media_id   ?? '',
-    mediaType: r.media_type ?? 'UNKNOWN',
-    caption:   r.caption,
-    permalink: r.permalink,
-    postedAt:  r.posted_at,
-    metrics: {
-      saves:         Number(r.total_saves          ?? 0),
-      shares:        Number(r.total_shares         ?? 0),
-      comments:      Number(r.total_comments       ?? 0),
-      likes:         Number(r.total_likes          ?? 0),
-      profileVisits: Number(r.total_profile_visits ?? 0),
-      reach:         Number(r.total_reach          ?? 0),
-    },
-    tags:  r.tags ?? [],
-    score: r.performance_score ?? 0,
-  }))
+  const top3: ContentLabPost[] = data.map(r => {
+    const saves         = Number(r.total_saves ?? 0)
+    const baselineSaves = r.baseline_saves == null ? null : Number(r.baseline_saves)
+    const savesMultiplier =
+      baselineSaves && baselineSaves > 0 ? saves / baselineSaves : null
+
+    return {
+      id:        r.post_id    ?? '',
+      mediaId:   r.media_id   ?? '',
+      mediaType: r.media_type ?? 'UNKNOWN',
+      caption:   r.caption,
+      permalink: r.permalink,
+      postedAt:  r.posted_at,
+      metrics: {
+        saves,
+        shares:        Number(r.total_shares         ?? 0),
+        comments:      Number(r.total_comments       ?? 0),
+        likes:         Number(r.total_likes          ?? 0),
+        profileVisits: Number(r.total_profile_visits ?? 0),
+        reach:         Number(r.total_reach          ?? 0),
+      },
+      tags:            r.tags ?? [],
+      score:           r.performance_score ?? 0,
+      scoreDelta:      r.score_delta       ?? 0,
+      savesMultiplier,
+    }
+  })
 
   return (
     <section>

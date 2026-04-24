@@ -23,3 +23,12 @@ export const FORMAT_LABEL: Record<string, string> = {
 export function isoDowToSundayFirst(iso: number): number {
   return iso % 7
 }
+
+// Compact y-axis / tooltip formatter shared across analytics charts.
+// 1 000 → 1k, 12 500 → 12.5k, 1 200 000 → 1.2M. Use to keep Recharts y-axis
+// labels within the tick width (otherwise long integers truncate to "00000").
+export function fmtK(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}k`
+  return String(v)
+}

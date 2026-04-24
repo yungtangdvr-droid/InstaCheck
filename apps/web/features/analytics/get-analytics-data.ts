@@ -144,17 +144,19 @@ export async function getPostingWindows(
 ): Promise<ActionResult<TPostingWindow[]>> {
   const { data, error } = await supabase
     .from('v_mart_best_posting_windows')
-    .select('day_of_week, hour, avg_saves, post_count, media_type')
+    .select('day_of_week, hour, avg_saves, post_count, sample_confidence, low_sample_flag, media_type')
     .eq('period_days', period)
     .is('media_type', null)
 
   if (error) return { data: null, error: error.message }
 
   const result: TPostingWindow[] = (data ?? []).map(r => ({
-    dayOfWeek: isoDowToSundayFirst(r.day_of_week ?? 1),
-    hour:      r.hour       ?? 0,
-    savesAvg:  r.avg_saves  ?? 0,
-    count:     r.post_count ?? 0,
+    dayOfWeek:        isoDowToSundayFirst(r.day_of_week ?? 1),
+    hour:             r.hour              ?? 0,
+    savesAvg:         r.avg_saves         ?? 0,
+    count:            r.post_count        ?? 0,
+    sampleConfidence: Number(r.sample_confidence ?? 0),
+    lowSample:        r.low_sample_flag   ?? false,
   }))
 
   return { data: result, error: null }
@@ -175,7 +177,7 @@ export async function getTopPosts(
 
   const { data, error } = await supabase
     .from('v_mart_post_performance')
-    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, performance_score')
+    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, performance_score, baseline_score, score_delta, baseline_saves')
     .eq(flag, true)
     .order('performance_score', { ascending: false })
     .order('post_id', { ascending: true })
@@ -183,21 +185,115 @@ export async function getTopPosts(
 
   if (error) return { data: null, error: error.message }
 
-  const result: TTopPost[] = (data ?? []).map(r => ({
-    id:            r.post_id    ?? '',
-    mediaId:       r.media_id   ?? '',
-    mediaType:     r.media_type ?? 'UNKNOWN',
-    caption:       r.caption,
-    permalink:     r.permalink,
-    postedAt:      r.posted_at,
-    reach:         Number(r.total_reach          ?? 0),
-    saves:         Number(r.total_saves          ?? 0),
-    shares:        Number(r.total_shares         ?? 0),
-    likes:         Number(r.total_likes          ?? 0),
-    comments:      Number(r.total_comments       ?? 0),
-    profileVisits: Number(r.total_profile_visits ?? 0),
-    score:         r.performance_score ?? 0,
-  }))
+  const result: TTopPost[] = (data ?? []).map(r => {
+    const saves         = Number(r.total_saves    ?? 0)
+    const baselineSaves = r.baseline_saves == null ? null : Number(r.baseline_saves)
+    const savesMultiplier =
+      baselineSaves && baselineSaves > 0 ? saves / baselineSaves : null
+
+    return {
+      id:              r.post_id    ?? '',
+      mediaId:         r.media_id   ?? '',
+      mediaType:       r.media_type ?? 'UNKNOWN',
+      caption:         r.caption,
+      permalink:       r.permalink,
+      postedAt:        r.posted_at,
+      reach:           Number(r.total_reach          ?? 0),
+      saves,
+      shares:          Number(r.total_shares         ?? 0),
+      likes:           Number(r.total_likes          ?? 0),
+      comments:        Number(r.total_comments       ?? 0),
+      profileVisits:   Number(r.total_profile_visits ?? 0),
+      score:           r.performance_score ?? 0,
+      scoreDelta:      r.score_delta       ?? 0,
+      savesMultiplier,
+    }
+  })
 
   return { data: result, error: null }
+}
+
+/**
+ * Per-post baseline + scoring row from v_mart_post_performance. Used by the
+ * post detail page to render the "vs format moyen" block. Returns null data
+ * when the mart has no row for this post (e.g. format with zero 30d samples).
+ */
+export type TPostPerformanceRow = {
+  performanceScore:      number
+  baselineScore:         number
+  scoreDelta:            number
+  formatSampleSize:      number
+  mediaType:             string
+  totals: {
+    saves:    number
+    shares:   number
+    comments: number
+    likes:    number
+  }
+  baselines: {
+    saves:    number | null
+    shares:   number | null
+    comments: number | null
+    likes:    number | null
+  }
+  multipliers: {
+    saves:    number | null
+    shares:   number | null
+    comments: number | null
+    likes:    number | null
+  }
+}
+
+export async function getPostPerformance(
+  supabase: Supabase,
+  postId: string,
+): Promise<ActionResult<TPostPerformanceRow | null>> {
+  const { data, error } = await supabase
+    .from('v_mart_post_performance')
+    .select('media_type, total_saves, total_shares, total_comments, total_likes, baseline_saves, baseline_shares, baseline_comments, baseline_likes, format_sample_size, performance_score, baseline_score, score_delta')
+    .eq('post_id', postId)
+    .maybeSingle()
+
+  if (error) return { data: null, error: error.message }
+  if (!data)  return { data: null, error: null }
+
+  const ratio = (v: number, b: number | null | undefined): number | null => {
+    if (b == null) return null
+    const bn = Number(b)
+    return bn > 0 ? v / bn : null
+  }
+
+  const totalSaves    = Number(data.total_saves    ?? 0)
+  const totalShares   = Number(data.total_shares   ?? 0)
+  const totalComments = Number(data.total_comments ?? 0)
+  const totalLikes    = Number(data.total_likes    ?? 0)
+
+  return {
+    data: {
+      performanceScore: data.performance_score ?? 0,
+      baselineScore:    data.baseline_score    ?? 50,
+      scoreDelta:       data.score_delta       ?? 0,
+      formatSampleSize: data.format_sample_size ?? 0,
+      mediaType:        data.media_type        ?? 'UNKNOWN',
+      totals: {
+        saves:    totalSaves,
+        shares:   totalShares,
+        comments: totalComments,
+        likes:    totalLikes,
+      },
+      baselines: {
+        saves:    data.baseline_saves    == null ? null : Number(data.baseline_saves),
+        shares:   data.baseline_shares   == null ? null : Number(data.baseline_shares),
+        comments: data.baseline_comments == null ? null : Number(data.baseline_comments),
+        likes:    data.baseline_likes    == null ? null : Number(data.baseline_likes),
+      },
+      multipliers: {
+        saves:    ratio(totalSaves,    data.baseline_saves),
+        shares:   ratio(totalShares,   data.baseline_shares),
+        comments: ratio(totalComments, data.baseline_comments),
+        likes:    ratio(totalLikes,    data.baseline_likes),
+      },
+    },
+    error: null,
+  }
 }
