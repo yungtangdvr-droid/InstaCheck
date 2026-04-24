@@ -2,6 +2,11 @@
 
 import type { ContentLabPost } from '@creator-hub/types'
 import { TagManager } from './TagManager'
+import {
+  RANK_LABEL_CLASS,
+  RANK_LABEL_FR,
+  rankLabel,
+} from '@/features/analytics/ranking'
 
 const MEDIA_LABELS: Record<string, string> = {
   REEL:           'Reel',
@@ -11,12 +16,14 @@ const MEDIA_LABELS: Record<string, string> = {
   STORY:          'Story',
 }
 
-export function ReplicablePostCard({ post }: { post: ContentLabPost }) {
-  const deltaColor =
-    post.scoreDelta >=  10 ? 'text-emerald-400' :
-    post.scoreDelta >= -10 ? 'text-neutral-300' :
-                             'text-red-400'
-  const deltaSign = post.scoreDelta > 0 ? '+' : ''
+export function ReplicablePostCard({
+  post,
+  sampleSize,
+}: {
+  post: ContentLabPost
+  sampleSize: number
+}) {
+  const label = rankLabel(post.percentile, sampleSize)
 
   const multiplierColor =
     post.savesMultiplier == null ? 'text-neutral-600' :
@@ -24,19 +31,56 @@ export function ReplicablePostCard({ post }: { post: ContentLabPost }) {
     post.savesMultiplier >= 0.8   ? 'text-neutral-300' :
                                     'text-red-400'
 
+  const rankTooltip = [
+    post.percentile != null ? `Percentile ${post.percentile} (30 j)` : null,
+    post.rankScore  != null ? `Ratio baseline ×${post.rankScore.toFixed(2)}` : null,
+    `Score mart ${post.score}/100`,
+  ].filter(Boolean).join(' · ')
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-300">
           {MEDIA_LABELS[post.mediaType] ?? post.mediaType}
         </span>
-        <span
-          className={`text-sm font-semibold ${deltaColor}`}
-          title={`Score absolu: ${post.score}/100 (baseline 50).`}
-        >
-          {deltaSign}{post.scoreDelta} vs moy.
-        </span>
+        {label ? (
+          <span
+            className={`rounded border px-2 py-0.5 text-[11px] font-medium ${RANK_LABEL_CLASS[label]}`}
+            title={rankTooltip}
+          >
+            {RANK_LABEL_FR[label]}
+          </span>
+        ) : (
+          <span
+            className="rounded border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-500"
+            title={rankTooltip + ' — échantillon insuffisant pour un rang'}
+          >
+            Rang indisponible
+          </span>
+        )}
       </div>
+
+      {post.previewUrl ? (
+        // Plain <img>: Meta CDN URLs rotate. See note in PostExplorer.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={post.previewUrl}
+          alt=""
+          loading="lazy"
+          className="aspect-square w-full rounded-md bg-neutral-950 object-cover"
+          onError={(e) => {
+            const el = e.currentTarget
+            el.style.display = 'none'
+          }}
+        />
+      ) : (
+        <div
+          className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-950 text-xs text-neutral-600"
+          title="Aucun aperçu disponible — voir sur Instagram."
+        >
+          {MEDIA_LABELS[post.mediaType] ?? post.mediaType}
+        </div>
+      )}
 
       <div className="flex items-baseline gap-2 text-xs text-neutral-500">
         <span>Saves</span>

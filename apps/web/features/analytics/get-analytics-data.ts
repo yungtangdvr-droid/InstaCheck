@@ -9,6 +9,8 @@ import type {
   TTopPost,
 } from '@creator-hub/types'
 import { isoDowToSundayFirst } from './utils'
+import { computePercentiles, computeRankScore } from './ranking'
+import { extractPreviewUrls } from './media-preview'
 
 type Supabase = SupabaseClient<Database>
 
@@ -163,11 +165,18 @@ export async function getPostingWindows(
 }
 
 /**
- * Top posts by weighted performance score.
- * Reads mart_post_performance (v_mart_post_performance) filtered by the
- * period's rolling-window flag. Score is baseline-relative 0–100 (avg ≈ 50)
- * — no longer the dataset-max normalization the provisional JS used.
+ * Top posts ranked by the UI-side percentile score (ratio vs same-format 30 d
+ * baseline, see ranking.ts). Reads v_mart_post_performance for the period
+ * flag — WITHOUT a row limit, because percentile needs the whole set — then
+ * enriches with media preview URLs from raw_instagram_media.raw_json and
+ * slices the top `limit` rows. The mart's clamped `performance_score` is
+ * still returned for transparency but no longer drives the ordering.
+ *
+ * Safety cap at 500 rows: a single account posting daily for a year stays
+ * well under that, and the fetch is head:false so we want to bound payload.
  */
+const RANKED_POSTS_CAP = 500
+
 export async function getTopPosts(
   supabase: Supabase,
   period: TAnalyticsPeriod,
@@ -177,38 +186,95 @@ export async function getTopPosts(
 
   const { data, error } = await supabase
     .from('v_mart_post_performance')
-    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, performance_score, baseline_score, score_delta, baseline_saves')
+    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, performance_score, baseline_score, score_delta, baseline_saves, baseline_shares, baseline_comments, baseline_likes, baseline_profile_visits')
     .eq(flag, true)
     .order('performance_score', { ascending: false })
     .order('post_id', { ascending: true })
-    .limit(limit)
+    .limit(RANKED_POSTS_CAP)
 
   if (error) return { data: null, error: error.message }
 
-  const result: TTopPost[] = (data ?? []).map(r => {
+  const mediaIds = Array.from(
+    new Set((data ?? []).map(r => r.media_id).filter((m): m is string => Boolean(m)))
+  )
+
+  // raw_instagram_media.raw_json is the Meta /media response captured at last
+  // sync. It has media_url + thumbnail_url — Meta serves signed CDN URLs
+  // that expire (~24 h for media_url on images, ~10 y for permalink pages).
+  // We surface them as best-effort previews; the UI falls back gracefully.
+  const previewByMediaId = new Map<string, { previewUrl: string | null; thumbnailUrl: string | null }>()
+  if (mediaIds.length > 0) {
+    const { data: rawMedia } = await supabase
+      .from('raw_instagram_media')
+      .select('media_id, raw_json')
+      .in('media_id', mediaIds)
+    for (const row of rawMedia ?? []) {
+      previewByMediaId.set(row.media_id, extractPreviewUrls(row.raw_json, row.media_id))
+    }
+  }
+
+  const enriched = (data ?? []).map(r => {
     const saves         = Number(r.total_saves    ?? 0)
-    const baselineSaves = r.baseline_saves == null ? null : Number(r.baseline_saves)
+    const shares        = Number(r.total_shares   ?? 0)
+    const likes         = Number(r.total_likes    ?? 0)
+    const comments      = Number(r.total_comments ?? 0)
+    const profileVisits = Number(r.total_profile_visits ?? 0)
+
+    const baselineSaves         = r.baseline_saves          == null ? null : Number(r.baseline_saves)
+    const baselineShares        = r.baseline_shares         == null ? null : Number(r.baseline_shares)
+    const baselineComments      = r.baseline_comments       == null ? null : Number(r.baseline_comments)
+    const baselineLikes         = r.baseline_likes          == null ? null : Number(r.baseline_likes)
+    const baselineProfileVisits = r.baseline_profile_visits == null ? null : Number(r.baseline_profile_visits)
+
+    const rankScore = computeRankScore({
+      saves, shares, comments, likes, profileVisits,
+      baselineSaves, baselineShares, baselineComments, baselineLikes, baselineProfileVisits,
+    })
+
     const savesMultiplier =
       baselineSaves && baselineSaves > 0 ? saves / baselineSaves : null
 
+    const mediaId = r.media_id ?? ''
+    const preview = previewByMediaId.get(mediaId) ?? { previewUrl: null, thumbnailUrl: null }
+
     return {
       id:              r.post_id    ?? '',
-      mediaId:         r.media_id   ?? '',
+      mediaId,
       mediaType:       r.media_type ?? 'UNKNOWN',
       caption:         r.caption,
       permalink:       r.permalink,
       postedAt:        r.posted_at,
-      reach:           Number(r.total_reach          ?? 0),
+      reach:           Number(r.total_reach ?? 0),
       saves,
-      shares:          Number(r.total_shares         ?? 0),
-      likes:           Number(r.total_likes          ?? 0),
-      comments:        Number(r.total_comments       ?? 0),
-      profileVisits:   Number(r.total_profile_visits ?? 0),
+      shares,
+      likes,
+      comments,
+      profileVisits,
       score:           r.performance_score ?? 0,
       scoreDelta:      r.score_delta       ?? 0,
       savesMultiplier,
+      rankScore,
+      percentile:      null as number | null,
+      previewUrl:      preview.previewUrl,
+      thumbnailUrl:    preview.thumbnailUrl,
     }
   })
+
+  const withPercentiles = computePercentiles(enriched)
+
+  // Sort by rankScore DESC, falling back to mart score + post_id for a stable
+  // order when posts lack baselines (rankScore === null).
+  const sorted = withPercentiles.slice().sort((a, b) => {
+    const ra = a.rankScore
+    const rb = b.rankScore
+    if (ra != null && rb != null) return rb - ra
+    if (ra != null) return -1
+    if (rb != null) return  1
+    if (b.score !== a.score) return b.score - a.score
+    return a.id.localeCompare(b.id)
+  })
+
+  const result: TTopPost[] = sorted.slice(0, limit)
 
   return { data: result, error: null }
 }
