@@ -32,9 +32,9 @@ export async function syncAccount(
       {
         account_id:      account.id,
         date:            today,
-        followers_count: account.followers_count ?? null,
-        reach:           null,
-        impressions:     null,
+        followers_count: account.followers_count ?? 0,
+        reach:           0,
+        impressions:     0,
       },
       { onConflict: 'account_id,date' }
     )
