@@ -11,24 +11,18 @@ const MEDIA_LABELS: Record<string, string> = {
   STORY:          'Story',
 }
 
-function ScoreBar({ score }: { score: number }) {
-  const color =
-    score >= 70 ? 'bg-emerald-500' :
-    score >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-  return (
-    <div className="h-1 w-full rounded-full bg-neutral-800">
-      <div
-        className={`h-1 rounded-full transition-all ${color}`}
-        style={{ width: `${score}%` }}
-      />
-    </div>
-  )
-}
-
 export function ReplicablePostCard({ post }: { post: ContentLabPost }) {
-  const scoreColor =
-    post.score >= 70 ? 'text-emerald-400' :
-    post.score >= 40 ? 'text-yellow-400' : 'text-red-400'
+  const deltaColor =
+    post.scoreDelta >=  10 ? 'text-emerald-400' :
+    post.scoreDelta >= -10 ? 'text-neutral-300' :
+                             'text-red-400'
+  const deltaSign = post.scoreDelta > 0 ? '+' : ''
+
+  const multiplierColor =
+    post.savesMultiplier == null ? 'text-neutral-600' :
+    post.savesMultiplier >= 1.5   ? 'text-emerald-400' :
+    post.savesMultiplier >= 0.8   ? 'text-neutral-300' :
+                                    'text-red-400'
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
@@ -36,12 +30,21 @@ export function ReplicablePostCard({ post }: { post: ContentLabPost }) {
         <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-300">
           {MEDIA_LABELS[post.mediaType] ?? post.mediaType}
         </span>
-        <span className={`text-sm font-semibold ${scoreColor}`}>
-          {post.score}/100
+        <span
+          className={`text-sm font-semibold ${deltaColor}`}
+          title={`Score absolu: ${post.score}/100 (baseline 50).`}
+        >
+          {deltaSign}{post.scoreDelta} vs moy.
         </span>
       </div>
 
-      <ScoreBar score={post.score} />
+      <div className="flex items-baseline gap-2 text-xs text-neutral-500">
+        <span>Saves</span>
+        <span className={`text-base font-semibold tabular-nums ${multiplierColor}`}>
+          {post.savesMultiplier == null ? '—' : `×${post.savesMultiplier.toFixed(1)}`}
+        </span>
+        <span className="text-neutral-600">vs baseline format</span>
+      </div>
 
       <p className="line-clamp-3 min-h-[3.75rem] text-sm text-neutral-300">
         {post.caption ?? <span className="italic text-neutral-600">Pas de caption</span>}

@@ -15,11 +15,15 @@ export default async function AnalyticsPage({
   const { period: periodParam } = await searchParams
   const period = parsePeriod(periodParam)
 
+  const periodFlag =
+    period === 7 ? 'in_last_7d' : period === 30 ? 'in_last_30d' : 'in_last_90d'
+
   const supabase = await createServerSupabaseClient()
 
   const [
     { data: recentRun },
-    { count: postsCount },
+    { count: totalPostsCount },
+    { count: periodPostsCount },
     reachResult,
     topPostsResult,
   ] = await Promise.all([
@@ -33,6 +37,10 @@ export default async function AnalyticsPage({
     supabase
       .from('posts')
       .select('id', { count: 'exact', head: true }),
+    supabase
+      .from('v_mart_post_performance')
+      .select('post_id', { count: 'exact', head: true })
+      .eq(periodFlag, true),
     getReachSeries(supabase, period),
     getTopPosts(supabase, period),
   ])
@@ -58,7 +66,15 @@ export default async function AnalyticsPage({
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Posts indexés" value={postsCount ?? 0} />
+        <StatCard
+          label={`Posts (${period}j)`}
+          value={periodPostsCount ?? 0}
+          hint={
+            totalPostsCount != null
+              ? `${totalPostsCount.toLocaleString('fr-FR')} indexés au total`
+              : undefined
+          }
+        />
         <StatCard
           label={`Reach (${period}j)`}
           value={totalReach > 0 ? totalReach.toLocaleString('fr-FR') : '—'}
@@ -116,10 +132,12 @@ function StatCard({
   label,
   value,
   badge,
+  hint,
 }: {
   label: string
   value: string | number
   badge?: string
+  hint?: string
 }) {
   const badgeColor =
     badge === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -129,6 +147,9 @@ function StatCard({
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
       <p className="text-xs text-neutral-500">{label}</p>
       <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+      {hint && (
+        <p className="mt-1 text-[11px] text-neutral-500">{hint}</p>
+      )}
       {badge && (
         <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
           {badge}

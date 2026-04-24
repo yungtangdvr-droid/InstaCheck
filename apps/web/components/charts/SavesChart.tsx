@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { TDailyMetricPoint } from '@creator-hub/types'
+import { fmtK } from '@/features/analytics/utils'
 
 type Props = { data: TDailyMetricPoint[] }
 
@@ -38,15 +39,17 @@ export function SavesChart({ data }: Props) {
           tickLine={false}
         />
         <YAxis
+          tickFormatter={fmtK}
           tick={{ fill: '#737373', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          width={30}
+          width={36}
         />
         <Tooltip
           contentStyle={{ background: '#171717', border: '1px solid #262626', borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: '#a3a3a3' }}
           labelFormatter={(label: unknown) => fmtDate(String(label))}
+          formatter={(value: unknown, name: unknown) => [fmtK(Number(value)), String(name)]}
           cursor={{ fill: '#262626' }}
         />
         <Legend wrapperStyle={{ fontSize: 11, color: '#a3a3a3' }} />
