@@ -12,6 +12,18 @@
 -- role stays blocked even if RLS is ever toggled off on the base
 -- tables. The marts schema itself gets usage so the views can
 -- resolve their underlying references.
+--
+-- OPERATIONAL CONTRACT — REAPPLY AFTER EVERY dbt RUN.
+-- dbt materializes marts as `table` (per dbt_project.yml). Every
+-- `dbt run` drops and recreates the underlying mart tables, which
+-- cascades and drops these views. This file is intentionally fully
+-- idempotent (`drop view if exists` + `create view`) so it can be
+-- reapplied on every refresh without state. The wiring lives in
+-- infrastructure/n8n/scoring-refresh.json — its `dbt-run` node now
+-- chains `&& psql -f .../0004_mart_views.sql` so Analytics never
+-- sees a 60-second outage between mart rebuild and view recreation.
+-- Any new dbt invocation path (manual `dbt run`, future workflow,
+-- etc.) MUST also reapply this file or Analytics will 404.
 
 create schema if not exists marts;
 grant usage on schema marts to authenticated, service_role;

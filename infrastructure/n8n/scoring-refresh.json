@@ -20,10 +20,10 @@
     },
     {
       "parameters": {
-        "command": "cd /opt/creator-hub/infrastructure/dbt && dbt run --profiles-dir ."
+        "command": "cd /opt/creator-hub/infrastructure/dbt && dbt run --profiles-dir . && PGPASSWORD=\"$SUPABASE_DB_PASSWORD\" psql -h \"$SUPABASE_DB_HOST\" -U postgres -d postgres -v ON_ERROR_STOP=1 -f /opt/creator-hub/supabase/migrations/0004_mart_views.sql"
       },
       "id": "dbt-run",
-      "name": "dbt run",
+      "name": "dbt run + reapply v_mart_* views",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [460, 300]
@@ -56,9 +56,9 @@
   ],
   "connections": {
     "CRON Sunday 06:00 UTC": {
-      "main": [[{ "node": "dbt run", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "dbt run + reapply v_mart_* views", "type": "main", "index": 0 }]]
     },
-    "dbt run": {
+    "dbt run + reapply v_mart_* views": {
       "main": [[{ "node": "POST /api/webhooks/n8n", "type": "main", "index": 0 }]]
     }
   },
