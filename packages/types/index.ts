@@ -110,9 +110,11 @@ export type SyncAccountResult = {
 }
 
 export type SyncMediaResult = {
-  total:   number
-  created: number
-  updated: number
+  total:     number
+  created:   number
+  updated:   number
+  limit:     number
+  processed: number
 }
 
 export type SyncInsightsResult = {
