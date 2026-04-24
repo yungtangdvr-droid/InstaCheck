@@ -36,10 +36,10 @@ export function HypothesisEditor({
 
       {recommendation.post && (
         <div className="rounded border border-neutral-800 bg-neutral-950 p-3">
-          <p className="mb-1 text-xs text-neutral-500">Post lié</p>
+          <p className="mb-1 text-xs text-neutral-500">Légende IG du post lié</p>
           <p className="line-clamp-2 text-sm text-neutral-300">
             {recommendation.post.caption ?? (
-              <span className="italic text-neutral-600">Pas de caption</span>
+              <span className="italic text-neutral-600">Sans légende IG</span>
             )}
           </p>
           <div className="mt-2 flex items-center gap-3">

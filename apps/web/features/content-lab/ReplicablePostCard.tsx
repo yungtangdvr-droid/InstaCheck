@@ -47,7 +47,7 @@ export function ReplicablePostCard({ post }: { post: ContentLabPost }) {
       </div>
 
       <p className="line-clamp-3 min-h-[3.75rem] text-sm text-neutral-300">
-        {post.caption ?? <span className="italic text-neutral-600">Pas de caption</span>}
+        {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
       </p>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-600">

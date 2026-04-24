@@ -57,7 +57,12 @@ export function PostExplorer({ posts }: Props) {
         <thead>
           <tr className="border-b border-neutral-800 bg-neutral-900">
             <th className="px-4 py-3 text-left  text-xs font-medium text-neutral-500">Format</th>
-            <th className="px-4 py-3 text-left  text-xs font-medium text-neutral-500">Caption</th>
+            <th
+              className="px-4 py-3 text-left  text-xs font-medium text-neutral-500"
+              title="Texte de la légende Instagram. Souvent vide pour les memes — le contenu éditorial est dans le visuel."
+            >
+              Légende IG
+            </th>
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Reach</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Saves</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Shares</th>
@@ -78,7 +83,7 @@ export function PostExplorer({ posts }: Props) {
                   href={`/analytics/post/${post.id}`}
                   className="block truncate text-neutral-300 hover:text-white"
                 >
-                  {post.caption ?? <span className="italic text-neutral-600">Sans caption</span>}
+                  {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
                 </Link>
               </td>
               <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
