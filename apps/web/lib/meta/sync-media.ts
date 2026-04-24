@@ -3,13 +3,23 @@ import type { Database } from '@creator-hub/types/supabase'
 import type { SyncMediaResult } from '@creator-hub/types'
 import { fetchAllMedia } from './instagram-client'
 
+const DEFAULT_MEDIA_SYNC_LIMIT = 200
+
+function resolveMediaSyncLimit(): number {
+  const raw = process.env.META_SYNC_MEDIA_LIMIT
+  if (!raw) return DEFAULT_MEDIA_SYNC_LIMIT
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MEDIA_SYNC_LIMIT
+}
+
 export async function syncMedia(
   supabase: ReturnType<typeof createClient<Database>>,
   igUserId: string,
   accessToken: string,
   accountRowId: string
 ): Promise<SyncMediaResult> {
-  const mediaList = await fetchAllMedia(igUserId, accessToken)
+  const limit = resolveMediaSyncLimit()
+  const mediaList = await fetchAllMedia(igUserId, accessToken, limit)
 
   let created = 0
   let updated = 0
@@ -64,5 +74,11 @@ export async function syncMedia(
     }
   }
 
-  return { total: mediaList.length, created, updated }
+  return {
+    total:     mediaList.length,
+    created,
+    updated,
+    limit,
+    processed: created + updated,
+  }
 }

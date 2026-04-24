@@ -66,7 +66,8 @@ export async function fetchMediaPage(
 
 export async function fetchAllMedia(
   igUserId: string,
-  accessToken: string
+  accessToken: string,
+  limit?: number
 ): Promise<IGMediaFields[]> {
   const allMedia: IGMediaFields[] = []
   let after: string | undefined
@@ -74,11 +75,12 @@ export async function fetchAllMedia(
   do {
     const page = await fetchMediaPage(igUserId, accessToken, after)
     allMedia.push(...page.data)
+    if (limit !== undefined && allMedia.length >= limit) break
     after = page.paging?.cursors?.after
     if (!page.paging?.next) break
   } while (after)
 
-  return allMedia
+  return limit !== undefined ? allMedia.slice(0, limit) : allMedia
 }
 
 export async function fetchMediaInsights(
