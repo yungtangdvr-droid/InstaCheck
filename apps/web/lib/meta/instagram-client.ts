@@ -6,9 +6,11 @@ import type {
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
 
+// `impressions` was deprecated for Instagram media insights in Graph API v21
+// (removed for organic media posted after 2024-07-02). Including it in the
+// comma-joined metric list causes the whole /{media-id}/insights call to 400.
 const MEDIA_INSIGHTS_METRICS = [
   'reach',
-  'impressions',
   'saved',
   'shares',
   'comments',

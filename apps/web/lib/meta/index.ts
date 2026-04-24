@@ -40,11 +40,16 @@ export async function runFullSync(config: {
 
   let insightsResults: FullSyncResult['insights'] = []
   try {
-    insightsResults = await syncInsightsForAllPosts(
+    const { results, errors: insightErrors } = await syncInsightsForAllPosts(
       supabase,
       accountRow.id,
       config.accessToken
     )
+    insightsResults = results
+    if (insightErrors.length) {
+      errors.push(...insightErrors)
+      console.error(`[fullSync] ${insightErrors.length} insight error(s); first: ${insightErrors[0]}`)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'insights sync failed'
     errors.push(msg)
