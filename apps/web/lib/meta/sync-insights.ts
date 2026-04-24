@@ -39,13 +39,13 @@ export async function syncInsightsForMedia(
 
 export async function syncInsightsForAllPosts(
   supabase: ReturnType<typeof createClient<Database>>,
-  igUserId: string,
+  accountRowId: string,
   accessToken: string
 ): Promise<SyncInsightsResult[]> {
   const { data: posts, error } = await supabase
     .from('posts')
     .select('media_id, media_type')
-    .eq('account_id', igUserId)
+    .eq('account_id', accountRowId)
 
   if (error) throw new Error(`posts select: ${error.message}`)
   if (!posts?.length) return []

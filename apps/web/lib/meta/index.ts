@@ -42,7 +42,7 @@ export async function runFullSync(config: {
   try {
     insightsResults = await syncInsightsForAllPosts(
       supabase,
-      config.igUserId,
+      accountRow.id,
       config.accessToken
     )
   } catch (err) {
