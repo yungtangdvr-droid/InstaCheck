@@ -37,6 +37,31 @@ Toute section ci-dessous qui décrit un module gelé reste de la documentation h
 
 ---
 
+## NOTE — "CAPTION" vs CONTENU VISUEL DU MEME (2026-04-24)
+
+Le champ `caption` (table `posts`, colonne `caption`) correspond **exclusivement** à la légende texte d'un post Instagram telle que retournée par l'API Meta. Sur ce compte opéré majoritairement en format meme, cette légende est **souvent vide** : l'éditorial vit dans l'image ou la vidéo (texte incrusté, template, référence visuelle, tonalité).
+
+Conséquences :
+
+- Dans l'UI, la colonne et les labels associés sont nommés **« Légende IG »** (et non « Caption » générique). L'état vide affiche **« Sans légende IG »** en italique, traité comme un état normal et non comme un bug de données.
+- Ne pas écrire de règle de scoring ou de recommandation qui pénalise un post uniquement parce que sa légende IG est vide.
+- Ne pas inventer de « caption virtuelle » en copiant le texte OCR, le hook visuel ou la description du meme dans la colonne `posts.caption`. Cette colonne reste le miroir fidèle du champ Meta.
+
+### Champ futur proposé — `meme_content` (NON IMPLÉMENTÉ)
+
+Lorsqu'un besoin éditorial réel émergera (typologie des memes, analyse de hooks, clustering par template), introduire un champ séparé, saisi manuellement ou produit par une future analyse visuelle dédiée. Noms candidats : **« Contenu du meme »**, **« Hook »**, **« Analyse visuelle »**.
+
+Contraintes pour une future implémentation (à ne pas lancer tant qu'elle n'est pas explicitement demandée) :
+
+- Colonne distincte de `caption` (ex. `posts.meme_content text null`), jamais un remplacement.
+- Saisie manuelle d'abord ; toute étape d'analyse visuelle automatique (OCR, vision model) sera un sprint séparé, hors scope actuel.
+- UI : afficher côte à côte « Légende IG » et « Contenu du meme » dans la fiche post et le Content Lab, sans fusionner les deux.
+- Scoring : ne brancher ce champ dans aucun calcul avant qu'il ne soit peuplé sur un échantillon représentatif.
+
+Tant que cette section n'est pas levée par un nouveau sprint explicite, **aucun code d'analyse visuelle ne doit être ajouté**.
+
+---
+
 ## RÔLE ET CONTEXTE
 
 Tu es l'architecte et développeur principal d'un hub personnel de créateur Instagram.

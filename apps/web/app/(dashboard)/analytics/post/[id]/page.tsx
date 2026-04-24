@@ -85,7 +85,7 @@ export default async function PostDetailPage({
           )}
         </div>
         <h1 className="mt-2 line-clamp-3 text-xl font-semibold text-white">
-          {post.caption ?? <span className="italic text-neutral-500">Sans caption</span>}
+          {post.caption ?? <span className="italic text-neutral-500">Sans légende IG</span>}
         </h1>
         {post.posted_at && (
           <p className="mt-1 text-sm text-neutral-500">
