@@ -90,14 +90,33 @@ export async function fetchMediaInsights(
   mediaType: string,
   accessToken: string
 ): Promise<IGInsightsResponse> {
-  const isStory = mediaType === 'STORY'
-  const metrics = isStory
-    ? ['reach', 'impressions', 'replies'].join(',')
-    : MEDIA_INSIGHTS_METRICS.join(',')
+  if (mediaType === 'STORY') {
+    return graphGet<IGInsightsResponse>(
+      `/${mediaId}/insights`,
+      { metric: ['reach', 'impressions', 'replies'].join(','), period: 'lifetime' },
+      accessToken
+    )
+  }
 
-  return graphGet<IGInsightsResponse>(
-    `/${mediaId}/insights`,
-    { metric: metrics, period: 'lifetime' },
-    accessToken
-  )
+  try {
+    return await graphGet<IGInsightsResponse>(
+      `/${mediaId}/insights`,
+      { metric: MEDIA_INSIGHTS_METRICS.join(','), period: 'lifetime' },
+      accessToken
+    )
+  } catch (err) {
+    // VIDEO media rejects `profile_visits` with a 400, which poisons the whole
+    // metric request. Retry once without it so we still capture the supported
+    // metrics (reach/saved/shares/likes/comments).
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('Meta API 400') && message.includes('profile_visits')) {
+      const fallback = MEDIA_INSIGHTS_METRICS.filter((m) => m !== 'profile_visits')
+      return graphGet<IGInsightsResponse>(
+        `/${mediaId}/insights`,
+        { metric: fallback.join(','), period: 'lifetime' },
+        accessToken
+      )
+    }
+    throw err
+  }
 }
