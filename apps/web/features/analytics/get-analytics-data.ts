@@ -25,9 +25,18 @@ function periodFlagColumn(period: TAnalyticsPeriod): 'in_last_7d' | 'in_last_30d
 }
 
 /**
- * Daily totals for reach, saves, shares, likes, comments within the period.
- * Aggregates all posts per date.
- * Data source: post_metrics_daily (no mart covers a per-day series yet).
+ * Daily totals for reach, saves, shares, likes, comments bucketed by each
+ * post's publication day (Europe/Paris), for posts published in the last
+ * `period` days.
+ *
+ * Bucketing is deliberately by `posts.posted_at`, NOT by
+ * `post_metrics_daily.date`: the current Meta sync writes lifetime insights
+ * with `date = sync_date`, so every post_metrics_daily row shares the same
+ * date after a sync. Filtering on that column would make 7 / 30 / 90 days
+ * all collapse onto the sync date and render identical series.
+ *
+ * Publication date is taken in Europe/Paris to match `stg_posts.posted_date_
+ * local` (the canonical operator timezone used by the marts).
  */
 export async function getReachSeries(
   supabase: Supabase,
@@ -35,17 +44,36 @@ export async function getReachSeries(
 ): Promise<ActionResult<TDailyMetricPoint[]>> {
   const from = periodStart(period)
 
-  const { data, error } = await supabase
-    .from('post_metrics_daily')
-    .select('date, reach, saves, shares, likes, comments')
-    .gte('date', from)
-    .order('date', { ascending: true })
+  const { data: posts, error: postsError } = await supabase
+    .from('posts')
+    .select('id, posted_at')
+    .gte('posted_at', from)
+    .order('posted_at', { ascending: true })
 
-  if (error) return { data: null, error: error.message }
+  if (postsError) return { data: null, error: postsError.message }
+  if (!posts || posts.length === 0) return { data: [], error: null }
+
+  const postedAtById = new Map<string, string>()
+  for (const p of posts) {
+    if (p.posted_at) postedAtById.set(p.id, p.posted_at)
+  }
+
+  const postIds = Array.from(postedAtById.keys())
+  if (postIds.length === 0) return { data: [], error: null }
+
+  const { data: metrics, error: metricsError } = await supabase
+    .from('post_metrics_daily')
+    .select('post_id, reach, saves, shares, likes, comments')
+    .in('post_id', postIds)
+
+  if (metricsError) return { data: null, error: metricsError.message }
 
   const byDate = new Map<string, TDailyMetricPoint>()
-  for (const row of data ?? []) {
-    const existing = byDate.get(row.date)
+  for (const row of metrics ?? []) {
+    const postedAt = postedAtById.get(row.post_id)
+    if (!postedAt) continue
+    const date = toParisDate(postedAt)
+    const existing = byDate.get(date)
     if (existing) {
       existing.reach    += row.reach    ?? 0
       existing.saves    += row.saves    ?? 0
@@ -53,8 +81,8 @@ export async function getReachSeries(
       existing.likes    += row.likes    ?? 0
       existing.comments += row.comments ?? 0
     } else {
-      byDate.set(row.date, {
-        date:     row.date,
+      byDate.set(date, {
+        date,
         reach:    row.reach    ?? 0,
         saves:    row.saves    ?? 0,
         shares:   row.shares   ?? 0,
@@ -64,7 +92,17 @@ export async function getReachSeries(
     }
   }
 
-  return { data: Array.from(byDate.values()), error: null }
+  const result = Array.from(byDate.values()).sort((a, b) =>
+    a.date.localeCompare(b.date),
+  )
+
+  return { data: result, error: null }
+}
+
+// ISO YYYY-MM-DD in Europe/Paris — matches stg_posts.posted_date_local.
+// 'en-CA' formats as 'YYYY-MM-DD' which is already sortable as a string.
+function toParisDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' })
 }
 
 /**
