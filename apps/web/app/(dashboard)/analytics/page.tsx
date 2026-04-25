@@ -1,9 +1,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PeriodFilter } from '@/components/analytics/PeriodFilter'
+import { DataHealthPanel } from '@/components/analytics/DataHealthPanel'
 import { ReachChart } from '@/components/charts/ReachChart'
 import { SavesChart } from '@/components/charts/SavesChart'
 import { PostExplorer } from '@/components/charts/PostExplorer'
 import { getReachSeries, getTopPosts } from '@/features/analytics/get-analytics-data'
+import { getDataHealth } from '@/features/analytics/get-data-health'
 import { parsePeriod } from '@/features/analytics/utils'
 import Link from 'next/link'
 
@@ -15,32 +17,10 @@ export default async function AnalyticsPage({
   const { period: periodParam } = await searchParams
   const period = parsePeriod(periodParam)
 
-  const periodFlag =
-    period === 7 ? 'in_last_7d' : period === 30 ? 'in_last_30d' : 'in_last_90d'
-
   const supabase = await createServerSupabaseClient()
 
-  const [
-    { data: recentRun },
-    { count: totalPostsCount },
-    { count: periodPostsCount },
-    reachResult,
-    topPostsResult,
-  ] = await Promise.all([
-    supabase
-      .from('automation_runs')
-      .select('ran_at, status')
-      .eq('automation_name', 'daily-instagram-sync')
-      .order('ran_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('posts')
-      .select('id', { count: 'exact', head: true }),
-    supabase
-      .from('v_mart_post_performance')
-      .select('post_id', { count: 'exact', head: true })
-      .eq(periodFlag, true),
+  const [health, reachResult, topPostsResult] = await Promise.all([
+    getDataHealth(supabase, period),
     getReachSeries(supabase, period),
     getTopPosts(supabase, period),
   ])
@@ -64,14 +44,17 @@ export default async function AnalyticsPage({
         <PeriodFilter current={period} />
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* Production Data Health / Sync Status */}
+      <DataHealthPanel health={health} period={period} />
+
+      {/* Period stat cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <StatCard
           label={`Posts (${period}j)`}
-          value={periodPostsCount ?? 0}
+          value={health.periodPosts}
           hint={
-            totalPostsCount != null
-              ? `${totalPostsCount.toLocaleString('fr-FR')} indexés au total`
+            health.totalPosts > 0
+              ? `${health.totalPosts.toLocaleString('fr-FR')} indexés au total`
               : undefined
           }
         />
@@ -82,18 +65,6 @@ export default async function AnalyticsPage({
         <StatCard
           label={`Saves (${period}j)`}
           value={totalSaves > 0 ? totalSaves.toLocaleString('fr-FR') : '—'}
-        />
-        <StatCard
-          label="Dernier sync"
-          value={
-            recentRun
-              ? new Date(recentRun.ran_at).toLocaleString('fr-FR', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                })
-              : '—'
-          }
-          badge={recentRun?.status ?? undefined}
         />
       </div>
 
@@ -131,29 +102,18 @@ export default async function AnalyticsPage({
 function StatCard({
   label,
   value,
-  badge,
   hint,
 }: {
   label: string
   value: string | number
-  badge?: string
   hint?: string
 }) {
-  const badgeColor =
-    badge === 'success' ? 'bg-emerald-500/20 text-emerald-400' :
-    badge === 'failed'  ? 'bg-red-500/20 text-red-400'         : ''
-
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
       <p className="text-xs text-neutral-500">{label}</p>
       <p className="mt-1 text-xl font-semibold text-white">{value}</p>
       {hint && (
         <p className="mt-1 text-[11px] text-neutral-500">{hint}</p>
-      )}
-      {badge && (
-        <span className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
-          {badge}
-        </span>
       )}
     </div>
   )

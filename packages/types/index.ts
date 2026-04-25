@@ -308,6 +308,13 @@ export interface ContentLabPost {
   score: number
   scoreDelta: number
   savesMultiplier: number | null
+  // Unclamped weighted ratio of the post vs the 30 d same-format baseline,
+  // and its percentile within the currently-ranked set. Both null when no
+  // baseline is available. See apps/web/features/analytics/ranking.ts.
+  rankScore: number | null
+  percentile: number | null
+  previewUrl: string | null
+  thumbnailUrl: string | null
 }
 
 export interface ThemeAggregate {
@@ -449,6 +456,18 @@ export type TTopPost = {
   scoreDelta:       number
   // total_saves / baseline_saves. Null when the format has no 30d baseline.
   savesMultiplier:  number | null
+  // Unclamped UI-side score: weighted sum of per-metric ratios vs same-format
+  // 30 d baseline. Null when every baseline is missing. See ranking.ts.
+  rankScore:        number | null
+  // Percentile rank (0–100) of rankScore within the currently-loaded period.
+  percentile:       number | null
+  // Meta CDN URL for image / carousel cover, or video thumbnail. Null when
+  // raw_instagram_media.raw_json doesn't carry the field. These URLs are
+  // signed and expire — treat as a best-effort preview, not an archive.
+  previewUrl:       string | null
+  // Explicit video thumbnail when distinct from the main media URL. Used for
+  // VIDEO / REEL rows where media_url points to the video binary itself.
+  thumbnailUrl:     string | null
 }
 
 // --- Umami + Attribution (Sprint 7) ---
