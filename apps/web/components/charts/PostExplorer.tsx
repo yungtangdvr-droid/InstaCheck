@@ -7,6 +7,11 @@ import {
   rankLabel,
   type TRankLabel,
 } from '@/features/analytics/ranking'
+import {
+  ENGAGEMENT_LABEL_CLASS,
+  ENGAGEMENT_LABEL_FR,
+  type TEngagementLabel,
+} from '@/features/analytics/engagement-score'
 import type { TTopPost } from '@creator-hub/types'
 
 type Props = { posts: TTopPost[] }
@@ -66,6 +71,25 @@ function RankBadge({
       className={`inline-flex h-6 items-center rounded border px-1.5 text-[11px] font-medium ${RANK_LABEL_CLASS[label]}`}
     >
       {RANK_LABEL_FR[label]}
+    </span>
+  )
+}
+
+function EngagementBadge({
+  score,
+  label,
+}: {
+  score: number
+  label: TEngagementLabel
+}) {
+  const cls = ENGAGEMENT_LABEL_CLASS[label]
+  return (
+    <span
+      title={`Score d'engagement ${score}/100 — ${ENGAGEMENT_LABEL_FR[label]}`}
+      className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] font-medium ${cls}`}
+    >
+      <span className="tabular-nums">{score}</span>
+      <span className="text-[10px] opacity-80">{ENGAGEMENT_LABEL_FR[label]}</span>
     </span>
   )
 }
@@ -135,6 +159,12 @@ export function PostExplorer({ posts }: Props) {
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">×saves</th>
             <th
               className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
+              title="Score d'engagement 0–100 basé sur les taux saves/reach, shares/reach, comments/reach, likes/reach."
+            >
+              Engagement
+            </th>
+            <th
+              className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
               title="Rang percentile du post dans la période, basé sur les ratios vs baseline 30 j (saves / shares / comments / likes / profile visits)."
             >
               Rang
@@ -175,6 +205,9 @@ export function PostExplorer({ posts }: Props) {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <MultiplierChip multiplier={post.savesMultiplier} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <EngagementBadge score={post.engagementScore} label={post.engagementLabel} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <RankBadge

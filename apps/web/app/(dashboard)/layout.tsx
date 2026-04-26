@@ -2,11 +2,14 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
-// Refocus 2026-04-22: only Analytics and Content Lab are surfaced in the nav.
-// Frozen routes (crm, deals, assets, attribution, brand-watch, automations) still
-// resolve by direct URL but are not advertised. See CLAUDE.md and MASTER_PROMPT_CREATOR_HUB.md.
+// Refocus 2026-04-22: only Analytics, Audience and Content Lab are surfaced
+// in the nav. Audience is part of the Analytics scope (Meta-official audience
+// behavior + demographics when synced). Frozen routes (crm, deals, assets,
+// attribution, brand-watch, automations) still resolve by direct URL but are
+// not advertised. See CLAUDE.md and MASTER_PROMPT_CREATOR_HUB.md.
 const NAV = [
   { href: '/analytics',   label: 'Analytics' },
+  { href: '/audience',    label: 'Audience' },
   { href: '/content-lab', label: 'Content Lab' },
 ]
 

@@ -468,6 +468,11 @@ export type TTopPost = {
   // Explicit video thumbnail when distinct from the main media URL. Used for
   // VIDEO / REEL rows where media_url points to the video binary itself.
   thumbnailUrl:     string | null
+  // Engagement Score v1 — rate-based, 0–100, computed in ranking.ts /
+  // engagement-score.ts. Decoupled from `score` (mart-side, baseline-relative)
+  // and `rankScore` (percentile within the loaded set).
+  engagementScore:  number
+  engagementLabel:  'faible' | 'moyen' | 'bon' | 'tres-fort' | 'exceptionnel'
 }
 
 // --- Umami + Attribution (Sprint 7) ---

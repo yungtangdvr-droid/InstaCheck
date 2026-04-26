@@ -4,6 +4,11 @@ import Link from 'next/link'
 import { ReachChart } from '@/components/charts/ReachChart'
 import { FORMAT_LABEL, fmtK } from '@/features/analytics/utils'
 import { getPostPerformance } from '@/features/analytics/get-analytics-data'
+import {
+  computeEngagementScore,
+  ENGAGEMENT_LABEL_CLASS,
+  ENGAGEMENT_LABEL_FR,
+} from '@/features/analytics/engagement-score'
 import type { TDailyMetricPoint } from '@creator-hub/types'
 
 // Impressions is deprecated for Instagram media posted after 2024-07-02 and
@@ -55,6 +60,28 @@ export default async function PostDetailPage({
   }))
 
   const perf = perfResult.data
+
+  const engagement = computeEngagementScore({
+    reach:    totals.reach,
+    saves:    totals.saves,
+    shares:   totals.shares,
+    comments: totals.comments,
+    likes:    totals.likes,
+    baselineRates:
+      perf &&
+      perf.baselines.saves    != null &&
+      perf.baselines.shares   != null &&
+      perf.baselines.comments != null &&
+      perf.baselines.likes    != null &&
+      totals.reach > 0
+        ? {
+            saves:    perf.baselines.saves    / totals.reach,
+            shares:   perf.baselines.shares   / totals.reach,
+            comments: perf.baselines.comments / totals.reach,
+            likes:    perf.baselines.likes    / totals.reach,
+          }
+        : undefined,
+  })
 
   return (
     <div className="space-y-8">
@@ -120,10 +147,10 @@ export default async function PostDetailPage({
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <DeltaTile
-              label="Score"
-              delta={perf.scoreDelta}
-              absolute={`${perf.performanceScore}/100`}
+            <EngagementTile
+              score={engagement.score}
+              label={engagement.label}
+              hasReach={engagement.hasReach}
             />
             <MultiplierTile
               label="Saves"
@@ -152,15 +179,27 @@ export default async function PostDetailPage({
               baseline est peu stable.
             </p>
           )}
+
+          <p className="mt-3 text-[11px] text-neutral-600">
+            Score mart (référence technique) : {perf.performanceScore}/100
+            {' · '}
+            Δ {perf.scoreDelta >= 0 ? '+' : ''}{perf.scoreDelta} vs baseline {perf.baselineScore}.
+          </p>
         </div>
       )}
 
       {/* Reach over time */}
       {reachSeries.length > 0 ? (
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="mb-4 text-sm font-medium text-neutral-300">
+          <h2 className="mb-1 text-sm font-medium text-neutral-300">
             Reach dans le temps
           </h2>
+          {reachSeries.length === 1 && (
+            <p className="mb-3 text-xs text-neutral-500">
+              Évolution disponible après plusieurs syncs. Donnée actuelle =
+              snapshot lifetime.
+            </p>
+          )}
           <ReachChart data={reachSeries} />
         </div>
       ) : (
@@ -195,27 +234,27 @@ function MetricCard({
   )
 }
 
-function DeltaTile({
+function EngagementTile({
+  score,
   label,
-  delta,
-  absolute,
+  hasReach,
 }: {
-  label: string
-  delta: number
-  absolute: string
+  score:    number
+  label:    keyof typeof ENGAGEMENT_LABEL_FR
+  hasReach: boolean
 }) {
-  const color =
-    delta >=  10 ? 'text-emerald-400' :
-    delta >= -10 ? 'text-neutral-200' :
-                   'text-red-400'
-  const sign = delta > 0 ? '+' : ''
+  const cls = ENGAGEMENT_LABEL_CLASS[label]
   return (
     <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className={`mt-1 text-lg font-semibold tabular-nums ${color}`}>
-        {sign}{delta}
+      <p className="text-[11px] uppercase tracking-wide text-neutral-500">Engagement</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-white">
+        {hasReach ? `${score}/100` : '—'}
       </p>
-      <p className="mt-0.5 text-[11px] text-neutral-600">absolu {absolute}</p>
+      <span
+        className={`mt-1 inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${cls}`}
+      >
+        {ENGAGEMENT_LABEL_FR[label]}
+      </span>
     </div>
   )
 }

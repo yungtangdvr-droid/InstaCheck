@@ -1,11 +1,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PeriodFilter } from '@/components/analytics/PeriodFilter'
 import { DataHealthPanel } from '@/components/analytics/DataHealthPanel'
+import { AccountEngagementCard } from '@/components/analytics/AccountEngagementCard'
 import { ReachChart } from '@/components/charts/ReachChart'
 import { SavesChart } from '@/components/charts/SavesChart'
 import { PostExplorer } from '@/components/charts/PostExplorer'
 import { getReachSeries, getTopPosts } from '@/features/analytics/get-analytics-data'
 import { getDataHealth } from '@/features/analytics/get-data-health'
+import { getAccountEngagementHealth } from '@/features/analytics/get-engagement-health'
 import { parsePeriod } from '@/features/analytics/utils'
 import Link from 'next/link'
 
@@ -19,8 +21,9 @@ export default async function AnalyticsPage({
 
   const supabase = await createServerSupabaseClient()
 
-  const [health, reachResult, topPostsResult] = await Promise.all([
+  const [health, engagement, reachResult, topPostsResult] = await Promise.all([
     getDataHealth(supabase, period),
+    getAccountEngagementHealth(supabase, period),
     getReachSeries(supabase, period),
     getTopPosts(supabase, period),
   ])
@@ -46,6 +49,9 @@ export default async function AnalyticsPage({
 
       {/* Production Data Health / Sync Status */}
       <DataHealthPanel health={health} period={period} />
+
+      {/* Account engagement health */}
+      <AccountEngagementCard health={engagement} period={period} />
 
       {/* Period stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

@@ -11,6 +11,7 @@ import type {
 import { isoDowToSundayFirst } from './utils'
 import { computePercentiles, computeRankScore } from './ranking'
 import { extractPreviewUrls } from './media-preview'
+import { computeEngagementScore } from './engagement-score'
 
 type Supabase = SupabaseClient<Database>
 
@@ -236,6 +237,20 @@ export async function getTopPosts(
 
     const mediaId = r.media_id ?? ''
     const preview = previewByMediaId.get(mediaId) ?? { previewUrl: null, thumbnailUrl: null }
+    const reach   = Number(r.total_reach ?? 0)
+
+    const engagement = computeEngagementScore({
+      reach, saves, shares, comments, likes,
+      baselineRates:
+        baselineSaves != null && baselineShares != null && baselineComments != null && baselineLikes != null && reach > 0
+          ? {
+              saves:    baselineSaves    / reach,
+              shares:   baselineShares   / reach,
+              comments: baselineComments / reach,
+              likes:    baselineLikes    / reach,
+            }
+          : undefined,
+    })
 
     return {
       id:              r.post_id    ?? '',
@@ -244,7 +259,7 @@ export async function getTopPosts(
       caption:         r.caption,
       permalink:       r.permalink,
       postedAt:        r.posted_at,
-      reach:           Number(r.total_reach ?? 0),
+      reach,
       saves,
       shares,
       likes,
@@ -257,6 +272,8 @@ export async function getTopPosts(
       percentile:      null as number | null,
       previewUrl:      preview.previewUrl,
       thumbnailUrl:    preview.thumbnailUrl,
+      engagementScore: engagement.score,
+      engagementLabel: engagement.label,
     }
   })
 
