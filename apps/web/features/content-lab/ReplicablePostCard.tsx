@@ -7,6 +7,19 @@ import {
   RANK_LABEL_FR,
   rankLabel,
 } from '@/features/analytics/ranking'
+import {
+  formatPatternLabel,
+  primaryThemeLabel,
+  replicationLevelLabel,
+} from './content-analysis-labels'
+
+// Compact per-card content analysis signal. Plain object so RSC → client
+// serialisation is trivial; mirrors the projection from getContentSignalsForPosts.
+export type TPostCardContentSignal = {
+  primaryTheme:         string | null
+  formatPattern:        string | null
+  replicationPotential: string | null
+}
 
 const MEDIA_LABELS: Record<string, string> = {
   REEL:           'Reel',
@@ -19,9 +32,11 @@ const MEDIA_LABELS: Record<string, string> = {
 export function ReplicablePostCard({
   post,
   sampleSize,
+  contentSignal,
 }: {
   post: ContentLabPost
   sampleSize: number
+  contentSignal?: TPostCardContentSignal | null
 }) {
   const label = rankLabel(post.percentile, sampleSize)
 
@@ -94,6 +109,8 @@ export function ReplicablePostCard({
         {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
       </p>
 
+      {contentSignal && <ContentSignalLine signal={contentSignal} />}
+
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-600">
         <div>Saves <span className="text-neutral-400">{post.metrics.saves}</span></div>
         <div>Shares <span className="text-neutral-400">{post.metrics.shares}</span></div>
@@ -114,5 +131,30 @@ export function ReplicablePostCard({
         </a>
       )}
     </div>
+  )
+}
+
+// Compact one-line signal: "Theme · format · replication potential".
+// Skips segments whose source field is null or 'unknown' so the line stays
+// honest — we never invent labels just to fill the row.
+function ContentSignalLine({ signal }: { signal: TPostCardContentSignal }) {
+  const parts: string[] = []
+  if (signal.primaryTheme && signal.primaryTheme !== 'unknown') {
+    parts.push(primaryThemeLabel(signal.primaryTheme))
+  }
+  if (signal.formatPattern && signal.formatPattern !== 'unknown') {
+    parts.push(formatPatternLabel(signal.formatPattern))
+  }
+  if (signal.replicationPotential && signal.replicationPotential !== 'unknown') {
+    parts.push(replicationLevelLabel(signal.replicationPotential))
+  }
+  if (parts.length === 0) return null
+  return (
+    <p
+      className="text-[11px] text-neutral-500"
+      title="Signal éditorial issu de l'analyse de contenu"
+    >
+      {parts.join(' · ')}
+    </p>
   )
 }

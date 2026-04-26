@@ -3,6 +3,7 @@ import type { ContentLabPost } from '@creator-hub/types'
 import { ReplicablePostCard } from './ReplicablePostCard'
 import { computePercentiles, computeRankScore } from '@/features/analytics/ranking'
 import { extractPreviewUrls } from '@/features/analytics/media-preview'
+import { getContentSignalsForPosts } from './get-content-analysis'
 
 // Hard cap on the candidate pool pulled into JS for percentile ranking. The
 // 30 d window on this account is well under 500; if it ever grows, only the
@@ -113,6 +114,10 @@ export async function WhatToDoNext() {
 
   const sampleSize = ranked.filter(p => p.rankScore != null).length
 
+  // Read-only content analysis signals for the surfaced top 3. Plain object
+  // so it serialises across the RSC boundary into the client card.
+  const signalMap = await getContentSignalsForPosts(supabase, top3.map(p => p.id))
+
   return (
     <section>
       <h2 className="mb-1 text-lg font-semibold text-white">Quoi poster ensuite ?</h2>
@@ -120,9 +125,21 @@ export async function WhatToDoNext() {
         Top posts à répliquer selon le score de circulation (shares, saves, profil) sur 30 j
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {top3.map((post) => (
-          <ReplicablePostCard key={post.id} post={post} sampleSize={sampleSize} />
-        ))}
+        {top3.map((post) => {
+          const signal = signalMap.get(post.id)
+          return (
+            <ReplicablePostCard
+              key={post.id}
+              post={post}
+              sampleSize={sampleSize}
+              contentSignal={signal ? {
+                primaryTheme:         signal.primaryTheme,
+                formatPattern:        signal.formatPattern,
+                replicationPotential: signal.replicationPotential,
+              } : null}
+            />
+          )
+        })}
       </div>
     </section>
   )

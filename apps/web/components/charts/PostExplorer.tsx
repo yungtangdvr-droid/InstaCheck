@@ -14,6 +14,7 @@ import {
   type TDistributionLabel,
   type TDistributionSignal,
 } from '@/features/analytics/engagement-score'
+import { primaryThemeLabel } from '@/features/content-lab/content-analysis-labels'
 import type { TTopPost } from '@creator-hub/types'
 
 // Compact 1–2 char glyph used inside the badge to flag the dominant signal
@@ -26,7 +27,13 @@ const SIGNAL_GLYPH: Record<TDistributionSignal, string> = {
   profileVisits: '@',
 }
 
-type Props = { posts: TTopPost[] }
+type Props = {
+  posts: TTopPost[]
+  // Optional read-only signal from post_content_analysis.primary_theme,
+  // keyed by post id. Plain Record so it serialises across the RSC boundary.
+  // Posts without a completed analysis are simply absent from the map.
+  themesByPostId?: Record<string, string | null>
+}
 
 function MultiplierChip({ multiplier }: { multiplier: number | null }) {
   if (multiplier == null) {
@@ -153,7 +160,7 @@ function PreviewThumb({
   )
 }
 
-export function PostExplorer({ posts }: Props) {
+export function PostExplorer({ posts, themesByPostId }: Props) {
   if (posts.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500">
@@ -218,6 +225,18 @@ export function PostExplorer({ posts }: Props) {
                   >
                     {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
                   </Link>
+                  {(() => {
+                    const theme = themesByPostId?.[post.id]
+                    if (!theme || theme === 'unknown') return null
+                    return (
+                      <span
+                        className="mt-1 inline-flex items-center rounded border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-400"
+                        title="Thème principal détecté par l'analyse de contenu"
+                      >
+                        {primaryThemeLabel(theme)}
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
                   {post.reach.toLocaleString('fr-FR')}

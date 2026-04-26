@@ -8,6 +8,7 @@ import { PostExplorer } from '@/components/charts/PostExplorer'
 import { getReachSeries, getTopPosts } from '@/features/analytics/get-analytics-data'
 import { getDataHealth } from '@/features/analytics/get-data-health'
 import { getAccountEngagementHealth } from '@/features/analytics/get-engagement-health'
+import { getContentSignalsForPosts } from '@/features/content-lab/get-content-analysis'
 import { parsePeriod } from '@/features/analytics/utils'
 import Link from 'next/link'
 
@@ -30,6 +31,14 @@ export default async function AnalyticsPage({
 
   const reachData = reachResult.data  ?? []
   const topPosts  = topPostsResult.data ?? []
+
+  // Read-only theme signals from post_content_analysis. Map → Record so the
+  // payload serialises cleanly to the client PostExplorer component.
+  const signalMap = await getContentSignalsForPosts(supabase, topPosts.map(p => p.id))
+  const themesByPostId: Record<string, string | null> = {}
+  for (const [postId, signal] of signalMap) {
+    themesByPostId[postId] = signal.primaryTheme
+  }
 
   const totalReach = reachData.reduce((s, d) => s + d.reach, 0)
   const totalSaves = reachData.reduce((s, d) => s + d.saves, 0)
@@ -99,7 +108,7 @@ export default async function AnalyticsPage({
             Vue par format →
           </Link>
         </div>
-        <PostExplorer posts={topPosts} />
+        <PostExplorer posts={topPosts} themesByPostId={themesByPostId} />
       </div>
     </div>
   )
