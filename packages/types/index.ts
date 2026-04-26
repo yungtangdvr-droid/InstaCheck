@@ -705,3 +705,60 @@ export type TEventToTaskResult = {
   taskId:  string
   deduped: boolean
 }
+
+// --- External benchmark pool (PR 2: foundation only) ---
+//
+// Schema-level enums are mirrored here as TS unions. Source of truth is
+// the `benchmark_cohort` and `benchmark_metric_status` Postgres enums in
+// supabase/migrations/0007_benchmark_foundation.sql.
+//
+// Reposts are first-class but nullable: the official Graph API may or may
+// not expose a reshare/share field for a given media object. The probe
+// records availability per metric — never assumed.
+
+export type TBenchmarkCohort =
+  | 'meme'
+  | 'lifestyle'
+  | 'fashion'
+  | 'beauty'
+  | 'food'
+  | 'travel'
+  | 'fitness'
+  | 'gaming'
+  | 'other'
+
+export type TBenchmarkMetricStatus =
+  | 'available'
+  | 'unavailable_field'
+  | 'unavailable_400'
+  | 'unavailable_403'
+  | 'unavailable_other'
+
+export type TBenchmarkFetchedVia = 'business_discovery' | 'oembed'
+
+export type TBenchmarkSyncRunStatus = 'started' | 'success' | 'partial' | 'failed'
+
+export type TBenchmarkAccountFieldKey = 'followers_count' | 'media_count'
+
+export type TBenchmarkMediaFieldKey =
+  | 'like_count'
+  | 'comments_count'
+  | 'view_count'
+  | 'reposts'
+
+export type TBenchmarkProbeError = {
+  field?:   string
+  status?:  number
+  message:  string
+}
+
+export type TBenchmarkProbeReport = {
+  username:             string
+  ig_user_id:           string | null
+  fetched_via:          TBenchmarkFetchedVia | null
+  account_fields:       Record<TBenchmarkAccountFieldKey, TBenchmarkMetricStatus>
+  media_fields:         Record<TBenchmarkMediaFieldKey, TBenchmarkMetricStatus>
+  sample_media_count:   number
+  errors:               TBenchmarkProbeError[]
+  raw_response_excerpt: unknown
+}
