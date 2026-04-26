@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { ReachChart } from '@/components/charts/ReachChart'
 import { FORMAT_LABEL, fmtK } from '@/features/analytics/utils'
 import { getPostPerformance } from '@/features/analytics/get-analytics-data'
+import { extractPreviewUrls } from '@/features/analytics/media-preview'
+import { PostMediaPreview } from '@/features/analytics/PostMediaPreview'
 import { ContentAnalysisCard } from '@/features/content-lab/ContentAnalysisCard'
 import { getPostContentAnalysis } from '@/features/content-lab/get-content-analysis'
 import {
@@ -44,6 +46,22 @@ export default async function PostDetailPage({
   ])
 
   if (!post) notFound()
+
+  // Hero preview: fetch the raw Meta media row matching this post's media_id
+  // and reuse the same extractor as PostExplorer / WhatToDoNext. raw_json
+  // carries media_url + thumbnail_url — Meta CDN URLs that rotate, so the
+  // client component falls back to a placeholder on onError.
+  let previewUrl: string | null = null
+  if (post.media_id) {
+    const { data: rawMedia } = await supabase
+      .from('raw_instagram_media')
+      .select('raw_json')
+      .eq('media_id', post.media_id)
+      .maybeSingle()
+    if (rawMedia) {
+      previewUrl = extractPreviewUrls(rawMedia.raw_json, post.media_id).previewUrl
+    }
+  }
 
   const totals = (metrics ?? []).reduce(
     (acc, m) => ({
@@ -134,6 +152,15 @@ export default async function PostDetailPage({
           </p>
         )}
       </div>
+
+      {/* Hero preview — image from raw_instagram_media, plain <img> with
+          onError fallback (Meta CDN URLs rotate, can't be cached). */}
+      <PostMediaPreview
+        previewUrl={previewUrl}
+        mediaType={post.media_type}
+        permalink={post.permalink}
+        caption={post.caption}
+      />
 
       {/* Metric cards — Impressions intentionally omitted (deprecated metric). */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -226,25 +253,46 @@ export default async function PostDetailPage({
       {/* Analyse du contenu (read-only Gemini v2 classification) */}
       <ContentAnalysisCard analysis={contentAnalysis} />
 
-      {/* Reach over time */}
-      {reachSeries.length > 0 ? (
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="mb-1 text-sm font-medium text-neutral-300">
-            Reach dans le temps
-          </h2>
-          {reachSeries.length === 1 && (
-            <p className="mb-3 text-xs text-neutral-500">
-              Évolution disponible après plusieurs syncs. Donnée actuelle =
-              snapshot lifetime.
-            </p>
-          )}
-          <ReachChart data={reachSeries} />
-        </div>
-      ) : (
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-6 text-sm text-neutral-500">
-          Aucune métrique journalière disponible pour ce post.
-        </div>
-      )}
+      {/* Reach snapshot.
+          We mostly store lifetime snapshots, not true daily deltas. With
+          0–1 points, or with multiple points that are flat across reach /
+          saves / shares (i.e. the same lifetime value resynced each day),
+          the chart would look like a real time-series and mislead. Show an
+          honest empty state instead. */}
+      {(() => {
+        const points = reachSeries.length
+        const flat =
+          points <= 1 ||
+          (
+            reachSeries.every(p => p.reach   === reachSeries[0].reach)   &&
+            reachSeries.every(p => p.saves   === reachSeries[0].saves)   &&
+            reachSeries.every(p => p.shares  === reachSeries[0].shares)
+          )
+
+        if (points === 0 || flat) {
+          return (
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
+              <h2 className="mb-2 text-sm font-medium text-neutral-300">
+                Snapshot lifetime
+              </h2>
+              <p className="text-sm text-neutral-500">
+                Historique détaillé indisponible pour l&apos;instant. Les
+                métriques affichées sont des snapshots lifetime récupérés à
+                chaque sync.
+              </p>
+            </div>
+          )
+        }
+
+        return (
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
+            <h2 className="mb-1 text-sm font-medium text-neutral-300">
+              Reach dans le temps
+            </h2>
+            <ReachChart data={reachSeries} />
+          </div>
+        )
+      })()}
     </div>
   )
 }

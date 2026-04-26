@@ -111,9 +111,23 @@ export type TThemePerformanceRow = {
   // Average performance_score from v_mart_post_performance (0–100, mart-side
   // baseline-relative). Null when none of the joined posts have a mart score.
   avgScore:      number | null
+  // Raw per-theme metric (avg circulation score if usable across all themes,
+  // otherwise avg shares). Same scale as `globalAverageScore` so the
+  // shrinkage formula stays apples-to-apples.
+  rawScore:      number
+  // Bayesian-shrunk score, on the same scale as `rawScore`. Sort key for the
+  // ranking — keeps tiny-sample themes from dominating.
+  adjustedScore: number
+  // postCount / (postCount + MIN_SAMPLE_SIZE), in [0, 1).
+  reliability:   number
   topPostId:     string | null
   topPostShares: number
 }
+
+// Minimum sample size used for the Bayesian shrinkage prior. Picked at 5
+// because with one viral post the reliability is 1/(1+5)=16 %, so the global
+// average dominates and the theme can't game the ranking on a single hit.
+export const THEME_MIN_SAMPLE_SIZE = 5
 
 /**
  * Aggregate post_content_analysis × v_mart_post_performance by primary_theme.
@@ -198,10 +212,21 @@ export async function getThemePerformance(
     byTheme.set(theme, acc)
   }
 
-  const rows: TThemePerformanceRow[] = []
+  type Intermediate = {
+    primaryTheme:  string
+    postCount:     number
+    avgReach:      number
+    avgSaves:      number
+    avgShares:     number
+    avgScore:      number | null
+    topPostId:     string | null
+    topPostShares: number
+  }
+
+  const intermediate: Intermediate[] = []
   for (const [theme, acc] of byTheme) {
     if (acc.posts === 0) continue
-    rows.push({
+    intermediate.push({
       primaryTheme:  theme,
       postCount:     acc.posts,
       avgReach:      Math.round(acc.sumReach  / acc.posts),
@@ -213,9 +238,50 @@ export async function getThemePerformance(
     })
   }
 
-  // Sort by avg_shares descending — shares is the dominant distribution
-  // signal on this account, matching the v2 engagement-score weighting.
-  rows.sort((a, b) => b.avgShares - a.avgShares)
+  if (intermediate.length === 0) return []
+
+  // Decide the metric used as raw_theme_score:
+  //   - If every theme has avgScore (the v2 0–100 circulation score), use it.
+  //     It's a normalised, baseline-relative quality signal — the cleanest
+  //     input to a weighted ranking.
+  //   - Otherwise fall back to avgShares so we never mix scales.
+  const useScore = intermediate.every(r => r.avgScore != null)
+  const rawScoreOf = (r: Intermediate): number =>
+    useScore && r.avgScore != null ? r.avgScore : r.avgShares
+
+  // Global average across all classified posts (weighted by post_count, not
+  // by theme — otherwise a tiny theme would skew the prior).
+  let totalPosts = 0
+  let weightedSum = 0
+  for (const r of intermediate) {
+    totalPosts  += r.postCount
+    weightedSum += rawScoreOf(r) * r.postCount
+  }
+  const globalAverageScore = totalPosts > 0 ? weightedSum / totalPosts : 0
+
+  const rows: TThemePerformanceRow[] = intermediate.map(r => {
+    const rawScore     = rawScoreOf(r)
+    const reliability  = r.postCount / (r.postCount + THEME_MIN_SAMPLE_SIZE)
+    const adjustedScore =
+      rawScore * reliability + globalAverageScore * (1 - reliability)
+    return {
+      primaryTheme:  r.primaryTheme,
+      postCount:     r.postCount,
+      avgReach:      r.avgReach,
+      avgSaves:      r.avgSaves,
+      avgShares:     r.avgShares,
+      avgScore:      r.avgScore,
+      rawScore,
+      adjustedScore,
+      reliability,
+      topPostId:     r.topPostId,
+      topPostShares: r.topPostShares,
+    }
+  })
+
+  // Sort by adjusted score desc — Bayesian shrinkage pulls low-sample themes
+  // toward the global mean so a single viral post can't dominate the table.
+  rows.sort((a, b) => b.adjustedScore - a.adjustedScore)
 
   return rows
 }
