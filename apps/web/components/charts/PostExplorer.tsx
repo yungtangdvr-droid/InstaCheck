@@ -98,9 +98,12 @@ function CirculationBadge({
 }) {
   const cls = DISTRIBUTION_LABEL_CLASS[label]
   const signalFr = dominantSignal ? DISTRIBUTION_SIGNAL_FR[dominantSignal] : null
+  // Self-relative tooltip: explicitly anchors the label against the per-format
+  // 30 j baseline so the reading can never be confused with an absolute judgment.
+  const baselineQualifier = 'vs ta baseline 30j du même format'
   const tooltip = signalFr
-    ? `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]} · signal dominant : ${signalFr}`
-    : `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]}`
+    ? `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]} (${baselineQualifier}) · signal dominant : ${signalFr}`
+    : `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]} (${baselineQualifier})`
   return (
     <span
       title={tooltip}
@@ -180,9 +183,10 @@ export function PostExplorer({ posts }: Props) {
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">×saves</th>
             <th
               className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
-              title="Score circulation 0–100 — taux shares/reach (50 %), saves/reach (25 %), comments/reach (10 %), likes/reach (10 %), profile_visits/reach (5 %), normalisés log vs baseline du même format."
+              title="Score circulation 0–100, self-relative — taux shares/reach (50 %), saves/reach (25 %), comments/reach (10 %), likes/reach (10 %), profile_visits/reach (5 %), normalisés log vs ta baseline 30j du même format. Pas de comparaison externe."
             >
               Score circulation
+              <span className="ml-1 text-[10px] font-normal opacity-70">(vs ta baseline 30j)</span>
             </th>
             <th
               className="px-4 py-3 text-right text-xs font-medium text-neutral-500"

@@ -60,23 +60,32 @@ export type TDistributionLabel =
   | 'tres-fort'
   | 'exceptionnel'
 
+// Self-relative labels — the displayed text describes the score's position vs
+// the operator's own baseline, never an absolute market judgment. Every UI
+// surface that renders these MUST also render a baseline qualifier (e.g.
+// "vs ta baseline 90j") in close visual proximity.
+//
+// Union keys (faible/moyen/bon/tres-fort/exceptionnel) and the threshold
+// boundaries in distributionLabel() are intentionally left unchanged — only
+// the user-facing French text is rewritten.
 export const DISTRIBUTION_LABEL_FR: Record<TDistributionLabel, string> = {
-  'faible':       'Faible',
-  'moyen':        'Moyen',
-  'bon':          'Bon',
-  'tres-fort':    'Très fort',
-  'exceptionnel': 'Exceptionnel',
+  'faible':       'Très sous ta baseline',
+  'moyen':        'Sous ta baseline',
+  'bon':          'Dans ta zone normale',
+  'tres-fort':    'Au-dessus de ta baseline',
+  'exceptionnel': 'Très au-dessus de ta baseline',
 }
 
 // Strategic, copy-ready descriptions used in the account health interpretation
-// and the post-detail card. Kept short — the UI joins them with the dominant
-// signal sentence.
+// and the post-detail card. Phrased as self-relative observations only — never
+// "weak / strong / exceptional". The UI joins them with the dominant signal
+// sentence and a baseline qualifier.
 export const DISTRIBUTION_LABEL_COPY: Record<TDistributionLabel, string> = {
-  'exceptionnel': 'circule très fortement',
-  'tres-fort':    'à répliquer',
-  'bon':          'solide',
-  'moyen':        'correct mais peu différenciant',
-  'faible':       'ne circule pas assez',
+  'exceptionnel': 'tes posts circulent très au-dessus de ton historique',
+  'tres-fort':    'tes posts circulent au-dessus de ton historique',
+  'bon':          'tes posts circulent dans ta zone habituelle',
+  'moyen':        'tes posts circulent en-dessous de ton historique',
+  'faible':       'tes posts circulent nettement moins que ton historique',
 }
 
 export const DISTRIBUTION_LABEL_CLASS: Record<TDistributionLabel, string> = {
@@ -263,16 +272,25 @@ export function computeDistributionScore(input: TDistributionInput): TDistributi
 
 /**
  * Strategic copy for the account health card and post detail block.
- * Honest about empty / weak states; doesn't over-promise.
+ * Self-relative — the sentence describes the score against the operator's
+ * own baseline, never absolute. Pass `baselineQualifier` (e.g.
+ * "vs ta baseline 90j") so the head reads unambiguously.
  *
  * Example output:
- *   "Très fort — à répliquer. Signal dominant : partages."
+ *   "Au-dessus de ta baseline (vs ta baseline 30j) — tes posts circulent
+ *    au-dessus de ton historique. Signal dominant : partages."
  */
-export function distributionInterpretation(result: TDistributionResult): string {
+export function distributionInterpretation(
+  result: TDistributionResult,
+  baselineQualifier?: string,
+): string {
   if (!result.hasReach) {
     return 'Pas encore de reach mesurable sur la période sélectionnée.'
   }
-  const head = `${DISTRIBUTION_LABEL_FR[result.label]} — ${DISTRIBUTION_LABEL_COPY[result.label]}.`
+  const labelText = baselineQualifier
+    ? `${DISTRIBUTION_LABEL_FR[result.label]} (${baselineQualifier})`
+    : DISTRIBUTION_LABEL_FR[result.label]
+  const head = `${labelText} — ${DISTRIBUTION_LABEL_COPY[result.label]}.`
   if (result.dominantSignal) {
     return `${head} Signal dominant : ${DISTRIBUTION_SIGNAL_FR[result.dominantSignal]}.`
   }

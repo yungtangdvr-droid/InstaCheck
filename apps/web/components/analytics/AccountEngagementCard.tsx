@@ -17,7 +17,7 @@ export function AccountEngagementCard({
   health: TAccountEngagementHealth
   period: number
 }) {
-  const { current, baseline, baselinePeriod, scoreDelta, interpretation, postCount, highPerformerCount } = health
+  const { current, baseline, baselinePeriod, baselineQualifier, scoreDelta, interpretation, postCount, highPerformerCount } = health
   const labelCls = DISTRIBUTION_LABEL_CLASS[current.label]
   const labelFr  = DISTRIBUTION_LABEL_FR[current.label]
   const dominantFr = current.dominantSignal
@@ -45,11 +45,16 @@ export function AccountEngagementCard({
             </p>
           )}
         </div>
-        <span
-          className={`inline-flex h-7 items-center rounded border px-2 text-xs font-medium ${labelCls}`}
-        >
-          {labelFr}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span
+            className={`inline-flex h-7 items-center rounded border px-2 text-xs font-medium ${labelCls}`}
+          >
+            {labelFr}
+          </span>
+          <span className="text-[10px] text-neutral-500" title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe.">
+            {baselineQualifier}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-5 gap-y-3 px-5 py-4 sm:grid-cols-6">
@@ -91,10 +96,10 @@ export function AccountEngagementCard({
           title="Score médian de circulation des posts publiés sur la période (40 % du score global)."
         />
         <ComponentTile
-          label="% Très fort"
+          label="% au-dessus"
           value={`${current.components.pctHighPerformers}%`}
           accent={current.components.pctHighPerformers >= 30}
-          title={`Part des posts au score ≥ 65 (30 % du score global). ${highPerformerCount}/${postCount} post${postCount > 1 ? 's' : ''}.`}
+          title={`Part des posts au-dessus de ta baseline (score ≥ 65, 30 % du score global). ${highPerformerCount}/${postCount} post${postCount > 1 ? 's' : ''}.`}
         />
         <ComponentTile
           label="Shares globaux"
