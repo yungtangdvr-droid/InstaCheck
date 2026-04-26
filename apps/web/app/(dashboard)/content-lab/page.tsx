@@ -1,7 +1,11 @@
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { WhatToDoNext } from '@/features/content-lab/WhatToDoNext'
-import { ThemePerformanceTable } from '@/features/content-lab/ThemePerformanceTable'
+// `ThemePerformanceTable` (manual-tag aggregate from v_mart_theme_performance)
+// is intentionally not rendered here: it overlapped with the new Content
+// Intelligence taxonomy surfaced by `ContentThemePerformance` and was
+// confusing the reading. The component stays in the codebase for a possible
+// future "Tags manuels" view.
 import { ContentThemePerformance } from '@/features/content-lab/ContentThemePerformance'
 import type { ContentRecommendationType } from '@creator-hub/types'
 
@@ -38,8 +42,6 @@ export default async function ContentLabPage() {
       <WhatToDoNext />
 
       <ContentThemePerformance />
-
-      <ThemePerformanceTable />
 
       <section>
         <h2 className="mb-4 text-lg font-semibold text-white">Hypothèses récentes</h2>
