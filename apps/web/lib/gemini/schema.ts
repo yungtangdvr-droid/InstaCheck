@@ -1,10 +1,12 @@
 import { Type } from '@google/genai'
 import { z } from 'zod'
 
-// Frozen reusable vocabularies for v1. We keep them deliberately small
-// and free-form-stable. Anything outside the enum collapses to 'unknown'
-// during validation; the model is asked to prefer these labels in the
-// prompt but we accept fall-throughs gracefully rather than failing.
+// Frozen reusable vocabularies. We keep them deliberately small and
+// stable. Anything outside an enum collapses to 'unknown' during
+// validation; the prompt asks Gemini to pick from these lists but we
+// accept fall-throughs gracefully rather than failing the row.
+// See PROMPT_VERSION in prompt.ts — bump it whenever any vocab below
+// changes so dashboards can correlate quality with prompt iterations.
 
 export const LANGUAGE_VALUES   = ['fr', 'en', 'mix', 'other', 'unknown'] as const
 
@@ -20,14 +22,51 @@ export const HUMOR_TYPES       = [
   'unknown',
 ] as const
 
+// Meme-specific format vocabulary. The model classifies the visible
+// structure of the post (template, hook, layout) — not the medium type
+// (which we already have via `posts.media_type`). Keep this list small
+// and stable so format-level aggregates remain comparable over time.
 export const FORMAT_PATTERNS   = [
-  'image_macro',
-  'reaction_screenshot',
-  'text_post',
+  'pov',
+  'starter_pack',
+  'reaction_image',
+  'screenshot_caption',
+  'text_overlay',
   'dialogue',
-  'reel_skit',
-  'carousel_listicle',
+  'brand_parody',
+  'celebrity_reference',
+  'news_reference',
+  'carousel_manifesto',
+  'image_macro',
+  'video_thumbnail',
   'other',
+  'unknown',
+] as const
+
+// Controlled primary_theme vocabulary (v2). The model MUST pick exactly
+// one of these labels for `primary_theme`. Anything outside the enum
+// collapses to 'unknown' during validation. Nuance lives in
+// `secondary_themes`, which stays free-form on purpose (e.g. "HR",
+// "burnout", "dinner party", "bouncer", "gallery opening").
+export const PRIMARY_THEMES    = [
+  'work_corporate',
+  'social_life',
+  'relationships',
+  'fashion_luxury',
+  'internet_creator',
+  'politics_society',
+  'food_cooking',
+  'health_body',
+  'parenting_family',
+  'nightlife_party',
+  'subculture_identity',
+  'music_popculture',
+  'everyday_absurdity',
+  'sports_fitness',
+  'sex_relationships',
+  'death_morbidity',
+  'art_culture',
+  'consumerism',
   'unknown',
 ] as const
 
@@ -46,7 +85,7 @@ const enumWithUnknown = <T extends readonly [string, ...string[]]>(values: T) =>
 export const ContentAnalysisSchema = z.object({
   visible_text:          z.string().max(2000).default(''),
   language:              enumWithUnknown(LANGUAGE_VALUES),
-  primary_theme:         z.string().min(1).max(80),
+  primary_theme:         enumWithUnknown(PRIMARY_THEMES),
   secondary_themes:      z.array(z.string().min(1).max(80)).max(8).default([]),
   humor_type:            enumWithUnknown(HUMOR_TYPES),
   format_pattern:        enumWithUnknown(FORMAT_PATTERNS),
@@ -69,7 +108,7 @@ export const GEMINI_RESPONSE_SCHEMA = {
   properties: {
     visible_text:          { type: Type.STRING },
     language:              { type: Type.STRING, enum: [...LANGUAGE_VALUES] },
-    primary_theme:         { type: Type.STRING },
+    primary_theme:         { type: Type.STRING, enum: [...PRIMARY_THEMES] },
     secondary_themes:      { type: Type.ARRAY, items: { type: Type.STRING } },
     humor_type:            { type: Type.STRING, enum: [...HUMOR_TYPES] },
     format_pattern:        { type: Type.STRING, enum: [...FORMAT_PATTERNS] },
