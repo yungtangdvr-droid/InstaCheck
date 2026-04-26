@@ -1,45 +1,66 @@
-// Engagement Score v1 — rate-based scoring shared across analytics surfaces
-// (PostExplorer, post detail, account-level health card, audience page).
+// Engagement Score v2 — "Score circulation" — optimised for a meme creator
+// account where shareability and DM circulation drive distribution. Surfaces
+// share at /analytics, /audience, post detail, PostExplorer.
 //
 // Distinct from the percentile rank in `ranking.ts`:
 //   - rank.ts answers "where does this post sit vs same-format 30 d baseline"
 //     (distribution-relative, percentile within the loaded set).
-//   - this module answers "how engaging is this post in absolute rate terms"
-//     (saves/reach, shares/reach, …) with a meaningful score band, even when
-//     the baseline is too thin for a percentile to be useful.
+//   - this module answers "how strongly does this post circulate" using
+//     rate-based signals normalised against a same-format baseline (with a
+//     log-scaled ratio so a few outliers don't saturate the scale).
 //
-// Weights mirror the reach-rate intuition from the master prompt: saves and
-// shares are the most signal-bearing actions; comments and likes are softer
-// confirms. Profile visits are intentionally excluded — they're not consistently
-// available across media types (VIDEO drops the metric in some contexts) and
-// the account-level health is calibrated on the four "share-of-reach" rates.
-export const ENGAGEMENT_WEIGHTS = {
-  saves:    0.35,
-  shares:   0.35,
-  comments: 0.15,
-  likes:    0.15,
-} as const
+// Weight rationale (meme account):
+//   - shares  → primary distribution signal (DM forwards, story re-posts)
+//   - saves   → secondary value/memory signal
+//   - comments / likes → soft confirms, deliberately capped to avoid
+//                        comment-bait dominating the score
+//   - profile_visits → small bonus when the metric is available
+//
+// Backwards-compatible aliases (computeEngagementScore, ENGAGEMENT_LABEL_*,
+// engagementInterpretation) are kept at the bottom of this file so older
+// imports still resolve while we migrate the UI to the "circulation" wording.
 
-// Reference rates used to anchor 100 on the score scale. Values come from
-// public Instagram benchmarks for an "exceptional" post on a creator account
-// (≈ 5 % saves rate, ≈ 5 % shares rate, ≈ 1 % comments rate, ≈ 12 % likes
-// rate). Treat these as an absolute reference — when a same-format baseline
-// is provided it overrides them. The score is then clamped 0–100.
-const REFERENCE_RATES = {
-  saves:    0.05,
-  shares:   0.05,
-  comments: 0.01,
-  likes:    0.12,
-} as const
+export type TDistributionSignal =
+  | 'shares'
+  | 'saves'
+  | 'comments'
+  | 'likes'
+  | 'profileVisits'
 
-export type TEngagementLabel =
+export const DISTRIBUTION_WEIGHTS: Record<TDistributionSignal, number> = {
+  shares:        0.50,
+  saves:         0.25,
+  comments:      0.10,
+  likes:         0.10,
+  profileVisits: 0.05,
+}
+
+// Final-fallback rates used when no caller-supplied baseline is available.
+// Conservative meme-account heuristics — kept low enough that a real strong
+// post still scores well, kept high enough that a flat post doesn't bloat to
+// "Bon" by accident.
+const FALLBACK_RATES: Record<TDistributionSignal, number> = {
+  shares:        0.020,
+  saves:         0.030,
+  comments:      0.005,
+  likes:         0.060,
+  profileVisits: 0.005,
+}
+
+// Log-scaled normalisation anchor. ratio == 1 → ~0.46, ratio == 2 → ~0.68,
+// ratio == 4 → 1.0 (cap). Above 4× the curve flattens, so 20× baseline does
+// not destroy the scale or steal the dominant-signal slot from a real-world
+// healthy post.
+const LOG_ANCHOR = Math.log(1 + 4)
+
+export type TDistributionLabel =
   | 'faible'
   | 'moyen'
   | 'bon'
   | 'tres-fort'
   | 'exceptionnel'
 
-export const ENGAGEMENT_LABEL_FR: Record<TEngagementLabel, string> = {
+export const DISTRIBUTION_LABEL_FR: Record<TDistributionLabel, string> = {
   'faible':       'Faible',
   'moyen':        'Moyen',
   'bon':          'Bon',
@@ -47,9 +68,18 @@ export const ENGAGEMENT_LABEL_FR: Record<TEngagementLabel, string> = {
   'exceptionnel': 'Exceptionnel',
 }
 
-// Tailwind classes for a subtle gradient/tint matching the dark visual style
-// already used across the analytics views.
-export const ENGAGEMENT_LABEL_CLASS: Record<TEngagementLabel, string> = {
+// Strategic, copy-ready descriptions used in the account health interpretation
+// and the post-detail card. Kept short — the UI joins them with the dominant
+// signal sentence.
+export const DISTRIBUTION_LABEL_COPY: Record<TDistributionLabel, string> = {
+  'exceptionnel': 'circule très fortement',
+  'tres-fort':    'à répliquer',
+  'bon':          'solide',
+  'moyen':        'correct mais peu différenciant',
+  'faible':       'ne circule pas assez',
+}
+
+export const DISTRIBUTION_LABEL_CLASS: Record<TDistributionLabel, string> = {
   'faible':       'bg-red-500/10      text-red-400      border-red-500/20',
   'moyen':        'bg-amber-500/10    text-amber-400    border-amber-500/20',
   'bon':          'bg-emerald-500/10  text-emerald-400  border-emerald-500/20',
@@ -57,7 +87,15 @@ export const ENGAGEMENT_LABEL_CLASS: Record<TEngagementLabel, string> = {
   'exceptionnel': 'bg-gradient-to-r from-emerald-500/25 to-teal-400/25 text-emerald-200 border-emerald-400/40',
 }
 
-export function engagementLabel(score: number): TEngagementLabel {
+export const DISTRIBUTION_SIGNAL_FR: Record<TDistributionSignal, string> = {
+  shares:        'partages',
+  saves:         'sauvegardes',
+  comments:      'commentaires',
+  likes:         'likes',
+  profileVisits: 'visites de profil',
+}
+
+export function distributionLabel(score: number): TDistributionLabel {
   if (score >= 85) return 'exceptionnel'
   if (score >= 65) return 'tres-fort'
   if (score >= 45) return 'bon'
@@ -65,153 +103,298 @@ export function engagementLabel(score: number): TEngagementLabel {
   return 'faible'
 }
 
-export type TEngagementInputs = {
+export type TDistributionInput = {
   reach:    number
-  saves:    number
   shares:   number
+  saves:    number
   comments: number
   likes:    number
-  // Optional same-format baseline rates. When all four are present, the score
-  // is computed relative to those rates (ratio capped at 2× → 100). Otherwise
-  // it falls back to REFERENCE_RATES.
-  baselineRates?: {
-    saves:    number | null
-    shares:   number | null
-    comments: number | null
-    likes:    number | null
-  }
+  // Undefined / null when the metric is not exposed for this media type.
+  // When null the profile_visits weight is redistributed onto shares + saves.
+  profileVisits?: number | null
+  // Optional per-metric baseline rates (already divided by reach). Each may be
+  // null/undefined — the function falls back to FALLBACK_RATES per metric.
+  baselineRates?: Partial<Record<TDistributionSignal, number | null | undefined>>
 }
 
-export type TEngagementResult = {
-  score:          number              // 0–100
-  label:          TEngagementLabel
-  rates: {
-    saves:    number
-    shares:   number
-    comments: number
-    likes:    number
-  }
-  // Strongest signal (largest contribution to the score), used in summary
-  // copy on the account health card and audience page.
-  strongestSignal: 'saves' | 'shares' | 'comments' | 'likes' | null
-  // True when reach is zero — caller should render a neutral state instead.
-  hasReach:       boolean
+export type TDistributionResult = {
+  score:           number              // 0–100
+  label:           TDistributionLabel
+  rates:           Record<TDistributionSignal, number | null>
+  // metric rate / baseline rate (null when rate is not measurable).
+  ratios:          Record<TDistributionSignal, number | null>
+  // log-scaled normalised contribution per metric, in [0, 1].
+  normalized:      Record<TDistributionSignal, number | null>
+  // Effective weights actually applied (profileVisits redistributed when null).
+  weights:         Record<TDistributionSignal, number>
+  // Largest weighted contribution. Null when reach is zero.
+  dominantSignal:  TDistributionSignal | null
+  hasReach:        boolean
+  hasProfileVisits: boolean
 }
 
-function rate(value: number, reach: number): number {
-  if (!Number.isFinite(reach) || reach <= 0) return 0
+function logScale(ratio: number): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) return 0
+  return Math.max(0, Math.min(1, Math.log(1 + ratio) / LOG_ANCHOR))
+}
+
+function pickBaselineRate(
+  custom: number | null | undefined,
+  fallback: number,
+): number {
+  if (custom == null) return fallback
+  if (!Number.isFinite(custom) || custom <= 0) return fallback
+  return custom
+}
+
+function rateOf(value: number, reach: number): number | null {
+  if (reach <= 0) return null
   return value / reach
 }
 
-// 0–100 contribution of a single rate against its reference. 1× reference
-// scores 50 (neutral baseline), 2× reference scores 100 (capped).
-function rateScore(actualRate: number, referenceRate: number): number {
-  if (!Number.isFinite(referenceRate) || referenceRate <= 0) return 0
-  const ratio = actualRate / referenceRate
-  return Math.max(0, Math.min(1, ratio / 2)) * 100
+function rateRatio(rate: number | null, baselineRate: number): number | null {
+  if (rate == null) return null
+  if (baselineRate <= 0) return null
+  return rate / baselineRate
+}
+
+// profile_visits weight (5 %) is redistributed proportionally to shares (50 %)
+// and saves (25 %) when the metric is unavailable for the media type.
+function effectiveWeights(hasProfileVisits: boolean): Record<TDistributionSignal, number> {
+  if (hasProfileVisits) return { ...DISTRIBUTION_WEIGHTS }
+  const shareSlice = DISTRIBUTION_WEIGHTS.shares /
+                     (DISTRIBUTION_WEIGHTS.shares + DISTRIBUTION_WEIGHTS.saves)
+  const saveSlice  = DISTRIBUTION_WEIGHTS.saves /
+                     (DISTRIBUTION_WEIGHTS.shares + DISTRIBUTION_WEIGHTS.saves)
+  return {
+    shares:        DISTRIBUTION_WEIGHTS.shares + DISTRIBUTION_WEIGHTS.profileVisits * shareSlice,
+    saves:         DISTRIBUTION_WEIGHTS.saves  + DISTRIBUTION_WEIGHTS.profileVisits * saveSlice,
+    comments:      DISTRIBUTION_WEIGHTS.comments,
+    likes:         DISTRIBUTION_WEIGHTS.likes,
+    profileVisits: 0,
+  }
 }
 
 /**
- * Compute the engagement score from a single post's metrics, or from
- * pre-aggregated account totals (saves/shares/comments/likes/reach summed
- * across the period). Rate-based — raw volumes don't bias the score in
- * favour of high-reach posts.
+ * Compute the distribution (circulation) score for a single post or for an
+ * aggregate of posts (when the caller passes summed totals). Rate-based —
+ * raw volumes never bias the score in favour of high-reach posts.
  */
-export function computeEngagementScore(input: TEngagementInputs): TEngagementResult {
+export function computeDistributionScore(input: TDistributionInput): TDistributionResult {
   const reach = input.reach
   const hasReach = reach > 0
+  const hasProfileVisits = input.profileVisits != null
 
-  const rates = {
-    saves:    rate(input.saves,    reach),
-    shares:   rate(input.shares,   reach),
-    comments: rate(input.comments, reach),
-    likes:    rate(input.likes,    reach),
+  const rates: Record<TDistributionSignal, number | null> = {
+    shares:        rateOf(input.shares,                     reach),
+    saves:         rateOf(input.saves,                      reach),
+    comments:      rateOf(input.comments,                   reach),
+    likes:         rateOf(input.likes,                      reach),
+    profileVisits: hasProfileVisits ? rateOf(input.profileVisits ?? 0, reach) : null,
   }
 
-  const refSaves    = pickRef(input.baselineRates?.saves,    REFERENCE_RATES.saves)
-  const refShares   = pickRef(input.baselineRates?.shares,   REFERENCE_RATES.shares)
-  const refComments = pickRef(input.baselineRates?.comments, REFERENCE_RATES.comments)
-  const refLikes    = pickRef(input.baselineRates?.likes,    REFERENCE_RATES.likes)
-
-  const partials = {
-    saves:    rateScore(rates.saves,    refSaves),
-    shares:   rateScore(rates.shares,   refShares),
-    comments: rateScore(rates.comments, refComments),
-    likes:    rateScore(rates.likes,    refLikes),
+  const baselineRates: Record<TDistributionSignal, number> = {
+    shares:        pickBaselineRate(input.baselineRates?.shares,        FALLBACK_RATES.shares),
+    saves:         pickBaselineRate(input.baselineRates?.saves,         FALLBACK_RATES.saves),
+    comments:      pickBaselineRate(input.baselineRates?.comments,      FALLBACK_RATES.comments),
+    likes:         pickBaselineRate(input.baselineRates?.likes,         FALLBACK_RATES.likes),
+    profileVisits: pickBaselineRate(input.baselineRates?.profileVisits, FALLBACK_RATES.profileVisits),
   }
 
-  const score = hasReach
-    ? Math.round(
-        ENGAGEMENT_WEIGHTS.saves    * partials.saves    +
-        ENGAGEMENT_WEIGHTS.shares   * partials.shares   +
-        ENGAGEMENT_WEIGHTS.comments * partials.comments +
-        ENGAGEMENT_WEIGHTS.likes    * partials.likes,
-      )
+  const ratios: Record<TDistributionSignal, number | null> = {
+    shares:        rateRatio(rates.shares,        baselineRates.shares),
+    saves:         rateRatio(rates.saves,         baselineRates.saves),
+    comments:      rateRatio(rates.comments,      baselineRates.comments),
+    likes:         rateRatio(rates.likes,         baselineRates.likes),
+    profileVisits: rateRatio(rates.profileVisits, baselineRates.profileVisits),
+  }
+
+  const normalized: Record<TDistributionSignal, number | null> = {
+    shares:        ratios.shares        != null ? logScale(ratios.shares)        : null,
+    saves:         ratios.saves         != null ? logScale(ratios.saves)         : null,
+    comments:      ratios.comments      != null ? logScale(ratios.comments)      : null,
+    likes:         ratios.likes         != null ? logScale(ratios.likes)         : null,
+    profileVisits: ratios.profileVisits != null ? logScale(ratios.profileVisits) : null,
+  }
+
+  const weights = effectiveWeights(hasProfileVisits)
+
+  let weightedSum = 0
+  let weightTotal = 0
+  for (const key of Object.keys(weights) as TDistributionSignal[]) {
+    const w = weights[key]
+    if (w === 0) continue
+    const n = normalized[key]
+    if (n == null) continue
+    weightedSum += w * n
+    weightTotal += w
+  }
+
+  const score = hasReach && weightTotal > 0
+    ? Math.round((weightedSum / weightTotal) * 100)
     : 0
 
-  // Strongest signal = weighted contribution to the final score, so a
-  // reasonable saves rate beats a great-but-low-weight likes rate.
-  const contributions: Array<['saves' | 'shares' | 'comments' | 'likes', number]> = [
-    ['saves',    ENGAGEMENT_WEIGHTS.saves    * partials.saves   ],
-    ['shares',   ENGAGEMENT_WEIGHTS.shares   * partials.shares  ],
-    ['comments', ENGAGEMENT_WEIGHTS.comments * partials.comments],
-    ['likes',    ENGAGEMENT_WEIGHTS.likes    * partials.likes   ],
-  ]
-  const strongest = hasReach
-    ? contributions.reduce((acc, cur) => (cur[1] > acc[1] ? cur : acc))[0]
-    : null
+  // Dominant signal = largest weighted contribution. Profile visits can win
+  // only when actually available (weight non-zero AND normalized non-null).
+  let dominantSignal: TDistributionSignal | null = null
+  if (hasReach) {
+    let bestContribution = 0
+    for (const key of Object.keys(weights) as TDistributionSignal[]) {
+      const contribution = (weights[key] || 0) * (normalized[key] ?? 0)
+      if (contribution > bestContribution) {
+        bestContribution = contribution
+        dominantSignal = key
+      }
+    }
+  }
 
   return {
-    score:           Math.max(0, Math.min(100, score)),
-    label:           engagementLabel(score),
+    score: Math.max(0, Math.min(100, score)),
+    label: distributionLabel(score),
     rates,
-    strongestSignal: strongest,
+    ratios,
+    normalized,
+    weights,
+    dominantSignal,
     hasReach,
+    hasProfileVisits,
   }
-}
-
-function pickRef(baseline: number | null | undefined, fallback: number): number {
-  if (baseline == null) return fallback
-  if (!Number.isFinite(baseline) || baseline <= 0) return fallback
-  return baseline
-}
-
-export const ENGAGEMENT_SIGNAL_FR: Record<'saves' | 'shares' | 'comments' | 'likes', string> = {
-  saves:    'sauvegardes',
-  shares:   'partages',
-  comments: 'commentaires',
-  likes:    'likes',
 }
 
 /**
- * Short interpretation sentence for the account health card.
+ * Strategic copy for the account health card and post detail block.
  * Honest about empty / weak states; doesn't over-promise.
+ *
+ * Example output:
+ *   "Très fort — à répliquer. Signal dominant : partages."
  */
-export function engagementInterpretation(result: TEngagementResult): string {
+export function distributionInterpretation(result: TDistributionResult): string {
   if (!result.hasReach) {
     return 'Pas encore de reach mesurable sur la période sélectionnée.'
   }
-  const signal = result.strongestSignal
-    ? ENGAGEMENT_SIGNAL_FR[result.strongestSignal]
-    : null
-  switch (result.label) {
-    case 'exceptionnel':
-      return signal
-        ? `Engagement exceptionnel — porté surtout par les ${signal}.`
-        : 'Engagement exceptionnel sur la période.'
-    case 'tres-fort':
-      return signal
-        ? `Très bon engagement — signal le plus fort : ${signal}.`
-        : 'Très bon engagement sur la période.'
-    case 'bon':
-      return signal
-        ? `Engagement solide — meilleur signal : ${signal}.`
-        : 'Engagement solide sur la période.'
-    case 'moyen':
-      return signal
-        ? `Engagement moyen — appui principal : ${signal}.`
-        : 'Engagement moyen sur la période.'
-    case 'faible':
-      return 'Engagement faible — peu de réactions par rapport au reach.'
+  const head = `${DISTRIBUTION_LABEL_FR[result.label]} — ${DISTRIBUTION_LABEL_COPY[result.label]}.`
+  if (result.dominantSignal) {
+    return `${head} Signal dominant : ${DISTRIBUTION_SIGNAL_FR[result.dominantSignal]}.`
+  }
+  return head
+}
+
+// ---------------------------------------------------------------------------
+// Baseline helpers — shared by health, post explorer, post detail.
+// ---------------------------------------------------------------------------
+
+export type TBaselineMartRow = {
+  total_reach:              number | null
+  total_saves:              number | null
+  total_shares:             number | null
+  total_likes:              number | null
+  total_comments:           number | null
+  total_profile_visits:     number | null
+  media_type?:              string | null
+  baseline_saves?:          number | string | null
+  baseline_shares?:         number | string | null
+  baseline_comments?:       number | string | null
+  baseline_likes?:          number | string | null
+  baseline_profile_visits?: number | string | null
+}
+
+export type TFormatRateMedians = Map<string, Partial<Record<TDistributionSignal, number>>>
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = values.slice().sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
+
+/**
+ * Per-format median *rate* table built from a set of mart rows. Used as the
+ * second-tier fallback (after the dbt mart per-post baseline, before the
+ * conservative defaults) when scoring a post against its same-format peers.
+ * Storing the median (not the average) keeps a single outlier from dragging
+ * the baseline.
+ */
+export function computeFormatRateMedians(rows: TBaselineMartRow[]): TFormatRateMedians {
+  const groups = new Map<string, {
+    shares: number[]; saves: number[]; comments: number[]; likes: number[]; profileVisits: number[]
+  }>()
+  for (const row of rows) {
+    const reach = Number(row.total_reach ?? 0)
+    if (reach <= 0) continue
+    const mt = row.media_type ?? 'UNKNOWN'
+    const bucket = groups.get(mt) ?? { shares: [], saves: [], comments: [], likes: [], profileVisits: [] }
+    bucket.shares  .push(Number(row.total_shares    ?? 0) / reach)
+    bucket.saves   .push(Number(row.total_saves     ?? 0) / reach)
+    bucket.comments.push(Number(row.total_comments  ?? 0) / reach)
+    bucket.likes   .push(Number(row.total_likes     ?? 0) / reach)
+    if (row.total_profile_visits != null) {
+      bucket.profileVisits.push(Number(row.total_profile_visits) / reach)
+    }
+    groups.set(mt, bucket)
+  }
+  const out: TFormatRateMedians = new Map()
+  for (const [mt, b] of groups.entries()) {
+    out.set(mt, {
+      shares:        median(b.shares),
+      saves:         median(b.saves),
+      comments:      median(b.comments),
+      likes:         median(b.likes),
+      profileVisits: b.profileVisits.length > 0 ? median(b.profileVisits) : undefined,
+    })
+  }
+  return out
+}
+
+/**
+ * Build the per-post baseline rate table by preferring the dbt mart's
+ * per-format baseline (baseline_metric / post_reach approximation), then
+ * falling back to the period-wide median rate for the same format. The
+ * scoring function applies its own conservative final fallback when both
+ * are missing.
+ */
+export function baselineRatesForPost(
+  row: TBaselineMartRow,
+  medians: TFormatRateMedians,
+): Partial<Record<TDistributionSignal, number | null>> {
+  const reach = Number(row.total_reach ?? 0)
+  const mt = row.media_type ?? 'UNKNOWN'
+  const fallback = medians.get(mt) ?? {}
+  const fromBaseline = (raw: number | string | null | undefined): number | null => {
+    if (raw == null) return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return null
+    if (reach <= 0) return null
+    return n / reach
+  }
+  return {
+    shares:        fromBaseline(row.baseline_shares)         ?? fallback.shares        ?? null,
+    saves:         fromBaseline(row.baseline_saves)          ?? fallback.saves         ?? null,
+    comments:      fromBaseline(row.baseline_comments)       ?? fallback.comments      ?? null,
+    likes:         fromBaseline(row.baseline_likes)          ?? fallback.likes         ?? null,
+    profileVisits: fromBaseline(row.baseline_profile_visits) ?? fallback.profileVisits ?? null,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Backwards-compat aliases — keep older imports compiling until every call
+// site is migrated. Names map 1:1 to the v2 surface above. These do not add
+// new behaviour; they are pure re-exports so the v2 algorithm is the single
+// source of truth.
+// ---------------------------------------------------------------------------
+
+export type TEngagementLabel  = TDistributionLabel
+export type TEngagementSignal = TDistributionSignal
+export type TEngagementResult = TDistributionResult
+
+export const ENGAGEMENT_LABEL_FR    = DISTRIBUTION_LABEL_FR
+export const ENGAGEMENT_LABEL_CLASS = DISTRIBUTION_LABEL_CLASS
+export const ENGAGEMENT_SIGNAL_FR   = DISTRIBUTION_SIGNAL_FR
+export const ENGAGEMENT_WEIGHTS     = DISTRIBUTION_WEIGHTS
+
+export const engagementLabel          = distributionLabel
+export const engagementInterpretation = distributionInterpretation
+export const computeEngagementScore   = computeDistributionScore
+
+export type TEngagementInputs = TDistributionInput

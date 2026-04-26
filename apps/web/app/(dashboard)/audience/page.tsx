@@ -4,9 +4,10 @@ import { PeriodFilter } from '@/components/analytics/PeriodFilter'
 import { getAudienceData } from '@/features/audience/get-audience'
 import { parsePeriod, FORMAT_LABEL } from '@/features/analytics/utils'
 import {
-  ENGAGEMENT_LABEL_CLASS,
-  ENGAGEMENT_LABEL_FR,
-  type TEngagementLabel,
+  DISTRIBUTION_LABEL_CLASS,
+  DISTRIBUTION_LABEL_FR,
+  DISTRIBUTION_SIGNAL_FR,
+  type TDistributionLabel,
 } from '@/features/analytics/engagement-score'
 import type {
   TAudienceFormatRate,
@@ -26,9 +27,12 @@ export default async function AudiencePage({
   const supabase = await createServerSupabaseClient()
   const audience = await getAudienceData(supabase, period)
 
-  const engagementLabel = audience.engagementLabel as TEngagementLabel
-  const labelCls = ENGAGEMENT_LABEL_CLASS[engagementLabel]
-  const labelFr  = ENGAGEMENT_LABEL_FR[engagementLabel]
+  const circulationLabel = audience.engagementLabel as TDistributionLabel
+  const labelCls = DISTRIBUTION_LABEL_CLASS[circulationLabel]
+  const labelFr  = DISTRIBUTION_LABEL_FR[circulationLabel]
+  const dominantFr = audience.dominantSignal
+    ? DISTRIBUTION_SIGNAL_FR[audience.dominantSignal]
+    : null
 
   const handle = audience.account?.username ? `@${audience.account.username}` : '—'
 
@@ -63,7 +67,7 @@ export default async function AudiencePage({
             value={audience.postsAnalyzed.toLocaleString('fr-FR')}
           />
           <div>
-            <p className="text-xs text-neutral-500">Engagement</p>
+            <p className="text-xs text-neutral-500">Santé de circulation</p>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="text-xl font-semibold tabular-nums text-white">
                 {audience.engagementScore}
@@ -75,8 +79,14 @@ export default async function AudiencePage({
             >
               {labelFr}
             </span>
+            {dominantFr && (
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
+              </p>
+            )}
           </div>
         </div>
+        <p className="mt-3 text-sm text-neutral-300">{audience.interpretation}</p>
       </section>
 
       {/* Habits summary */}
@@ -111,9 +121,9 @@ export default async function AudiencePage({
         </div>
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-          <h3 className="text-sm font-medium text-neutral-300">Posts les plus engageants</h3>
+          <h3 className="text-sm font-medium text-neutral-300">Posts qui circulent le plus</h3>
           {audience.topPosts.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-500">Aucun post avec engagement mesurable.</p>
+            <p className="mt-3 text-sm text-neutral-500">Aucun post avec circulation mesurable.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {audience.topPosts.map((p) => (
@@ -178,7 +188,7 @@ function TopPostRow({ post }: { post: TAudienceTopPost }) {
       >
         {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
       </Link>
-      <span className="text-xs tabular-nums text-emerald-400" title="Score d'engagement">
+      <span className="text-xs tabular-nums text-emerald-400" title="Score circulation">
         {post.engagementScore}
       </span>
     </li>

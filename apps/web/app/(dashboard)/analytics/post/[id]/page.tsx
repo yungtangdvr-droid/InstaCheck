@@ -5,9 +5,13 @@ import { ReachChart } from '@/components/charts/ReachChart'
 import { FORMAT_LABEL, fmtK } from '@/features/analytics/utils'
 import { getPostPerformance } from '@/features/analytics/get-analytics-data'
 import {
-  computeEngagementScore,
-  ENGAGEMENT_LABEL_CLASS,
-  ENGAGEMENT_LABEL_FR,
+  computeDistributionScore,
+  distributionInterpretation,
+  DISTRIBUTION_LABEL_CLASS,
+  DISTRIBUTION_LABEL_FR,
+  DISTRIBUTION_SIGNAL_FR,
+  type TDistributionLabel,
+  type TDistributionSignal,
 } from '@/features/analytics/engagement-score'
 import type { TDailyMetricPoint } from '@creator-hub/types'
 
@@ -61,26 +65,32 @@ export default async function PostDetailPage({
 
   const perf = perfResult.data
 
-  const engagement = computeEngagementScore({
-    reach:    totals.reach,
-    saves:    totals.saves,
-    shares:   totals.shares,
-    comments: totals.comments,
-    likes:    totals.likes,
-    baselineRates:
-      perf &&
-      perf.baselines.saves    != null &&
-      perf.baselines.shares   != null &&
-      perf.baselines.comments != null &&
-      perf.baselines.likes    != null &&
-      totals.reach > 0
-        ? {
-            saves:    perf.baselines.saves    / totals.reach,
-            shares:   perf.baselines.shares   / totals.reach,
-            comments: perf.baselines.comments / totals.reach,
-            likes:    perf.baselines.likes    / totals.reach,
-          }
-        : undefined,
+  // v2 Score circulation — log-scaled rate ratios vs same-format baseline.
+  // Baseline rate is approximated as baseline_count / current post reach
+  // (caller-side fallback to median rate happens in the analytics list path,
+  // but on a single post we only have the per-post mart row).
+  const baselineRate = (count: number | null | undefined): number | null => {
+    if (count == null || totals.reach <= 0) return null
+    const n = Number(count)
+    return Number.isFinite(n) && n > 0 ? n / totals.reach : null
+  }
+
+  const engagement = computeDistributionScore({
+    reach:         totals.reach,
+    saves:         totals.saves,
+    shares:        totals.shares,
+    comments:      totals.comments,
+    likes:         totals.likes,
+    profileVisits: totals.profileVisits > 0 ? totals.profileVisits : null,
+    baselineRates: perf
+      ? {
+          shares:        baselineRate(perf.baselines.shares),
+          saves:         baselineRate(perf.baselines.saves),
+          comments:      baselineRate(perf.baselines.comments),
+          likes:         baselineRate(perf.baselines.likes),
+          profileVisits: baselineRate(perf.baselines.profileVisits),
+        }
+      : undefined,
   })
 
   return (
@@ -136,7 +146,7 @@ export default async function PostDetailPage({
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-medium text-neutral-300">
-              Performance vs format moyen
+              Score circulation vs format moyen
             </h2>
             <span className="text-xs text-neutral-500">
               Baseline {FORMAT_LABEL[perf.mediaType] ?? perf.mediaType} · 30 j
@@ -146,29 +156,50 @@ export default async function PostDetailPage({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <EngagementTile
-              score={engagement.score}
-              label={engagement.label}
-              hasReach={engagement.hasReach}
+          <CirculationSummary
+            score={engagement.score}
+            label={engagement.label}
+            dominantSignal={engagement.dominantSignal}
+            interpretation={distributionInterpretation(engagement)}
+            hasReach={engagement.hasReach}
+          />
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <MultiplierTile
+              label="Shares"
+              actual={perf.totals.shares}
+              baseline={perf.baselines.shares}
+              multiplier={perf.multipliers.shares}
+              accent={engagement.dominantSignal === 'shares'}
             />
             <MultiplierTile
               label="Saves"
               actual={perf.totals.saves}
               baseline={perf.baselines.saves}
               multiplier={perf.multipliers.saves}
-            />
-            <MultiplierTile
-              label="Shares"
-              actual={perf.totals.shares}
-              baseline={perf.baselines.shares}
-              multiplier={perf.multipliers.shares}
+              accent={engagement.dominantSignal === 'saves'}
             />
             <MultiplierTile
               label="Comments"
               actual={perf.totals.comments}
               baseline={perf.baselines.comments}
               multiplier={perf.multipliers.comments}
+              accent={engagement.dominantSignal === 'comments'}
+            />
+            <MultiplierTile
+              label="Likes"
+              actual={perf.totals.likes}
+              baseline={perf.baselines.likes}
+              multiplier={perf.multipliers.likes}
+              accent={engagement.dominantSignal === 'likes'}
+            />
+            <MultiplierTile
+              label="Profil"
+              actual={perf.totals.profileVisits ?? 0}
+              baseline={perf.baselines.profileVisits}
+              multiplier={perf.multipliers.profileVisits}
+              accent={engagement.dominantSignal === 'profileVisits'}
+              missing={perf.totals.profileVisits == null}
             />
           </div>
 
@@ -234,27 +265,41 @@ function MetricCard({
   )
 }
 
-function EngagementTile({
+function CirculationSummary({
   score,
   label,
+  dominantSignal,
+  interpretation,
   hasReach,
 }: {
-  score:    number
-  label:    keyof typeof ENGAGEMENT_LABEL_FR
-  hasReach: boolean
+  score:          number
+  label:          TDistributionLabel
+  dominantSignal: TDistributionSignal | null
+  interpretation: string
+  hasReach:       boolean
 }) {
-  const cls = ENGAGEMENT_LABEL_CLASS[label]
+  const cls = DISTRIBUTION_LABEL_CLASS[label]
+  const dominantFr = dominantSignal ? DISTRIBUTION_SIGNAL_FR[dominantSignal] : null
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-neutral-500">Engagement</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-white">
-        {hasReach ? `${score}/100` : '—'}
-      </p>
-      <span
-        className={`mt-1 inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${cls}`}
-      >
-        {ENGAGEMENT_LABEL_FR[label]}
-      </span>
+    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-4">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <p className="text-[11px] uppercase tracking-wide text-neutral-500">Score circulation</p>
+        <span className="text-2xl font-semibold tabular-nums text-white">
+          {hasReach ? `${score}` : '—'}
+        </span>
+        <span className="text-xs text-neutral-500">/ 100</span>
+        <span
+          className={`inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${cls}`}
+        >
+          {DISTRIBUTION_LABEL_FR[label]}
+        </span>
+        {dominantFr && hasReach && (
+          <span className="text-[11px] text-neutral-400">
+            Signal le plus fort : <span className="text-neutral-200">{dominantFr}</span>
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-neutral-300">{interpretation}</p>
     </div>
   )
 }
@@ -264,26 +309,37 @@ function MultiplierTile({
   actual,
   baseline,
   multiplier,
+  accent,
+  missing,
 }: {
   label:      string
   actual:     number
   baseline:   number | null
   multiplier: number | null
+  accent?:    boolean
+  missing?:   boolean
 }) {
   const color =
+    missing                ? 'text-neutral-600' :
     multiplier == null     ? 'text-neutral-400' :
     multiplier >= 1.5      ? 'text-emerald-400' :
     multiplier >= 0.8      ? 'text-neutral-200' :
                              'text-red-400'
+  const borderCls = accent
+    ? 'border-emerald-500/40 bg-emerald-500/5'
+    : 'border-neutral-800 bg-neutral-950/40'
 
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-3">
+    <div
+      className={`rounded-md border p-3 ${borderCls}`}
+      title={accent ? 'Signal dominant pour ce post' : undefined}
+    >
       <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
       <p className={`mt-1 text-lg font-semibold tabular-nums ${color}`}>
-        {multiplier == null ? '—' : `×${multiplier.toFixed(1)}`}
+        {missing ? 'n/a' : multiplier == null ? '—' : `×${multiplier.toFixed(1)}`}
       </p>
       <p className="mt-0.5 text-[11px] text-neutral-600 tabular-nums">
-        {fmtK(actual)} vs {baseline == null ? '—' : fmtK(Math.round(baseline))}
+        {missing ? 'métrique non exposée' : `${fmtK(actual)} vs ${baseline == null ? '—' : fmtK(Math.round(baseline))}`}
       </p>
     </div>
   )

@@ -1,7 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 import type { TAnalyticsPeriod } from '@creator-hub/types'
-import { computeEngagementScore } from '@/features/analytics/engagement-score'
+import {
+  baselineRatesForPost,
+  computeDistributionScore,
+  computeFormatRateMedians,
+  type TDistributionSignal,
+} from '@/features/analytics/engagement-score'
 import { getAccountEngagementHealth } from '@/features/analytics/get-engagement-health'
 import { isoDowToSundayFirst, FORMAT_LABEL } from '@/features/analytics/utils'
 
@@ -49,8 +54,11 @@ export type TAudienceData = {
   followersCount:  number | null
   followersAt:     string | null
   postsAnalyzed:   number
+  // v2 "Santé de circulation" — composite distribution health for the period.
   engagementScore: number
   engagementLabel: string
+  dominantSignal:  TDistributionSignal | null
+  interpretation:  string
   period:          TAnalyticsPeriod
   bestWindow:      TAudienceWindow | null
   formatsBySaves:  TAudienceFormatRate[]
@@ -97,7 +105,7 @@ export async function getAudienceData(
       .maybeSingle(),
     supabase
       .from('v_mart_post_performance')
-      .select('post_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_comments, total_likes')
+      .select('post_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_comments, total_likes, total_profile_visits, baseline_saves, baseline_shares, baseline_comments, baseline_likes, baseline_profile_visits')
       .eq(flag, true),
     supabase
       .from('v_mart_best_posting_windows')
@@ -134,7 +142,10 @@ export async function getAudienceData(
   const formatsBySaves  = formatRates.slice().sort((a, b) => b.savesRate  - a.savesRate)
   const formatsByShares = formatRates.slice().sort((a, b) => b.sharesRate - a.sharesRate)
 
-  // Top engaging posts (top 3 by engagement score within the period).
+  // Top engaging posts (top 3 by v2 distribution score within the period).
+  // Uses the same per-format median fallback as analytics so the audience
+  // ranking aligns with PostExplorer.
+  const formatRateMedians = computeFormatRateMedians(posts)
   const ranked: TAudienceTopPost[] = posts
     .map(p => {
       const reach    = Number(p.total_reach    ?? 0)
@@ -142,7 +153,16 @@ export async function getAudienceData(
       const shares   = Number(p.total_shares   ?? 0)
       const comments = Number(p.total_comments ?? 0)
       const likes    = Number(p.total_likes    ?? 0)
-      const eng = computeEngagementScore({ reach, saves, shares, comments, likes })
+      const pv       = p.total_profile_visits == null ? null : Number(p.total_profile_visits)
+      const eng = computeDistributionScore({
+        reach,
+        shares,
+        saves,
+        comments,
+        likes,
+        profileVisits:  pv,
+        baselineRates:  baselineRatesForPost(p, formatRateMedians),
+      })
       return {
         postId:          p.post_id   ?? '',
         permalink:       p.permalink ?? null,
@@ -173,10 +193,10 @@ export async function getAudienceData(
       }
     : null
 
-  // Habits summary — built from the strongest signal + best window + best
-  // saves format. No demographic inference; only what's measurable.
+  // Habits summary — built from the dominant circulation signal + best window +
+  // best saves format. No demographic inference; only what's measurable.
   const habitsSummary = buildHabitsSummary({
-    strongestSignal: engagement.current.strongestSignal,
+    dominantSignal:  engagement.current.dominantSignal,
     bestWindow,
     bestSavesFormat: formatsBySaves[0] ?? null,
     hasReach:        engagement.current.hasReach,
@@ -195,6 +215,8 @@ export async function getAudienceData(
     postsAnalyzed:   posts.length,
     engagementScore: engagement.current.score,
     engagementLabel: engagement.current.label,
+    dominantSignal:  engagement.current.dominantSignal,
+    interpretation:  engagement.interpretation,
     period,
     bestWindow,
     formatsBySaves,
@@ -209,7 +231,7 @@ export async function getAudienceData(
 }
 
 function buildHabitsSummary(input: {
-  strongestSignal: 'saves' | 'shares' | 'comments' | 'likes' | null
+  dominantSignal:  TDistributionSignal | null
   bestWindow:      TAudienceWindow | null
   bestSavesFormat: TAudienceFormatRate | null
   hasReach:        boolean
@@ -222,19 +244,23 @@ function buildHabitsSummary(input: {
 
   if (input.bestSavesFormat) {
     const fmt = FORMAT_LABEL[input.bestSavesFormat.mediaType] ?? input.bestSavesFormat.mediaType
-    if (input.strongestSignal === 'saves') {
+    if (input.dominantSignal === 'saves') {
       parts.push(`Ton audience sauvegarde surtout les ${fmt.toLowerCase()}s`)
-    } else if (input.strongestSignal === 'shares') {
+    } else if (input.dominantSignal === 'shares') {
       parts.push(`Ton audience partage activement, avec un appui sur les ${fmt.toLowerCase()}s`)
-    } else if (input.strongestSignal === 'comments') {
+    } else if (input.dominantSignal === 'comments') {
       parts.push(`Ton audience commente, avec un appui sur les ${fmt.toLowerCase()}s`)
+    } else if (input.dominantSignal === 'profileVisits') {
+      parts.push(`Tes posts génèrent des visites de profil, surtout sur les ${fmt.toLowerCase()}s`)
     } else {
       parts.push(`Ton audience réagit surtout aux ${fmt.toLowerCase()}s`)
     }
-  } else if (input.strongestSignal === 'saves') {
+  } else if (input.dominantSignal === 'saves') {
     parts.push('Ton audience sauvegarde plus qu\'elle ne réagit en surface')
-  } else if (input.strongestSignal === 'shares') {
+  } else if (input.dominantSignal === 'shares') {
     parts.push('Ton audience partage tes posts plus que la moyenne')
+  } else if (input.dominantSignal === 'profileVisits') {
+    parts.push('Tes posts génèrent des visites de profil')
   } else {
     parts.push('Ton audience interagit modérément')
   }
