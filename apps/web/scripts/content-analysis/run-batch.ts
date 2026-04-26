@@ -1,16 +1,32 @@
 /* eslint-disable no-console */
 //
-// Content Intelligence v1 — manual batch script.
+// Content Intelligence — manual batch script.
 // Run from apps/web with: pnpm content:analyze -- --limit=5
 //
 // Refuses to call Gemini unless CONTENT_ANALYSIS_ENABLED=true.
 // Caps limit at MAX_BATCH_LIMIT regardless of CLI/env input.
-// Skips posts that already have a row in post_content_analysis.
+//
+// Retry / reanalysis policy (explicit):
+//   - Default: posts with ANY existing row in post_content_analysis are
+//     skipped, regardless of status (completed | failed | skipped). A new
+//     PROMPT_VERSION therefore applies only to posts analyzed AFTER the
+//     bump. Existing rows keep the prompt_version they were written with.
+//   - With --reanalyze: existing rows ARE included as candidates and
+//     overwritten on upsert (onConflict: 'post_id'). Use this when you
+//     have changed the prompt or vocabulary and want to re-classify the
+//     historical sample. Combine with --limit and --status= for safety.
+//   - --status=completed|failed|skipped (only meaningful with --reanalyze)
+//     restricts which existing rows are eligible. Defaults to all three
+//     when --reanalyze is set without --status.
+//
+// MAX_BATCH_LIMIT (=100) is a hard cap on a single run regardless of
+// flags, to keep accidental large reruns bounded.
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
 import { analyzePostMedia } from '../../lib/gemini/analyze'
+import { PROMPT_VERSION } from '../../lib/gemini/prompt'
 import { refreshMediaUrl, pickAnalyzableUrl } from '../../lib/meta/refresh-media-url'
 
 const PROVIDER         = 'gemini'
@@ -20,20 +36,40 @@ const MAX_BATCH_LIMIT  = 100
 const AUTOMATION_NAME  = 'content-analysis-batch'
 const POST_DELAY_MS    = 600 // gentle pacing between Gemini calls
 
-type Cli = { limit: number | null; dryRun: boolean }
+type ReanalyzeStatus = 'completed' | 'failed' | 'skipped'
+const ALL_REANALYZE_STATUSES: ReanalyzeStatus[] = ['completed', 'failed', 'skipped']
+
+type Cli = {
+  limit:           number | null
+  dryRun:          boolean
+  reanalyze:       boolean
+  reanalyzeStatus: ReanalyzeStatus[]
+}
 
 function parseArgv(argv: string[]): Cli {
   let limit: number | null = null
   let dryRun = false
+  let reanalyze = false
+  let reanalyzeStatus: ReanalyzeStatus[] = []
   for (const arg of argv.slice(2)) {
     if (arg.startsWith('--limit=')) {
       const n = Number.parseInt(arg.slice('--limit='.length), 10)
       if (Number.isFinite(n) && n > 0) limit = n
     } else if (arg === '--dry-run') {
       dryRun = true
+    } else if (arg === '--reanalyze') {
+      reanalyze = true
+    } else if (arg.startsWith('--status=')) {
+      const raw = arg.slice('--status='.length).split(',').map((s) => s.trim())
+      reanalyzeStatus = raw.filter(
+        (s): s is ReanalyzeStatus => (ALL_REANALYZE_STATUSES as string[]).includes(s),
+      )
     }
   }
-  return { limit, dryRun }
+  if (reanalyze && reanalyzeStatus.length === 0) {
+    reanalyzeStatus = [...ALL_REANALYZE_STATUSES]
+  }
+  return { limit, dryRun, reanalyze, reanalyzeStatus }
 }
 
 function resolveLimit(cli: Cli): number {
@@ -79,6 +115,8 @@ function readEnvOrFail(): {
 async function pickCandidates(
   supabase: ReturnType<typeof createClient<Database>>,
   limit:    number,
+  reanalyze:       boolean,
+  reanalyzeStatus: ReanalyzeStatus[],
 ): Promise<Array<{ post_id: string; media_id: string; media_type: string; caption: string | null }>> {
   // Overfetch 4× so we have spares after excluding already-analyzed posts.
   const overfetch = Math.max(limit * 4, 20)
@@ -101,12 +139,31 @@ async function pickCandidates(
 
   const { data: existing, error: exErr } = await supabase
     .from('post_content_analysis')
-    .select('post_id')
+    .select('post_id, status')
     .in('post_id', usable.map((r) => r.post_id))
   if (exErr) throw new Error(`existing_query: ${exErr.message}`)
 
-  const skip = new Set((existing ?? []).map((r) => r.post_id))
-  return usable.filter((r) => !skip.has(r.post_id)).slice(0, limit)
+  if (!reanalyze) {
+    // Default: any existing row blocks the post from being re-analyzed.
+    // Completed rows are preserved; failed/skipped rows are not silently
+    // retried (would burn quota on the same broken URL every run).
+    const skip = new Set((existing ?? []).map((r) => r.post_id))
+    return usable.filter((r) => !skip.has(r.post_id)).slice(0, limit)
+  }
+
+  // --reanalyze: only KEEP posts whose existing row matches the requested
+  // status filter. Posts with no row at all are also kept (treated as
+  // first-time analysis), so a single command can both backfill and
+  // refresh in one pass.
+  const allowed = new Set(reanalyzeStatus)
+  const byPost  = new Map((existing ?? []).map((r) => [r.post_id, r.status]))
+  return usable
+    .filter((r) => {
+      const s = byPost.get(r.post_id)
+      if (s === undefined) return true
+      return s !== null && allowed.has(s as ReanalyzeStatus)
+    })
+    .slice(0, limit)
 }
 
 type Outcome = {
@@ -220,7 +277,7 @@ async function upsertSkipped(
       post_id:          post.post_id,
       provider:         PROVIDER,
       model,
-      prompt_version:   'v1',
+      prompt_version:   PROMPT_VERSION,
       status:           'skipped',
       source_media_url: url,
       error_message:    reason.slice(0, 500),
@@ -274,7 +331,7 @@ async function main() {
 
   let candidates: Awaited<ReturnType<typeof pickCandidates>> = []
   try {
-    candidates = await pickCandidates(supabase, limit)
+    candidates = await pickCandidates(supabase, limit, cli.reanalyze, cli.reanalyzeStatus)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'pick_candidates_failed'
     console.error(`[content-analysis] ${msg}`)
@@ -316,14 +373,16 @@ async function main() {
   }
 
   const summary = {
-    processed:  outcomes.length,
-    completed:  outcomes.filter((o) => o.status === 'completed').length,
-    failed:     outcomes.filter((o) => o.status === 'failed').length,
-    skipped:    outcomes.filter((o) => o.status === 'skipped').length,
-    model:      env.geminiModel,
-    promptVer:  'v1',
+    processed:       outcomes.length,
+    completed:       outcomes.filter((o) => o.status === 'completed').length,
+    failed:          outcomes.filter((o) => o.status === 'failed').length,
+    skipped:         outcomes.filter((o) => o.status === 'skipped').length,
+    model:           env.geminiModel,
+    promptVer:       PROMPT_VERSION,
     limit,
-    durationMs: Date.now() - start,
+    reanalyze:       cli.reanalyze,
+    reanalyzeStatus: cli.reanalyze ? cli.reanalyzeStatus : null,
+    durationMs:      Date.now() - start,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
 

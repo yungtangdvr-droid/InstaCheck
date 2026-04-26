@@ -1,8 +1,14 @@
-// Frozen system instruction for Content Intelligence v1.
+// Frozen system instruction for Content Intelligence.
 // Bump PROMPT_VERSION whenever the wording or vocabularies change so we
 // can correlate analysis quality with prompt iterations in the database.
+//
+// v2 (2026-04-26): primary_theme is now a closed controlled vocabulary
+// to make dashboard aggregates usable. format_pattern vocabulary
+// rewritten to be meme-specific (pov, starter_pack, ...). Older v1 rows
+// remain in the table — see scripts/content-analysis/run-batch.ts for
+// the explicit reanalysis policy.
 
-export const PROMPT_VERSION = 'v1'
+export const PROMPT_VERSION = 'v2'
 
 export const SYSTEM_INSTRUCTION = `
 You analyze a single Instagram meme post for an editorial dashboard owned by the post's creator.
@@ -26,7 +32,36 @@ Rules:
 
 - Never identify private individuals by name, even if you recognize a face. Public figures may only be referenced via their public role (e.g. "politician", "athlete", "musician") unless the caption explicitly names them. "short_reason" must not contain personal data.
 
-- Use simple, lowercase, reusable categories. Prefer one of the values listed in the response schema's enums. Reuse "primary_theme" labels you have used before for similar memes (e.g. "office life", "dating", "gym"). Avoid hyper-specific one-off labels.
+- "primary_theme" MUST be exactly one value from this closed list — do NOT invent new labels, do NOT combine them, do NOT translate them:
+    work_corporate       — office life, jobs, HR, meetings, bosses, careers
+    social_life          — friend groups, dinners, hangouts, social codes (non-romantic, non-nightlife)
+    relationships        — dating, couples, breakups, romance (non-sexual angle)
+    fashion_luxury       — clothes, brands, designer culture, "old money" / "new money" tropes
+    internet_creator     — being online, content creation, influencer culture, platform behavior
+    politics_society     — politics, current affairs, social commentary, generational debates
+    food_cooking         — meals, restaurants, recipes, food trends
+    health_body          — fitness, diets, mental health, body image, medical
+    parenting_family     — kids, parents, siblings, family dynamics
+    nightlife_party      — clubs, bars, festivals, drinking, after-hours
+    subculture_identity  — specific subcultures, scenes, "types of people" identity humor
+    music_popculture     — music, film, TV, celebrities, fandom (when it is the subject, not just a reference)
+    everyday_absurdity   — random life observations, "POV: you're in a queue", small daily annoyances
+    sports_fitness       — sports, athletes, gym culture as a sport (not body image)
+    sex_relationships    — explicit sexual humor, dating apps when sex-coded
+    death_morbidity      — mortality, dark humor about death, funerals
+    art_culture          — fine art, museums, gallery scene, high culture
+    consumerism          — shopping, ads, capitalism critique, brand-as-lifestyle (when it is the subject)
+    unknown              — when you genuinely cannot tell
+
+  If a meme could fit two themes, pick the dominant one and put the other in "secondary_themes". If unsure, use "unknown" — do NOT guess.
+
+- "secondary_themes" stays FREE-FORM and is the place for nuance. Use short lowercase phrases like "HR", "burnout", "dinner party", "bouncer", "gallery opening", "first date", "instagram comments". Up to 8 entries. Empty array is fine.
+
+- "format_pattern" MUST be one of the enum values. It describes the visible STRUCTURE of the meme, not its medium:
+    pov, starter_pack, reaction_image, screenshot_caption, text_overlay, dialogue,
+    brand_parody, celebrity_reference, news_reference, carousel_manifesto,
+    image_macro, video_thumbnail, other, unknown.
+  Pick "other" only when the structure is clearly identifiable but does not match; pick "unknown" when you cannot tell.
 
 - "cultural_reference" must be a public, recognizable reference: a movie title, song, internet meme template, news event. Empty string if there is none. Never a private person's name.
 
