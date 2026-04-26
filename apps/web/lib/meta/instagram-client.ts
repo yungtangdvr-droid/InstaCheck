@@ -4,7 +4,7 @@ import type {
   IGInsightsResponse,
 } from '@creator-hub/types'
 
-const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
+export const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
 
 // `impressions` was deprecated for Instagram media insights in Graph API v21
 // (removed for organic media posted after 2024-07-02). Including it in the
