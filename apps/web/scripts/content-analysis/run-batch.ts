@@ -18,6 +18,11 @@
 //   - --status=completed|failed|skipped (only meaningful with --reanalyze)
 //     restricts which existing rows are eligible. Defaults to all three
 //     when --reanalyze is set without --status.
+//   - --outdated-only (safe migration mode): restricts eligible rows to
+//     those whose prompt_version != current PROMPT_VERSION. Posts with no
+//     existing row, and rows already on the current version, are skipped.
+//     Pair with --reanalyze --status=completed to migrate v1 rows to v2
+//     without re-burning quota on rows already on the latest prompt.
 //
 // MAX_BATCH_LIMIT (=100) is a hard cap on a single run regardless of
 // flags, to keep accidental large reruns bounded.
@@ -44,6 +49,7 @@ type Cli = {
   dryRun:          boolean
   reanalyze:       boolean
   reanalyzeStatus: ReanalyzeStatus[]
+  outdatedOnly:    boolean
 }
 
 function parseArgv(argv: string[]): Cli {
@@ -51,6 +57,7 @@ function parseArgv(argv: string[]): Cli {
   let dryRun = false
   let reanalyze = false
   let reanalyzeStatus: ReanalyzeStatus[] = []
+  let outdatedOnly = false
   for (const arg of argv.slice(2)) {
     if (arg.startsWith('--limit=')) {
       const n = Number.parseInt(arg.slice('--limit='.length), 10)
@@ -59,6 +66,8 @@ function parseArgv(argv: string[]): Cli {
       dryRun = true
     } else if (arg === '--reanalyze') {
       reanalyze = true
+    } else if (arg === '--outdated-only') {
+      outdatedOnly = true
     } else if (arg.startsWith('--status=')) {
       const raw = arg.slice('--status='.length).split(',').map((s) => s.trim())
       reanalyzeStatus = raw.filter(
@@ -69,7 +78,7 @@ function parseArgv(argv: string[]): Cli {
   if (reanalyze && reanalyzeStatus.length === 0) {
     reanalyzeStatus = [...ALL_REANALYZE_STATUSES]
   }
-  return { limit, dryRun, reanalyze, reanalyzeStatus }
+  return { limit, dryRun, reanalyze, reanalyzeStatus, outdatedOnly }
 }
 
 function resolveLimit(cli: Cli): number {
@@ -117,6 +126,7 @@ async function pickCandidates(
   limit:    number,
   reanalyze:       boolean,
   reanalyzeStatus: ReanalyzeStatus[],
+  outdatedOnly:    boolean,
 ): Promise<Array<{ post_id: string; media_id: string; media_type: string; caption: string | null }>> {
   // Overfetch 4× so we have spares after excluding already-analyzed posts.
   const overfetch = Math.max(limit * 4, 20)
@@ -139,29 +149,49 @@ async function pickCandidates(
 
   const { data: existing, error: exErr } = await supabase
     .from('post_content_analysis')
-    .select('post_id, status')
+    .select('post_id, status, prompt_version')
     .in('post_id', usable.map((r) => r.post_id))
   if (exErr) throw new Error(`existing_query: ${exErr.message}`)
+
+  type ExistingRow = { post_id: string; status: string | null; prompt_version: string | null }
+  const byPost = new Map<string, ExistingRow>(
+    (existing ?? []).map((r) => [r.post_id, r as ExistingRow]),
+  )
 
   if (!reanalyze) {
     // Default: any existing row blocks the post from being re-analyzed.
     // Completed rows are preserved; failed/skipped rows are not silently
     // retried (would burn quota on the same broken URL every run).
-    const skip = new Set((existing ?? []).map((r) => r.post_id))
-    return usable.filter((r) => !skip.has(r.post_id)).slice(0, limit)
+    // --outdated-only narrows further: only existing rows on an outdated
+    // prompt_version are eligible — but since reanalyze is off, those
+    // rows would be skipped anyway, so the result is effectively empty.
+    if (outdatedOnly) {
+      return []
+    }
+    return usable.filter((r) => !byPost.has(r.post_id)).slice(0, limit)
   }
 
   // --reanalyze: only KEEP posts whose existing row matches the requested
   // status filter. Posts with no row at all are also kept (treated as
   // first-time analysis), so a single command can both backfill and
-  // refresh in one pass.
+  // refresh in one pass — UNLESS --outdated-only is set, in which case
+  // we restrict to existing rows whose prompt_version differs from the
+  // current PROMPT_VERSION.
   const allowed = new Set(reanalyzeStatus)
-  const byPost  = new Map((existing ?? []).map((r) => [r.post_id, r.status]))
   return usable
     .filter((r) => {
-      const s = byPost.get(r.post_id)
-      if (s === undefined) return true
-      return s !== null && allowed.has(s as ReanalyzeStatus)
+      const row = byPost.get(r.post_id)
+      if (row === undefined) {
+        // No existing row. In outdated-only mode we never touch new posts.
+        return !outdatedOnly
+      }
+      if (row.status === null || !allowed.has(row.status as ReanalyzeStatus)) {
+        return false
+      }
+      if (outdatedOnly && row.prompt_version === PROMPT_VERSION) {
+        return false
+      }
+      return true
     })
     .slice(0, limit)
 }
@@ -331,7 +361,7 @@ async function main() {
 
   let candidates: Awaited<ReturnType<typeof pickCandidates>> = []
   try {
-    candidates = await pickCandidates(supabase, limit, cli.reanalyze, cli.reanalyzeStatus)
+    candidates = await pickCandidates(supabase, limit, cli.reanalyze, cli.reanalyzeStatus, cli.outdatedOnly)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'pick_candidates_failed'
     console.error(`[content-analysis] ${msg}`)
@@ -340,8 +370,21 @@ async function main() {
   }
 
   if (candidates.length === 0) {
-    console.log(JSON.stringify({ ok: true, processed: 0, reason: 'no_unanalyzed_posts' }, null, 2))
-    await logRun(supabase, { processed: 0, reason: 'no_unanalyzed_posts', limit }, true)
+    const reason = cli.outdatedOnly ? 'no_outdated_posts' : 'no_unanalyzed_posts'
+    console.log(JSON.stringify({
+      ok:                   true,
+      processed:            0,
+      reason,
+      outdatedOnly:         cli.outdatedOnly,
+      currentPromptVersion: PROMPT_VERSION,
+    }, null, 2))
+    await logRun(supabase, {
+      processed:            0,
+      reason,
+      limit,
+      outdatedOnly:         cli.outdatedOnly,
+      currentPromptVersion: PROMPT_VERSION,
+    }, true)
     return
   }
 
@@ -373,16 +416,18 @@ async function main() {
   }
 
   const summary = {
-    processed:       outcomes.length,
-    completed:       outcomes.filter((o) => o.status === 'completed').length,
-    failed:          outcomes.filter((o) => o.status === 'failed').length,
-    skipped:         outcomes.filter((o) => o.status === 'skipped').length,
-    model:           env.geminiModel,
-    promptVer:       PROMPT_VERSION,
+    processed:            outcomes.length,
+    completed:            outcomes.filter((o) => o.status === 'completed').length,
+    failed:               outcomes.filter((o) => o.status === 'failed').length,
+    skipped:              outcomes.filter((o) => o.status === 'skipped').length,
+    model:                env.geminiModel,
+    promptVer:            PROMPT_VERSION,
+    currentPromptVersion: PROMPT_VERSION,
     limit,
-    reanalyze:       cli.reanalyze,
-    reanalyzeStatus: cli.reanalyze ? cli.reanalyzeStatus : null,
-    durationMs:      Date.now() - start,
+    reanalyze:            cli.reanalyze,
+    reanalyzeStatus:      cli.reanalyze ? cli.reanalyzeStatus : null,
+    outdatedOnly:         cli.outdatedOnly,
+    durationMs:           Date.now() - start,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
 
