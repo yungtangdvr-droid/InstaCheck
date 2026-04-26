@@ -149,8 +149,8 @@ export async function fetchBusinessDiscovery(args: {
 
 /**
  * Probe a single field name on Business Discovery for one media
- * item. Used to ask "does the API expose `reshare_count` for
- * this account?" without poisoning the main fields call.
+ * item. Used to ask "does the API expose `reposts` for this
+ * account?" without poisoning the main fields call.
  *
  * Returns the raw envelope so the probe layer can decide whether
  * the field came back populated, missing, or rejected.

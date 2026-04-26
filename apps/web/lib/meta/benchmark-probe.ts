@@ -32,11 +32,14 @@ import {
   type BusinessDiscoveryEnvelope,
 } from './benchmark-public-client'
 
-// Candidate field names the Graph API has historically used or
-// might use for repost / reshare counts on Instagram media.
-// Tried in order; the first one that returns a populated value
-// wins. If none populate, the metric is unavailable.
-const REPOST_FIELD_CANDIDATES = ['reshare_count', 'share_count'] as const
+// Repost candidate field names on Instagram media via Business
+// Discovery. We only ask for the canonical `reposts` name. Any
+// other candidate (e.g. `reshare_count`, `share_count`) would
+// either be an owner-side engagement metric (forbidden for peers)
+// or lack a Meta-documented public repost citation. If `reposts`
+// is absent from the response or the API rejects it, the metric
+// is recorded as unavailable_* — never assumed.
+const REPOST_FIELD_CANDIDATES = ['reposts'] as const
 
 export type BenchmarkProbeDeps = {
   fetchBusinessDiscovery: typeof fetchBusinessDiscovery
