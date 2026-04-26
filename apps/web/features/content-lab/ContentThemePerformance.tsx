@@ -3,6 +3,11 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getThemePerformance, THEME_MIN_SAMPLE_SIZE } from './get-content-analysis'
 import { primaryThemeLabel } from './content-analysis-labels'
 
+// Tooltip used both on the small-sample badge and on the explanatory footer
+// note. Kept as a single source so the two surfaces stay in sync.
+const LOW_SAMPLE_TOOLTIP =
+  `Moins de ${THEME_MIN_SAMPLE_SIZE} posts dans ce thème : le score est pondéré vers la moyenne globale.`
+
 // Read-only aggregate of post_content_analysis × v_mart_post_performance.
 // Surfaces which Gemini-classified themes circulate the most on this account.
 //
@@ -87,13 +92,19 @@ export async function ContentThemePerformance() {
                   <tr key={row.primaryTheme} className={lowSample ? 'opacity-60' : undefined}>
                     <td className="px-4 py-3 text-neutral-200">
                       <div className="flex items-center gap-2">
-                        <span>{primaryThemeLabel(row.primaryTheme)}</span>
+                        <Link
+                          href={`/content-lab/themes/${encodeURIComponent(row.primaryTheme)}`}
+                          className="hover:text-white"
+                          title="Voir tous les posts de ce thème"
+                        >
+                          {primaryThemeLabel(row.primaryTheme)}
+                        </Link>
                         {lowSample && (
                           <span
                             className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-                            title={`Moins de ${THEME_MIN_SAMPLE_SIZE} posts : signal à confirmer.`}
+                            title={LOW_SAMPLE_TOOLTIP}
                           >
-                            À confirmer
+                            Signal à confirmer
                           </span>
                         )}
                       </div>
@@ -132,11 +143,23 @@ export async function ContentThemePerformance() {
               })}
             </tbody>
           </table>
-          <p className="border-t border-neutral-800 bg-neutral-900/50 px-4 py-2 text-[11px] text-neutral-600">
-            Score ajusté = score brut × fiabilité + moyenne globale × (1 − fiabilité),
-            avec fiabilité = posts / (posts + {THEME_MIN_SAMPLE_SIZE}). Les thèmes
-            <code className="mx-1">unknown</code> et non classés sont exclus.
-          </p>
+          <div className="space-y-1 border-t border-neutral-800 bg-neutral-900/50 px-4 py-2 text-[11px] text-neutral-600">
+            <p>
+              <span className="text-neutral-400">Comment lire le classement :</span> les
+              thèmes sont triés par <em>score ajusté</em>, pas par moyenne brute. Un
+              thème avec très peu de posts est tiré vers la moyenne globale pour
+              éviter qu&apos;un seul post viral le hisse en tête.
+            </p>
+            <p>
+              <code className="mr-1">score ajusté = score brut × fiabilité + moyenne globale × (1 − fiabilité)</code>
+              avec fiabilité = posts / (posts + {THEME_MIN_SAMPLE_SIZE}). Les thèmes
+              <code className="mx-1">unknown</code> ou non classés sont exclus.
+            </p>
+            <p title={LOW_SAMPLE_TOOLTIP}>
+              Le badge <span className="text-amber-400">Signal à confirmer</span>{' '}
+              s&apos;affiche dès qu&apos;un thème compte moins de {THEME_MIN_SAMPLE_SIZE} posts.
+            </p>
+          </div>
         </div>
       )}
     </section>

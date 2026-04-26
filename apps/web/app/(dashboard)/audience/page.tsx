@@ -28,13 +28,6 @@ export default async function AudiencePage({
   const supabase = await createServerSupabaseClient()
   const audience = await getAudienceData(supabase, period)
 
-  const circulationLabel = audience.engagementLabel as TDistributionLabel
-  const labelCls = DISTRIBUTION_LABEL_CLASS[circulationLabel]
-  const labelFr  = DISTRIBUTION_LABEL_FR[circulationLabel]
-  const dominantFr = audience.dominantSignal
-    ? DISTRIBUTION_SIGNAL_FR[audience.dominantSignal]
-    : null
-
   // Mirrors the baseline-window selection in getAccountEngagementHealth:
   // period 7 → 30j window, period 30 → 90j window, period 90 → no longer
   // window so we fall through to "vs ton historique récent".
@@ -43,6 +36,34 @@ export default async function AudiencePage({
     audience.period === 30 ? 90 :
                              null
   const baselineQualifier = baselineQualifierFor(baselinePeriod)
+
+  // Mirrors AccountEngagementCard: only render the verdict label when we have
+  // a baseline window AND enough posts in the period to make the delta honest.
+  // Below the threshold we drop the badge and tell the operator the comparison
+  // can't be trusted yet.
+  const MIN_POSTS_FOR_VERDICT = 5
+  const hasVerdict =
+    baselinePeriod != null && audience.postsAnalyzed >= MIN_POSTS_FOR_VERDICT
+
+  const circulationLabel: TDistributionLabel = audience.engagementLabel as TDistributionLabel
+  // Soften the alarmist 'faible' label — same rationale as the analytics card.
+  const displayedLabel: TDistributionLabel | null = !hasVerdict
+    ? null
+    : circulationLabel === 'faible' ? 'moyen' : circulationLabel
+  const labelCls = displayedLabel ? DISTRIBUTION_LABEL_CLASS[displayedLabel] : null
+  const labelFr  = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel]    : null
+  const dominantFr = audience.dominantSignal
+    ? DISTRIBUTION_SIGNAL_FR[audience.dominantSignal]
+    : null
+
+  // The default interpretation copy embeds the verdict label ("Très sous ta
+  // baseline …"). When we suppress the verdict above we also have to swap the
+  // copy or the page contradicts itself.
+  const interpretation = hasVerdict
+    ? audience.interpretation
+    : audience.postsAnalyzed === 0
+      ? 'Aucun post analysé sur la période.'
+      : 'Aucune fenêtre baseline fiable pour cette période — voir les taux observés ci-dessous.'
 
   const handle = audience.account?.username ? `@${audience.account.username}` : '—'
 
@@ -77,24 +98,35 @@ export default async function AudiencePage({
             value={audience.postsAnalyzed.toLocaleString('fr-FR')}
           />
           <div>
-            <p className="text-xs text-neutral-500">Santé de circulation</p>
+            <p className="text-xs text-neutral-500">Signaux de circulation</p>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-xl font-semibold tabular-nums text-white">
+              <span className="text-xl font-semibold tabular-nums text-neutral-200">
                 {audience.engagementScore}
               </span>
               <span className="text-xs text-neutral-500">/ 100</span>
             </div>
-            <span
-              className={`mt-1 inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${labelCls}`}
-            >
-              {labelFr}
-            </span>
-            <p
-              className="mt-1 text-[10px] text-neutral-500"
-              title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
-            >
-              {baselineQualifier}
-            </p>
+            {hasVerdict && labelFr && labelCls ? (
+              <>
+                <span
+                  className={`mt-1 inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${labelCls}`}
+                >
+                  {labelFr}
+                </span>
+                <p
+                  className="mt-1 text-[10px] text-neutral-500"
+                  title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
+                >
+                  {baselineQualifier}
+                </p>
+              </>
+            ) : (
+              <p
+                className="mt-1 text-[10px] text-neutral-500"
+                title="Aucune fenêtre baseline non recouvrante n'a pu être construite."
+              >
+                Comparaison indisponible : historique insuffisant.
+              </p>
+            )}
             {dominantFr && (
               <p className="mt-1 text-[11px] text-neutral-500">
                 Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
@@ -102,7 +134,7 @@ export default async function AudiencePage({
             )}
           </div>
         </div>
-        <p className="mt-3 text-sm text-neutral-300">{audience.interpretation}</p>
+        <p className="mt-3 text-sm text-neutral-300">{interpretation}</p>
       </section>
 
       {/* Habits summary */}

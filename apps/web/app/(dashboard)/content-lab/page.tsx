@@ -32,11 +32,19 @@ export default async function ContentLabPage() {
 
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Content Lab</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Analyse tes formats, optimise ta stratégie éditoriale
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Content Lab</h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            Analyse tes formats, optimise ta stratégie éditoriale
+          </p>
+        </div>
+        <Link
+          href="/content-lab/themes"
+          className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white"
+        >
+          Explorer les thèmes →
+        </Link>
       </div>
 
       <WhatToDoNext />
