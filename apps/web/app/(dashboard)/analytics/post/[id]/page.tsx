@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { ReachChart } from '@/components/charts/ReachChart'
 import { FORMAT_LABEL, fmtK } from '@/features/analytics/utils'
 import { getPostPerformance } from '@/features/analytics/get-analytics-data'
+import { ContentAnalysisCard } from '@/features/content-lab/ContentAnalysisCard'
+import { getPostContentAnalysis } from '@/features/content-lab/get-content-analysis'
 import {
   computeDistributionScore,
   distributionInterpretation,
@@ -26,7 +28,7 @@ export default async function PostDetailPage({
   const { id } = await params
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: post }, { data: metrics }, perfResult] = await Promise.all([
+  const [{ data: post }, { data: metrics }, perfResult, contentAnalysis] = await Promise.all([
     supabase
       .from('posts')
       .select('id, media_id, media_type, caption, permalink, posted_at')
@@ -38,6 +40,7 @@ export default async function PostDetailPage({
       .eq('post_id', id)
       .order('date', { ascending: true }),
     getPostPerformance(supabase, id),
+    getPostContentAnalysis(supabase, id),
   ])
 
   if (!post) notFound()
@@ -219,6 +222,9 @@ export default async function PostDetailPage({
           </p>
         </div>
       )}
+
+      {/* Analyse du contenu (read-only Gemini v2 classification) */}
+      <ContentAnalysisCard analysis={contentAnalysis} />
 
       {/* Reach over time */}
       {reachSeries.length > 0 ? (

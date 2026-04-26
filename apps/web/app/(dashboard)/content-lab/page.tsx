@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { WhatToDoNext } from '@/features/content-lab/WhatToDoNext'
 import { ThemePerformanceTable } from '@/features/content-lab/ThemePerformanceTable'
+import { ContentThemePerformance } from '@/features/content-lab/ContentThemePerformance'
 import type { ContentRecommendationType } from '@creator-hub/types'
 
 const TYPE_BADGE: Record<ContentRecommendationType, string> = {
@@ -35,6 +36,8 @@ export default async function ContentLabPage() {
       </div>
 
       <WhatToDoNext />
+
+      <ContentThemePerformance />
 
       <ThemePerformanceTable />
 
