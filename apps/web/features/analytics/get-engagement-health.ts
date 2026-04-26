@@ -34,8 +34,18 @@ const HEALTH_WEIGHTS = {
 } as const
 
 // Threshold above which a post counts as a "high performer" for the
-// pct-of-posts component. Aligned with the "Très fort" label band.
+// pct-of-posts component. Aligned with the "Au-dessus de ta baseline" band
+// (score ≥ 65 in distributionLabel()).
 const HIGH_PERFORMER_THRESHOLD = 65
+
+// Self-relative qualifier shown next to every label render so the UI never
+// implies an absolute market judgment. `null` baselinePeriod means we have
+// no longer comparison window for the current selection (period == 90 today).
+export function baselineQualifierFor(baselinePeriod: 30 | 90 | null): string {
+  if (baselinePeriod === 30) return 'vs ta baseline 30j'
+  if (baselinePeriod === 90) return 'vs ta baseline 90j'
+  return 'vs ton historique récent'
+}
 
 export type TAccountEngagementHealth = {
   // v2 composite score 0–100 (no longer a raw average). See HEALTH_WEIGHTS.
@@ -58,9 +68,13 @@ export type TAccountEngagementHealth = {
       consistency:          number   // 0–100 (1 − coeff of variation, clamped)
     }
   }
-  baseline:       TDistributionResult | null
-  baselinePeriod: 30 | 90 | null
-  postCount:      number
+  baseline:          TDistributionResult | null
+  baselinePeriod:    30 | 90 | null
+  // Pre-computed qualifier string ("vs ta baseline 30j" / "vs ta baseline 90j"
+  // / "vs ton historique récent"). Every UI surface that renders the label
+  // must show this next to it.
+  baselineQualifier: string
+  postCount:         number
   // Posts whose v2 distribution score is ≥ 65 in the period.
   highPerformerCount: number
   interpretation: string
@@ -269,9 +283,11 @@ export async function getAccountEngagementHealth(
     dominantSignal,
   }
 
+  const baselineQualifier = baselineQualifierFor(baselinePeriod)
+
   const interpretation = aggregate.reach > 0
-    ? buildHealthInterpretation(finalLabel, dominantSignal)
-    : distributionInterpretation(synthetic)
+    ? buildHealthInterpretation(finalLabel, dominantSignal, baselineQualifier)
+    : distributionInterpretation(synthetic, baselineQualifier)
 
   const scoreDelta = baseline ? finalScore - baseline.score : null
 
@@ -297,6 +313,7 @@ export async function getAccountEngagementHealth(
     },
     baseline,
     baselinePeriod,
+    baselineQualifier,
     postCount:        periodRows.length,
     highPerformerCount,
     interpretation,
@@ -305,11 +322,14 @@ export async function getAccountEngagementHealth(
 }
 
 // "Santé de circulation" copy — strategic, mirrors the post-level wording.
+// Always self-relative: the head includes the baseline qualifier so the
+// reader can never mistake the score for an absolute market judgment.
 function buildHealthInterpretation(
   label: TDistributionLabel,
   dominantSignal: TDistributionSignal | null,
+  baselineQualifier: string,
 ): string {
-  const head = `${DISTRIBUTION_LABEL_FR[label]} — ${DISTRIBUTION_LABEL_COPY[label]}.`
+  const head = `${DISTRIBUTION_LABEL_FR[label]} (${baselineQualifier}) — ${DISTRIBUTION_LABEL_COPY[label]}.`
   if (!dominantSignal) return head
   const signalFr = DISTRIBUTION_SIGNAL_FR[dominantSignal]
   // Audience-facing phrasing that differs slightly from the per-post copy:

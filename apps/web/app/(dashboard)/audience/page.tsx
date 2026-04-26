@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { PeriodFilter } from '@/components/analytics/PeriodFilter'
 import { getAudienceData } from '@/features/audience/get-audience'
 import { parsePeriod, FORMAT_LABEL } from '@/features/analytics/utils'
+import { baselineQualifierFor } from '@/features/analytics/get-engagement-health'
 import {
   DISTRIBUTION_LABEL_CLASS,
   DISTRIBUTION_LABEL_FR,
@@ -33,6 +34,15 @@ export default async function AudiencePage({
   const dominantFr = audience.dominantSignal
     ? DISTRIBUTION_SIGNAL_FR[audience.dominantSignal]
     : null
+
+  // Mirrors the baseline-window selection in getAccountEngagementHealth:
+  // period 7 → 30j window, period 30 → 90j window, period 90 → no longer
+  // window so we fall through to "vs ton historique récent".
+  const baselinePeriod: 30 | 90 | null =
+    audience.period === 7  ? 30 :
+    audience.period === 30 ? 90 :
+                             null
+  const baselineQualifier = baselineQualifierFor(baselinePeriod)
 
   const handle = audience.account?.username ? `@${audience.account.username}` : '—'
 
@@ -79,6 +89,12 @@ export default async function AudiencePage({
             >
               {labelFr}
             </span>
+            <p
+              className="mt-1 text-[10px] text-neutral-500"
+              title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
+            >
+              {baselineQualifier}
+            </p>
             {dominantFr && (
               <p className="mt-1 text-[11px] text-neutral-500">
                 Signal dominant : <span className="text-neutral-300">{dominantFr}</span>

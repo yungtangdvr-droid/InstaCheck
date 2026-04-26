@@ -160,8 +160,9 @@ export default async function PostDetailPage({
             score={engagement.score}
             label={engagement.label}
             dominantSignal={engagement.dominantSignal}
-            interpretation={distributionInterpretation(engagement)}
+            interpretation={distributionInterpretation(engagement, 'vs ta baseline 30j du même format')}
             hasReach={engagement.hasReach}
+            baselineQualifier="vs ta baseline 30j du même format"
           />
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -271,12 +272,14 @@ function CirculationSummary({
   dominantSignal,
   interpretation,
   hasReach,
+  baselineQualifier,
 }: {
-  score:          number
-  label:          TDistributionLabel
-  dominantSignal: TDistributionSignal | null
-  interpretation: string
-  hasReach:       boolean
+  score:             number
+  label:             TDistributionLabel
+  dominantSignal:    TDistributionSignal | null
+  interpretation:    string
+  hasReach:          boolean
+  baselineQualifier: string
 }) {
   const cls = DISTRIBUTION_LABEL_CLASS[label]
   const dominantFr = dominantSignal ? DISTRIBUTION_SIGNAL_FR[dominantSignal] : null
@@ -292,6 +295,12 @@ function CirculationSummary({
           className={`inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${cls}`}
         >
           {DISTRIBUTION_LABEL_FR[label]}
+        </span>
+        <span
+          className="text-[10px] text-neutral-500"
+          title="Le score est self-relative : il compare ce post à la baseline du même format, pas à un benchmark externe."
+        >
+          {baselineQualifier}
         </span>
         {dominantFr && hasReach && (
           <span className="text-[11px] text-neutral-400">
