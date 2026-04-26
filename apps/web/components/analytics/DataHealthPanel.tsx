@@ -105,25 +105,27 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
           }
         />
         <HealthStat
-          label="raw_instagram_media"
+          label="Médias bruts"
           value={formatInt(health.rawMediaCount)}
+          hint="Médias récupérés depuis Meta"
         />
         <HealthStat
-          label="raw insights"
+          label="Insights bruts"
           value={formatInt(health.rawInsightsCount)}
+          hint="Métriques renvoyées par Meta"
         />
         <HealthStat
-          label="Lignes mart"
+          label="Lignes analytics"
           value={formatInt(health.martRowCount)}
           tone={martStatus === 'empty' ? 'warn' : 'ok'}
-          hint={martStatus === 'empty' ? 'v_mart_post_performance vide' : undefined}
+          hint={martStatus === 'empty' ? 'Aucune ligne analytics calculée' : undefined}
         />
         <HealthStat
-          label="Sync limit"
+          label="Limite sync"
           value={health.mediaSyncLimit != null ? formatInt(health.mediaSyncLimit) : '—'}
           hint={
             health.mediaSyncLimit != null
-              ? 'Dernier run sync-media'
+              ? 'Posts traités au dernier sync'
               : 'Dernier run non parsable'
           }
         />
