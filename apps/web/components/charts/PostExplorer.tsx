@@ -8,11 +8,23 @@ import {
   type TRankLabel,
 } from '@/features/analytics/ranking'
 import {
-  ENGAGEMENT_LABEL_CLASS,
-  ENGAGEMENT_LABEL_FR,
-  type TEngagementLabel,
+  DISTRIBUTION_LABEL_CLASS,
+  DISTRIBUTION_LABEL_FR,
+  DISTRIBUTION_SIGNAL_FR,
+  type TDistributionLabel,
+  type TDistributionSignal,
 } from '@/features/analytics/engagement-score'
 import type { TTopPost } from '@creator-hub/types'
+
+// Compact 1–2 char glyph used inside the badge to flag the dominant signal
+// without taking a full column. Hover tooltip carries the full word.
+const SIGNAL_GLYPH: Record<TDistributionSignal, string> = {
+  shares:        '↗',
+  saves:         '◆',
+  comments:      '✎',
+  likes:         '♥',
+  profileVisits: '@',
+}
 
 type Props = { posts: TTopPost[] }
 
@@ -75,21 +87,30 @@ function RankBadge({
   )
 }
 
-function EngagementBadge({
+function CirculationBadge({
   score,
   label,
+  dominantSignal,
 }: {
-  score: number
-  label: TEngagementLabel
+  score:          number
+  label:          TDistributionLabel
+  dominantSignal: TDistributionSignal | null
 }) {
-  const cls = ENGAGEMENT_LABEL_CLASS[label]
+  const cls = DISTRIBUTION_LABEL_CLASS[label]
+  const signalFr = dominantSignal ? DISTRIBUTION_SIGNAL_FR[dominantSignal] : null
+  const tooltip = signalFr
+    ? `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]} · signal dominant : ${signalFr}`
+    : `Score circulation ${score}/100 — ${DISTRIBUTION_LABEL_FR[label]}`
   return (
     <span
-      title={`Score d'engagement ${score}/100 — ${ENGAGEMENT_LABEL_FR[label]}`}
+      title={tooltip}
       className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] font-medium ${cls}`}
     >
       <span className="tabular-nums">{score}</span>
-      <span className="text-[10px] opacity-80">{ENGAGEMENT_LABEL_FR[label]}</span>
+      <span className="text-[10px] opacity-80">{DISTRIBUTION_LABEL_FR[label]}</span>
+      {dominantSignal && (
+        <span className="text-[10px] opacity-70" aria-hidden>{SIGNAL_GLYPH[dominantSignal]}</span>
+      )}
     </span>
   )
 }
@@ -159,9 +180,9 @@ export function PostExplorer({ posts }: Props) {
             <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">×saves</th>
             <th
               className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
-              title="Score d'engagement 0–100 basé sur les taux saves/reach, shares/reach, comments/reach, likes/reach."
+              title="Score circulation 0–100 — taux shares/reach (50 %), saves/reach (25 %), comments/reach (10 %), likes/reach (10 %), profile_visits/reach (5 %), normalisés log vs baseline du même format."
             >
-              Engagement
+              Score circulation
             </th>
             <th
               className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
@@ -207,7 +228,11 @@ export function PostExplorer({ posts }: Props) {
                   <MultiplierChip multiplier={post.savesMultiplier} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <EngagementBadge score={post.engagementScore} label={post.engagementLabel} />
+                  <CirculationBadge
+                    score={post.engagementScore}
+                    label={post.engagementLabel}
+                    dominantSignal={post.dominantSignal}
+                  />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <RankBadge

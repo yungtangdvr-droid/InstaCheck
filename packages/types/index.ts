@@ -468,11 +468,16 @@ export type TTopPost = {
   // Explicit video thumbnail when distinct from the main media URL. Used for
   // VIDEO / REEL rows where media_url points to the video binary itself.
   thumbnailUrl:     string | null
-  // Engagement Score v1 — rate-based, 0–100, computed in ranking.ts /
-  // engagement-score.ts. Decoupled from `score` (mart-side, baseline-relative)
-  // and `rankScore` (percentile within the loaded set).
+  // Distribution / "Score circulation" v2 — rate-based, 0–100, log-scaled
+  // against a same-format baseline. Decoupled from `score` (mart-side,
+  // baseline-relative) and `rankScore` (percentile within the loaded set).
+  // Optimised for a meme creator account where shares are the primary
+  // distribution signal — see apps/web/features/analytics/engagement-score.ts.
   engagementScore:  number
   engagementLabel:  'faible' | 'moyen' | 'bon' | 'tres-fort' | 'exceptionnel'
+  // Largest weighted contribution to engagementScore. Null when reach is
+  // zero. Used in PostExplorer to surface "what circulated this post".
+  dominantSignal:   'shares' | 'saves' | 'comments' | 'likes' | 'profileVisits' | null
 }
 
 // --- Umami + Attribution (Sprint 7) ---

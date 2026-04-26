@@ -11,7 +11,12 @@ import type {
 import { isoDowToSundayFirst } from './utils'
 import { computePercentiles, computeRankScore } from './ranking'
 import { extractPreviewUrls } from './media-preview'
-import { computeEngagementScore } from './engagement-score'
+import {
+  baselineRatesForPost,
+  computeDistributionScore,
+  computeFormatRateMedians,
+  type TDistributionSignal,
+} from './engagement-score'
 
 type Supabase = SupabaseClient<Database>
 
@@ -214,6 +219,10 @@ export async function getTopPosts(
     }
   }
 
+  // Same-format median rate fallbacks for the period — drives the v2
+  // distribution score when a per-post baseline is missing for a metric.
+  const formatRateMedians = computeFormatRateMedians(data ?? [])
+
   const enriched = (data ?? []).map(r => {
     const saves         = Number(r.total_saves    ?? 0)
     const shares        = Number(r.total_shares   ?? 0)
@@ -239,17 +248,14 @@ export async function getTopPosts(
     const preview = previewByMediaId.get(mediaId) ?? { previewUrl: null, thumbnailUrl: null }
     const reach   = Number(r.total_reach ?? 0)
 
-    const engagement = computeEngagementScore({
-      reach, saves, shares, comments, likes,
-      baselineRates:
-        baselineSaves != null && baselineShares != null && baselineComments != null && baselineLikes != null && reach > 0
-          ? {
-              saves:    baselineSaves    / reach,
-              shares:   baselineShares   / reach,
-              comments: baselineComments / reach,
-              likes:    baselineLikes    / reach,
-            }
-          : undefined,
+    const engagement = computeDistributionScore({
+      reach,
+      shares,
+      saves,
+      comments,
+      likes,
+      profileVisits: r.total_profile_visits == null ? null : profileVisits,
+      baselineRates: baselineRatesForPost(r, formatRateMedians),
     })
 
     return {
@@ -272,8 +278,9 @@ export async function getTopPosts(
       percentile:      null as number | null,
       previewUrl:      preview.previewUrl,
       thumbnailUrl:    preview.thumbnailUrl,
-      engagementScore: engagement.score,
-      engagementLabel: engagement.label,
+      engagementScore:  engagement.score,
+      engagementLabel:  engagement.label,
+      dominantSignal:   engagement.dominantSignal as TDistributionSignal | null,
     }
   })
 
@@ -308,22 +315,26 @@ export type TPostPerformanceRow = {
   formatSampleSize:      number
   mediaType:             string
   totals: {
-    saves:    number
-    shares:   number
-    comments: number
-    likes:    number
+    reach:         number
+    saves:         number
+    shares:        number
+    comments:      number
+    likes:         number
+    profileVisits: number | null
   }
   baselines: {
-    saves:    number | null
-    shares:   number | null
-    comments: number | null
-    likes:    number | null
+    saves:         number | null
+    shares:        number | null
+    comments:      number | null
+    likes:         number | null
+    profileVisits: number | null
   }
   multipliers: {
-    saves:    number | null
-    shares:   number | null
-    comments: number | null
-    likes:    number | null
+    saves:         number | null
+    shares:        number | null
+    comments:      number | null
+    likes:         number | null
+    profileVisits: number | null
   }
 }
 
@@ -333,7 +344,7 @@ export async function getPostPerformance(
 ): Promise<ActionResult<TPostPerformanceRow | null>> {
   const { data, error } = await supabase
     .from('v_mart_post_performance')
-    .select('media_type, total_saves, total_shares, total_comments, total_likes, baseline_saves, baseline_shares, baseline_comments, baseline_likes, format_sample_size, performance_score, baseline_score, score_delta')
+    .select('media_type, total_reach, total_saves, total_shares, total_comments, total_likes, total_profile_visits, baseline_saves, baseline_shares, baseline_comments, baseline_likes, baseline_profile_visits, format_sample_size, performance_score, baseline_score, score_delta')
     .eq('post_id', postId)
     .maybeSingle()
 
@@ -346,10 +357,12 @@ export async function getPostPerformance(
     return bn > 0 ? v / bn : null
   }
 
-  const totalSaves    = Number(data.total_saves    ?? 0)
-  const totalShares   = Number(data.total_shares   ?? 0)
-  const totalComments = Number(data.total_comments ?? 0)
-  const totalLikes    = Number(data.total_likes    ?? 0)
+  const totalReach         = Number(data.total_reach         ?? 0)
+  const totalSaves         = Number(data.total_saves         ?? 0)
+  const totalShares        = Number(data.total_shares        ?? 0)
+  const totalComments      = Number(data.total_comments      ?? 0)
+  const totalLikes         = Number(data.total_likes         ?? 0)
+  const totalProfileVisits = data.total_profile_visits == null ? null : Number(data.total_profile_visits)
 
   return {
     data: {
@@ -359,22 +372,26 @@ export async function getPostPerformance(
       formatSampleSize: data.format_sample_size ?? 0,
       mediaType:        data.media_type        ?? 'UNKNOWN',
       totals: {
-        saves:    totalSaves,
-        shares:   totalShares,
-        comments: totalComments,
-        likes:    totalLikes,
+        reach:         totalReach,
+        saves:         totalSaves,
+        shares:        totalShares,
+        comments:      totalComments,
+        likes:         totalLikes,
+        profileVisits: totalProfileVisits,
       },
       baselines: {
-        saves:    data.baseline_saves    == null ? null : Number(data.baseline_saves),
-        shares:   data.baseline_shares   == null ? null : Number(data.baseline_shares),
-        comments: data.baseline_comments == null ? null : Number(data.baseline_comments),
-        likes:    data.baseline_likes    == null ? null : Number(data.baseline_likes),
+        saves:         data.baseline_saves          == null ? null : Number(data.baseline_saves),
+        shares:        data.baseline_shares         == null ? null : Number(data.baseline_shares),
+        comments:      data.baseline_comments       == null ? null : Number(data.baseline_comments),
+        likes:         data.baseline_likes          == null ? null : Number(data.baseline_likes),
+        profileVisits: data.baseline_profile_visits == null ? null : Number(data.baseline_profile_visits),
       },
       multipliers: {
-        saves:    ratio(totalSaves,    data.baseline_saves),
-        shares:   ratio(totalShares,   data.baseline_shares),
-        comments: ratio(totalComments, data.baseline_comments),
-        likes:    ratio(totalLikes,    data.baseline_likes),
+        saves:         ratio(totalSaves,                data.baseline_saves),
+        shares:        ratio(totalShares,               data.baseline_shares),
+        comments:      ratio(totalComments,             data.baseline_comments),
+        likes:         ratio(totalLikes,                data.baseline_likes),
+        profileVisits: totalProfileVisits == null ? null : ratio(totalProfileVisits, data.baseline_profile_visits),
       },
     },
     error: null,

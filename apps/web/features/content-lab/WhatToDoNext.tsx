@@ -117,7 +117,7 @@ export async function WhatToDoNext() {
     <section>
       <h2 className="mb-1 text-lg font-semibold text-white">Quoi poster ensuite ?</h2>
       <p className="mb-4 text-xs text-neutral-500">
-        Top posts à répliquer selon saves, shares et engagement (30 derniers jours)
+        Top posts à répliquer selon le score de circulation (shares, saves, profil) sur 30 j
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {top3.map((post) => (
