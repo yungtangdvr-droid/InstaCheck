@@ -612,6 +612,64 @@ export interface Database {
         Update: Update<Database['public']['Tables']['attribution_events']['Insert']>
         Relationships: []
       }
+      post_content_analysis: {
+        Row: Row<{
+          id:                    string
+          post_id:               string
+          provider:              string
+          model:                 string
+          prompt_version:        string
+          status:                'pending' | 'completed' | 'failed' | 'skipped'
+          visible_text:          string | null
+          language:              string | null
+          primary_theme:         string | null
+          secondary_themes:      string[]
+          humor_type:            string | null
+          format_pattern:        string | null
+          cultural_reference:    string | null
+          niche_level:           string | null
+          replication_potential: string | null
+          confidence:            number | null
+          short_reason:          string | null
+          analysis_json:         Json | null
+          source_media_url:      string | null
+          input_tokens:          number | null
+          output_tokens:         number | null
+          error_message:         string | null
+          analyzed_at:           string | null
+          created_at:            string
+          updated_at:            string
+        }>
+        Insert: Insert<{
+          id?:                    string
+          post_id:                string
+          provider:               string
+          model:                  string
+          prompt_version:         string
+          status?:                'pending' | 'completed' | 'failed' | 'skipped'
+          visible_text?:          string | null
+          language?:              string | null
+          primary_theme?:         string | null
+          secondary_themes?:      string[]
+          humor_type?:            string | null
+          format_pattern?:        string | null
+          cultural_reference?:    string | null
+          niche_level?:           string | null
+          replication_potential?: string | null
+          confidence?:            number | null
+          short_reason?:          string | null
+          analysis_json?:         Json | null
+          source_media_url?:      string | null
+          input_tokens?:          number | null
+          output_tokens?:         number | null
+          error_message?:         string | null
+          analyzed_at?:           string | null
+          created_at?:            string
+          updated_at?:            string
+        }>
+        Update: Update<Database['public']['Tables']['post_content_analysis']['Insert']>
+        Relationships: []
+      }
     }
     Views: {
       // dbt mart surfaces. These are read-only views defined in
