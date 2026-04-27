@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { PeriodFilter } from '@/components/analytics/PeriodFilter'
+import { AnalyzeNewButton } from '@/components/analytics/AnalyzeNewButton'
 import { ChronologicalPostsTable } from '@/components/analytics/ChronologicalPostsTable'
 import { getChronologicalPosts } from '@/features/analytics/get-chronological-posts'
 import { parsePeriod } from '@/features/analytics/utils'
@@ -32,7 +33,10 @@ export default async function ChronologicalPostsPage({
             Tous les posts de la période ordonnés par date de publication
           </p>
         </div>
-        <PeriodFilter current={period} />
+        <div className="flex items-start gap-3">
+          <AnalyzeNewButton variant="compact" />
+          <PeriodFilter current={period} />
+        </div>
       </div>
 
       <ChronologicalPostsTable posts={posts} />

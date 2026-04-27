@@ -37,13 +37,14 @@ export type TDataHealth = {
     summary: TSyncSummary | null
     errorMessage: string | null
   }
-  totalPosts:        number
-  periodPosts:       number
-  postsWithMetrics:  number
-  rawMediaCount:     number
-  rawInsightsCount:  number
-  martRowCount:      number
-  mediaSyncLimit:    number | null
+  totalPosts:                   number
+  periodPosts:                  number
+  postsWithMetrics:             number
+  rawMediaCount:                number
+  rawInsightsCount:             number
+  martRowCount:                 number
+  mediaSyncLimit:               number | null
+  postsPendingContentAnalysis:  number
 }
 
 function periodFlagColumn(period: TAnalyticsPeriod): 'in_last_7d' | 'in_last_30d' | 'in_last_90d' {
@@ -92,6 +93,8 @@ export async function getDataHealth(
     rawMediaRes,
     rawInsightsRes,
     martRes,
+    pendingMartRes,
+    pendingAnalyzedRes,
   ] = await Promise.all([
     supabase
       .from('accounts')
@@ -126,9 +129,30 @@ export async function getDataHealth(
     supabase
       .from('v_mart_post_performance')
       .select('post_id', { count: 'exact', head: true }),
+    // Pending analysis count: same window as the analyze-new flow (last 90d
+    // of v_mart_post_performance, which is what selectCandidates scans). We
+    // exclude posts that already have any row in post_content_analysis so
+    // the count matches what the button would actually process.
+    supabase
+      .from('v_mart_post_performance')
+      .select('post_id')
+      .eq('in_last_90d', true),
+    supabase
+      .from('post_content_analysis')
+      .select('post_id'),
   ])
 
   const { summary, errorMessage } = parseSummary(syncRes.data?.result_summary ?? null)
+
+  const analyzedIds = new Set(
+    (pendingAnalyzedRes.data ?? [])
+      .map((r) => r.post_id)
+      .filter((id): id is string => typeof id === 'string'),
+  )
+  const postsPendingContentAnalysis =
+    (pendingMartRes.data ?? []).filter(
+      (r) => typeof r.post_id === 'string' && !analyzedIds.has(r.post_id),
+    ).length
 
   return {
     account: accountRes.data
@@ -144,12 +168,13 @@ export async function getDataHealth(
       summary,
       errorMessage,
     },
-    totalPosts:        totalPostsRes.count       ?? 0,
-    periodPosts:       periodPostsRes.count      ?? 0,
-    postsWithMetrics:  postsWithMetricsRes.count ?? 0,
-    rawMediaCount:     rawMediaRes.count         ?? 0,
-    rawInsightsCount:  rawInsightsRes.count      ?? 0,
-    martRowCount:      martRes.count             ?? 0,
-    mediaSyncLimit:    summary?.media?.limit     ?? null,
+    totalPosts:                   totalPostsRes.count       ?? 0,
+    periodPosts:                  periodPostsRes.count      ?? 0,
+    postsWithMetrics:             postsWithMetricsRes.count ?? 0,
+    rawMediaCount:                rawMediaRes.count         ?? 0,
+    rawInsightsCount:             rawInsightsRes.count      ?? 0,
+    martRowCount:                 martRes.count             ?? 0,
+    mediaSyncLimit:               summary?.media?.limit     ?? null,
+    postsPendingContentAnalysis,
   }
 }
