@@ -101,12 +101,20 @@ export default async function AnalyticsPage({
           <h2 className="text-sm font-medium text-neutral-300">
             Posts — {period}j
           </h2>
-          <Link
-            href={`/analytics/formats?period=${period}`}
-            className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
-          >
-            Vue par format →
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/analytics/posts?period=${period}`}
+              className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+            >
+              Voir tous les posts →
+            </Link>
+            <Link
+              href={`/analytics/formats?period=${period}`}
+              className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+            >
+              Vue par format →
+            </Link>
+          </div>
         </div>
         <PostExplorer posts={topPosts} themesByPostId={themesByPostId} />
       </div>

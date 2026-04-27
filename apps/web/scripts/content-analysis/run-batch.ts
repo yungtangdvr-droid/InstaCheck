@@ -30,19 +30,18 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
-import { analyzePostMedia } from '../../lib/gemini/analyze'
 import { PROMPT_VERSION } from '../../lib/gemini/prompt'
-import { refreshMediaUrl, pickAnalyzableUrl } from '../../lib/meta/refresh-media-url'
+import {
+  ALL_REANALYZE_STATUSES,
+  DEFAULT_MODEL,
+  runAnalysisBatch,
+  type ReanalyzeStatus,
+  type SelectionMode,
+} from '../../lib/content-analysis/run-analysis-batch'
 
-const PROVIDER         = 'gemini'
-const DEFAULT_MODEL    = 'gemini-2.5-flash'
 const DEFAULT_LIMIT    = 5
 const MAX_BATCH_LIMIT  = 100
 const AUTOMATION_NAME  = 'content-analysis-batch'
-const POST_DELAY_MS    = 600 // gentle pacing between Gemini calls
-
-type ReanalyzeStatus = 'completed' | 'failed' | 'skipped'
-const ALL_REANALYZE_STATUSES: ReanalyzeStatus[] = ['completed', 'failed', 'skipped']
 
 type Cli = {
   limit:           number | null
@@ -121,203 +120,6 @@ function readEnvOrFail(): {
   }
 }
 
-async function pickCandidates(
-  supabase: ReturnType<typeof createClient<Database>>,
-  limit:    number,
-  reanalyze:       boolean,
-  reanalyzeStatus: ReanalyzeStatus[],
-  outdatedOnly:    boolean,
-): Promise<Array<{ post_id: string; media_id: string; media_type: string; caption: string | null }>> {
-  // Overfetch 4× so we have spares after excluding already-analyzed posts.
-  const overfetch = Math.max(limit * 4, 20)
-
-  const { data: rows, error } = await supabase
-    .from('v_mart_post_performance')
-    .select('post_id, media_id, media_type, caption')
-    .eq('in_last_90d', true)
-    .order('performance_score', { ascending: false, nullsFirst: false })
-    .limit(overfetch)
-  if (error) throw new Error(`mart_query: ${error.message}`)
-  if (!rows || rows.length === 0) return []
-
-  const usable = rows.filter(
-    (r): r is { post_id: string; media_id: string; media_type: string; caption: string | null } =>
-      typeof r.post_id   === 'string' &&
-      typeof r.media_id  === 'string' &&
-      typeof r.media_type === 'string',
-  )
-
-  const { data: existing, error: exErr } = await supabase
-    .from('post_content_analysis')
-    .select('post_id, status, prompt_version')
-    .in('post_id', usable.map((r) => r.post_id))
-  if (exErr) throw new Error(`existing_query: ${exErr.message}`)
-
-  type ExistingRow = { post_id: string; status: string | null; prompt_version: string | null }
-  const byPost = new Map<string, ExistingRow>(
-    (existing ?? []).map((r) => [r.post_id, r as ExistingRow]),
-  )
-
-  if (!reanalyze) {
-    // Default: any existing row blocks the post from being re-analyzed.
-    // Completed rows are preserved; failed/skipped rows are not silently
-    // retried (would burn quota on the same broken URL every run).
-    // --outdated-only narrows further: only existing rows on an outdated
-    // prompt_version are eligible — but since reanalyze is off, those
-    // rows would be skipped anyway, so the result is effectively empty.
-    if (outdatedOnly) {
-      return []
-    }
-    return usable.filter((r) => !byPost.has(r.post_id)).slice(0, limit)
-  }
-
-  // --reanalyze: only KEEP posts whose existing row matches the requested
-  // status filter. Posts with no row at all are also kept (treated as
-  // first-time analysis), so a single command can both backfill and
-  // refresh in one pass — UNLESS --outdated-only is set, in which case
-  // we restrict to existing rows whose prompt_version differs from the
-  // current PROMPT_VERSION.
-  const allowed = new Set(reanalyzeStatus)
-  return usable
-    .filter((r) => {
-      const row = byPost.get(r.post_id)
-      if (row === undefined) {
-        // No existing row. In outdated-only mode we never touch new posts.
-        return !outdatedOnly
-      }
-      if (row.status === null || !allowed.has(row.status as ReanalyzeStatus)) {
-        return false
-      }
-      if (outdatedOnly && row.prompt_version === PROMPT_VERSION) {
-        return false
-      }
-      return true
-    })
-    .slice(0, limit)
-}
-
-type Outcome = {
-  postId:  string
-  status:  'completed' | 'failed' | 'skipped'
-  reason?: string
-}
-
-async function processPost(
-  supabase:    ReturnType<typeof createClient<Database>>,
-  post:        { post_id: string; media_id: string; media_type: string; caption: string | null },
-  ctx:         { geminiKey: string; geminiModel: string; metaToken: string },
-): Promise<Outcome> {
-  const refresh = await refreshMediaUrl(post.media_id, ctx.metaToken)
-  if (!refresh.ok) {
-    await upsertSkipped(supabase, post, ctx.geminiModel, refresh.error, null)
-    return { postId: post.post_id, status: 'skipped', reason: refresh.error }
-  }
-
-  const url = pickAnalyzableUrl(refresh.data)
-  if (!url) {
-    await upsertSkipped(supabase, post, ctx.geminiModel, 'no_media_url', null)
-    return { postId: post.post_id, status: 'skipped', reason: 'no_media_url' }
-  }
-
-  const analysis = await analyzePostMedia({
-    apiKey:    ctx.geminiKey,
-    model:     ctx.geminiModel,
-    mediaUrl:  url,
-    mediaType: refresh.data.mediaType,
-    caption:   post.caption,
-  })
-
-  if (!analysis.ok) {
-    await upsertFailed(supabase, post, analysis, url)
-    return { postId: post.post_id, status: 'failed', reason: analysis.error }
-  }
-
-  await upsertCompleted(supabase, post, analysis, url)
-  return { postId: post.post_id, status: 'completed' }
-}
-
-async function upsertCompleted(
-  supabase: ReturnType<typeof createClient<Database>>,
-  post:     { post_id: string },
-  a:        Extract<Awaited<ReturnType<typeof analyzePostMedia>>, { ok: true }>,
-  url:      string,
-) {
-  const { error } = await supabase.from('post_content_analysis').upsert(
-    {
-      post_id:               post.post_id,
-      provider:              PROVIDER,
-      model:                 a.model,
-      prompt_version:        a.promptVersion,
-      status:                'completed',
-      visible_text:          a.data.visible_text,
-      language:              a.data.language,
-      primary_theme:         a.data.primary_theme,
-      secondary_themes:      a.data.secondary_themes,
-      humor_type:            a.data.humor_type,
-      format_pattern:        a.data.format_pattern,
-      cultural_reference:    a.data.cultural_reference,
-      niche_level:           a.data.niche_level,
-      replication_potential: a.data.replication_potential,
-      confidence:            a.data.confidence,
-      short_reason:          a.data.short_reason,
-      analysis_json:         a.raw as never,
-      source_media_url:      url,
-      input_tokens:          a.inputTokens,
-      output_tokens:         a.outputTokens,
-      error_message:         null,
-      analyzed_at:           new Date().toISOString(),
-    },
-    { onConflict: 'post_id' },
-  )
-  if (error) throw new Error(`upsert_completed:${error.message}`)
-}
-
-async function upsertFailed(
-  supabase: ReturnType<typeof createClient<Database>>,
-  post:     { post_id: string },
-  a:        Extract<Awaited<ReturnType<typeof analyzePostMedia>>, { ok: false }>,
-  url:      string,
-) {
-  const { error } = await supabase.from('post_content_analysis').upsert(
-    {
-      post_id:          post.post_id,
-      provider:         PROVIDER,
-      model:            a.model,
-      prompt_version:   a.promptVersion,
-      status:           'failed',
-      analysis_json:    (a.raw ?? null) as never,
-      source_media_url: url,
-      error_message:    a.error.slice(0, 500),
-      analyzed_at:      new Date().toISOString(),
-    },
-    { onConflict: 'post_id' },
-  )
-  if (error) throw new Error(`upsert_failed:${error.message}`)
-}
-
-async function upsertSkipped(
-  supabase: ReturnType<typeof createClient<Database>>,
-  post:     { post_id: string },
-  model:    string,
-  reason:   string,
-  url:      string | null,
-) {
-  const { error } = await supabase.from('post_content_analysis').upsert(
-    {
-      post_id:          post.post_id,
-      provider:         PROVIDER,
-      model,
-      prompt_version:   PROMPT_VERSION,
-      status:           'skipped',
-      source_media_url: url,
-      error_message:    reason.slice(0, 500),
-      analyzed_at:      new Date().toISOString(),
-    },
-    { onConflict: 'post_id' },
-  )
-  if (error) throw new Error(`upsert_skipped:${error.message}`)
-}
-
 async function logRun(
   supabase: ReturnType<typeof createClient<Database>>,
   summary:  Record<string, unknown>,
@@ -329,10 +131,6 @@ async function logRun(
     result_summary:  JSON.stringify(summary),
   })
   if (error) console.error(`[automation_runs] insert failed: ${error.message}`)
-}
-
-async function sleep(ms: number) {
-  return new Promise<void>((r) => setTimeout(r, ms))
 }
 
 async function main() {
@@ -357,11 +155,26 @@ async function main() {
   }
 
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseKey)
-  const start    = Date.now()
+  const selection: SelectionMode = {
+    kind:            'cli',
+    reanalyze:       cli.reanalyze,
+    reanalyzeStatus: cli.reanalyzeStatus,
+    outdatedOnly:    cli.outdatedOnly,
+  }
 
-  let candidates: Awaited<ReturnType<typeof pickCandidates>> = []
+  let result
   try {
-    candidates = await pickCandidates(supabase, limit, cli.reanalyze, cli.reanalyzeStatus, cli.outdatedOnly)
+    result = await runAnalysisBatch({
+      supabase,
+      selection,
+      limit,
+      dryRun: cli.dryRun,
+      ctx: {
+        geminiKey:   env.geminiKey,
+        geminiModel: env.geminiModel,
+        metaToken:   env.metaToken,
+      },
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'pick_candidates_failed'
     console.error(`[content-analysis] ${msg}`)
@@ -369,18 +182,17 @@ async function main() {
     process.exit(1)
   }
 
-  if (candidates.length === 0) {
-    const reason = cli.outdatedOnly ? 'no_outdated_posts' : 'no_unanalyzed_posts'
+  if (result.outcomes.length === 0 && result.noOpReason) {
     console.log(JSON.stringify({
       ok:                   true,
       processed:            0,
-      reason,
+      reason:               result.noOpReason,
       outdatedOnly:         cli.outdatedOnly,
       currentPromptVersion: PROMPT_VERSION,
     }, null, 2))
     await logRun(supabase, {
       processed:            0,
-      reason,
+      reason:               result.noOpReason,
       limit,
       outdatedOnly:         cli.outdatedOnly,
       currentPromptVersion: PROMPT_VERSION,
@@ -388,46 +200,27 @@ async function main() {
     return
   }
 
-  console.log(`[content-analysis] running ${candidates.length} post(s) with ${env.geminiModel}`)
-  const outcomes: Outcome[] = []
-
-  for (const post of candidates) {
-    if (cli.dryRun) {
-      console.log(`[dry-run] would analyze ${post.post_id} (media_id=${post.media_id})`)
-      outcomes.push({ postId: post.post_id, status: 'skipped', reason: 'dry_run' })
-      continue
-    }
-
-    try {
-      const o = await processPost(supabase, post, {
-        geminiKey:   env.geminiKey,
-        geminiModel: env.geminiModel,
-        metaToken:   env.metaToken,
-      })
-      outcomes.push(o)
+  for (const o of result.outcomes) {
+    if (o.reason === 'dry_run') {
+      console.log(`[dry-run] would analyze ${o.postId}`)
+    } else {
       console.log(`[content-analysis] ${o.postId} → ${o.status}${o.reason ? ` (${o.reason})` : ''}`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'unknown_error'
-      outcomes.push({ postId: post.post_id, status: 'failed', reason: msg })
-      console.error(`[content-analysis] ${post.post_id} → failed (${msg})`)
     }
-
-    await sleep(POST_DELAY_MS)
   }
 
   const summary = {
-    processed:            outcomes.length,
-    completed:            outcomes.filter((o) => o.status === 'completed').length,
-    failed:               outcomes.filter((o) => o.status === 'failed').length,
-    skipped:              outcomes.filter((o) => o.status === 'skipped').length,
-    model:                env.geminiModel,
-    promptVer:            PROMPT_VERSION,
+    processed:            result.processed,
+    completed:            result.completed,
+    failed:               result.failed,
+    skipped:              result.skipped,
+    model:                result.model,
+    promptVer:            result.promptVersion,
     currentPromptVersion: PROMPT_VERSION,
     limit,
     reanalyze:            cli.reanalyze,
     reanalyzeStatus:      cli.reanalyze ? cli.reanalyzeStatus : null,
     outdatedOnly:         cli.outdatedOnly,
-    durationMs:           Date.now() - start,
+    durationMs:           result.durationMs,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
 
