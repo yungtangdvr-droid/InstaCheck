@@ -3,9 +3,20 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-type Status = 'idle' | 'loading' | 'success' | 'error'
+type Status = 'idle' | 'syncing' | 'analyzing' | 'success' | 'warning' | 'error'
 
 const NBSP = ' '
+
+type AnalyzeResponse = {
+  ok?:           boolean
+  disabled?:     boolean
+  processed?:    number
+  completed?:    number
+  failed?:       number
+  skipped?:      number
+  noOpReason?:   string | null
+  error?:        string
+}
 
 export function SyncNowButton() {
   const router = useRouter()
@@ -14,32 +25,65 @@ export function SyncNowButton() {
   const [isPending, startTransition] = useTransition()
 
   async function trigger() {
-    setStatus('loading')
+    setStatus('syncing')
     setMessage(null)
 
     try {
-      const res = await fetch('/api/meta/sync-now', {
+      const syncRes = await fetch('/api/meta/sync-now', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
       })
 
-      const body = await res.json().catch(() => null) as
+      const syncBody = await syncRes.json().catch(() => null) as
         | { ok?: boolean; error?: string; message?: string; durationMs?: number; errors?: string[] }
         | null
 
-      if (!res.ok || !body?.ok) {
+      if (!syncRes.ok || !syncBody?.ok) {
         const detail =
-          body?.message
-          ?? body?.error
-          ?? `Erreur ${res.status}`
+          syncBody?.message
+          ?? syncBody?.error
+          ?? `Erreur ${syncRes.status}`
         setStatus('error')
         setMessage(detail)
         return
       }
 
-      const seconds = body.durationMs ? Math.round(body.durationMs / 1000) : null
-      setStatus('success')
-      setMessage(seconds != null ? `Sync terminée en ${seconds}${NBSP}s` : 'Sync terminée')
+      // Sync succeeded → chain content analysis on newly synced posts.
+      // A failure here must NOT poison the sync result: surface a warning
+      // and keep the page refresh.
+      setStatus('analyzing')
+      setMessage('Analyse des nouveaux posts…')
+
+      let analysis: AnalyzeResponse | null = null
+      let analysisFailed = false
+      try {
+        const aRes = await fetch('/api/content/analyze-new', {
+          method:  'POST',
+          headers: { 'content-type': 'application/json' },
+        })
+        analysis = await aRes.json().catch(() => null) as AnalyzeResponse | null
+        if (!aRes.ok || !analysis?.ok) {
+          analysisFailed = true
+        }
+      } catch {
+        analysisFailed = true
+      }
+
+      if (analysisFailed) {
+        setStatus('warning')
+        setMessage('Sync OK · analyse contenu à relancer')
+      } else if (analysis?.disabled || analysis?.noOpReason === 'content_analysis_disabled') {
+        setStatus('success')
+        setMessage('Sync terminée')
+      } else if (analysis?.noOpReason === 'no_new_posts_to_analyze' || (analysis?.processed ?? 0) === 0) {
+        setStatus('success')
+        setMessage('Sync terminée · aucun nouveau post à analyser')
+      } else {
+        const completed = analysis?.completed ?? 0
+        const plural = completed > 1 ? 's' : ''
+        setStatus('success')
+        setMessage(`Sync terminée · ${completed} post${plural} analysé${plural}`)
+      }
 
       // Pull fresh server data into the page (Data Health, charts, etc.).
       startTransition(() => router.refresh())
@@ -49,12 +93,13 @@ export function SyncNowButton() {
     }
   }
 
-  const isLoading = status === 'loading' || isPending
+  const isLoading = status === 'syncing' || status === 'analyzing' || isPending
   const label =
-    status === 'loading' ? 'Synchronisation en cours…' :
-    isPending            ? 'Mise à jour…' :
-    status === 'success' ? 'Resynchroniser' :
-                           'Synchroniser maintenant'
+    status === 'syncing'   ? 'Synchronisation en cours…' :
+    status === 'analyzing' ? 'Analyse des nouveaux posts…' :
+    isPending              ? 'Mise à jour…' :
+    status === 'success' || status === 'warning' ? 'Resynchroniser' :
+                             'Synchroniser maintenant'
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -63,7 +108,7 @@ export function SyncNowButton() {
         onClick={trigger}
         disabled={isLoading}
         aria-busy={isLoading}
-        title="Lance une synchronisation Meta complète. Peut prendre 1 à 3 minutes."
+        title="Sync puis analyse des nouveaux posts. Peut prendre quelques minutes."
         className="inline-flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading && (
@@ -76,16 +121,22 @@ export function SyncNowButton() {
       </button>
       {status === 'idle' && (
         <span className="text-[10px] text-neutral-600">
-          1 à 3{NBSP}min · ne ferme pas l&apos;onglet
+          Sync puis analyse · ne ferme pas l&apos;onglet
         </span>
       )}
-      {status === 'loading' && (
+      {status === 'syncing' && (
         <span className="text-[10px] text-neutral-500">
           Peut prendre 1 à 3{NBSP}min · garde l&apos;onglet ouvert
         </span>
       )}
+      {status === 'analyzing' && message && (
+        <span className="text-[10px] text-neutral-400">{message}</span>
+      )}
       {status === 'success' && message && (
         <span className="text-[10px] text-emerald-400">{message}</span>
+      )}
+      {status === 'warning' && message && (
+        <span className="text-[10px] text-amber-400">{message}</span>
       )}
       {status === 'error' && message && (
         <span className="max-w-[14rem] text-right text-[10px] text-red-400">
