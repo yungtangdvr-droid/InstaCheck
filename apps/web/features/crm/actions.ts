@@ -206,8 +206,11 @@ export async function unlinkContactFromBrand(
 export async function createTouchpoint(
   input: TTouchpointInput,
 ): Promise<ActionResult<{ id: string }>> {
-  if (!input.contactId && !input.brandId) {
-    return { data: null, error: 'Touchpoint needs a brand or a contact' }
+  // touchpoints.contact_id is `uuid not null` in the schema (brand_id is
+  // nullable). Reject brand-only calls at the action level rather than
+  // letting the DB raise a NOT NULL violation.
+  if (!input.contactId) {
+    return { data: null, error: 'Touchpoint needs a contact' }
   }
 
   const supabase = await createServerSupabaseClient()
@@ -216,7 +219,7 @@ export async function createTouchpoint(
   const { data, error } = await supabase
     .from('touchpoints')
     .insert({
-      contact_id:  input.contactId ?? null,
+      contact_id:  input.contactId,
       brand_id:    input.brandId ?? null,
       type:        input.type,
       note:        input.note?.trim() || null,

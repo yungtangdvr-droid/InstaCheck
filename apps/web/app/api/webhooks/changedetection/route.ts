@@ -44,8 +44,14 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
+  // raw_watchlist_events.change_summary is `text not null` in the schema,
+  // so always fall back to '' (empty string) rather than null when the
+  // payload carries no usable summary.
   const changeSummary =
-    (payload.change_summary?.trim() || payload.diff?.trim() || payload.current_snapshot?.trim() || null) ?? null
+    payload.change_summary?.trim() ||
+    payload.diff?.trim() ||
+    payload.current_snapshot?.trim() ||
+    ''
 
   const detectedAt = payload.detected_at ?? new Date().toISOString()
 
