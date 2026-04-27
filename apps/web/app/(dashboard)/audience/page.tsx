@@ -14,6 +14,10 @@ import type {
   TAudienceFormatRate,
   TAudienceTopPost,
 } from '@/features/audience/get-audience'
+import type {
+  TAudienceBreakdownState,
+  TAudienceDemographicBreakdown,
+} from '@creator-hub/types'
 
 const DAY_NAMES_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 
@@ -197,20 +201,124 @@ export default async function AudiencePage({
         />
       </section>
 
-      {/* Audience characteristics — demographics empty state */}
-      <section className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/40 p-5">
-        <h2 className="text-sm font-medium text-neutral-300">Caractéristiques d&apos;audience</h2>
-        <p className="mt-2 text-sm text-neutral-400">
-          {audience.demographics.reason}
-        </p>
+      {/* Audience characteristics — demographics from follower_demographics */}
+      <section className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-medium text-neutral-300">
+            Démographie audience — 30 derniers jours
+          </h2>
+          {audience.demographics.syncedAt && (
+            <span className="text-[11px] text-neutral-600">
+              Snapshot du {new Date(audience.demographics.syncedAt).toLocaleDateString('fr-FR')}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-[11px] text-neutral-600">
-          Les données d&apos;âge, de genre, de pays et de ville ne sont pas inférées
-          depuis les posts. Elles viendront de l&apos;insight officiel
-          {' '}<code className="text-neutral-500">follower_demographics</code>{' '}
-          de l&apos;API Meta lorsque la sync sera étendue.
+          Source : insight officiel{' '}
+          <code className="text-neutral-500">follower_demographics</code>{' '}
+          (timeframe <code className="text-neutral-500">last_30_days</code>).
         </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <DemographicsBlock title="Pays"   state={audience.demographics.country} breakdown="country" topN={5} />
+          <DemographicsBlock title="Villes" state={audience.demographics.city}    breakdown="city"    topN={5} />
+          <DemographicsBlock title="Âge"    state={audience.demographics.age}     breakdown="age"     topN={5} />
+          <DemographicsBlock title="Genre"  state={audience.demographics.gender}  breakdown="gender"  topN={null} />
+        </div>
       </section>
     </div>
+  )
+}
+
+const GENDER_LABEL: Record<string, string> = {
+  F: 'Femmes',
+  M: 'Hommes',
+  U: 'Non spécifié',
+}
+
+function formatBreakdownKey(breakdown: TAudienceDemographicBreakdown, key: string, label: string | null): string {
+  if (label) return label
+  if (breakdown === 'gender') return GENDER_LABEL[key] ?? key
+  return key
+}
+
+function DemographicsBlock({
+  title,
+  state,
+  breakdown,
+  topN,
+}: {
+  title:     string
+  state:     TAudienceBreakdownState
+  breakdown: TAudienceDemographicBreakdown
+  topN:      number | null
+}) {
+  return (
+    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-4">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+        {title}
+      </h3>
+      <DemographicsBody state={state} breakdown={breakdown} topN={topN} />
+    </div>
+  )
+}
+
+function DemographicsBody({
+  state,
+  breakdown,
+  topN,
+}: {
+  state:     TAudienceBreakdownState
+  breakdown: TAudienceDemographicBreakdown
+  topN:      number | null
+}) {
+  if (state.state === 'not_synced') {
+    return (
+      <p className="mt-3 text-sm text-neutral-500">
+        Données démographiques non encore synchronisées.
+      </p>
+    )
+  }
+
+  if (state.state === 'available_below_threshold') {
+    return (
+      <p className="mt-3 text-sm text-neutral-500">
+        Sous le seuil Meta (~100 followers) — pas de répartition publiée pour cet axe.
+        {state.reason ? <span className="ml-1 text-neutral-600">{state.reason}</span> : null}
+      </p>
+    )
+  }
+
+  if (state.state === 'unavailable') {
+    return (
+      <p className="mt-3 text-sm text-neutral-500">
+        Indisponible : <span className="text-neutral-400">{state.reason}</span>
+      </p>
+    )
+  }
+
+  const rows = topN == null ? state.rows : state.rows.slice(0, topN)
+  return (
+    <ul className="mt-3 space-y-1.5">
+      {rows.map(r => (
+        <li key={r.key} className="flex items-center gap-2 text-sm">
+          <span className="flex-1 truncate text-neutral-300" title={`${r.value.toLocaleString('fr-FR')} followers`}>
+            {formatBreakdownKey(breakdown, r.key, r.label)}
+          </span>
+          <span className="w-24 shrink-0">
+            <span className="block h-1.5 rounded bg-neutral-800">
+              <span
+                className="block h-full rounded bg-emerald-500/70"
+                style={{ width: `${Math.min(100, Math.max(2, r.share * 100))}%` }}
+              />
+            </span>
+          </span>
+          <span className="w-12 shrink-0 text-right text-xs tabular-nums text-neutral-400">
+            {(r.share * 100).toFixed(1)}%
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       accounts: {
@@ -89,6 +114,7 @@ export type Database = {
           {
             foreignKeyName: "asset_events_asset_id_fkey"
             columns: ["asset_id"]
+            isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
           },
@@ -165,30 +191,35 @@ export type Database = {
           {
             foreignKeyName: "attribution_events_asset_id_fkey"
             columns: ["asset_id"]
+            isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attribution_events_brand_id_fkey"
             columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attribution_events_opportunity_id_fkey"
             columns: ["opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attribution_events_raw_event_id_fkey"
             columns: ["raw_event_id"]
+            isOneToOne: true
             referencedRelation: "raw_umami_events"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "attribution_events_rule_id_fkey"
             columns: ["rule_id"]
+            isOneToOne: false
             referencedRelation: "attribution_rules"
             referencedColumns: ["id"]
           },
@@ -352,12 +383,14 @@ export type Database = {
           {
             foreignKeyName: "brand_contacts_brand_id_fkey"
             columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "brand_contacts_contact_id_fkey"
             columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
@@ -392,6 +425,7 @@ export type Database = {
           {
             foreignKeyName: "brand_watchlists_brand_id_fkey"
             columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
@@ -510,24 +544,28 @@ export type Database = {
           {
             foreignKeyName: "content_recommendations_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "content_recommendations_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_format_performance"
             referencedColumns: ["top_post_id"]
           },
           {
             foreignKeyName: "content_recommendations_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_post_performance"
             referencedColumns: ["post_id"]
           },
           {
             foreignKeyName: "content_recommendations_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_theme_performance"
             referencedColumns: ["top_post_id"]
           },
@@ -607,18 +645,21 @@ export type Database = {
           {
             foreignKeyName: "opportunities_brand_id_fkey"
             columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "opportunities_contact_id_fkey"
             columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "opportunities_deck_id_fkey"
             columns: ["deck_id"]
+            isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
           },
@@ -647,6 +688,7 @@ export type Database = {
           {
             foreignKeyName: "opportunity_stage_history_opportunity_id_fkey"
             columns: ["opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
@@ -738,24 +780,28 @@ export type Database = {
           {
             foreignKeyName: "post_content_analysis_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: true
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "post_content_analysis_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: true
             referencedRelation: "v_mart_format_performance"
             referencedColumns: ["top_post_id"]
           },
           {
             foreignKeyName: "post_content_analysis_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: true
             referencedRelation: "v_mart_post_performance"
             referencedColumns: ["post_id"]
           },
           {
             foreignKeyName: "post_content_analysis_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: true
             referencedRelation: "v_mart_theme_performance"
             referencedColumns: ["top_post_id"]
           },
@@ -805,24 +851,28 @@ export type Database = {
           {
             foreignKeyName: "post_metrics_daily_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "post_metrics_daily_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_format_performance"
             referencedColumns: ["top_post_id"]
           },
           {
             foreignKeyName: "post_metrics_daily_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_post_performance"
             referencedColumns: ["post_id"]
           },
           {
             foreignKeyName: "post_metrics_daily_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_theme_performance"
             referencedColumns: ["top_post_id"]
           },
@@ -851,24 +901,28 @@ export type Database = {
           {
             foreignKeyName: "post_tags_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "post_tags_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_format_performance"
             referencedColumns: ["top_post_id"]
           },
           {
             foreignKeyName: "post_tags_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_post_performance"
             referencedColumns: ["post_id"]
           },
           {
             foreignKeyName: "post_tags_post_id_fkey"
             columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "v_mart_theme_performance"
             referencedColumns: ["top_post_id"]
           },
@@ -906,6 +960,7 @@ export type Database = {
           {
             foreignKeyName: "posts_account_id_fkey"
             columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -949,6 +1004,7 @@ export type Database = {
           {
             foreignKeyName: "raw_benchmark_instagram_account_daily_benchmark_account_id_fkey"
             columns: ["benchmark_account_id"]
+            isOneToOne: false
             referencedRelation: "benchmark_accounts"
             referencedColumns: ["id"]
           },
@@ -1007,6 +1063,7 @@ export type Database = {
           {
             foreignKeyName: "raw_benchmark_instagram_media_benchmark_account_id_fkey"
             columns: ["benchmark_account_id"]
+            isOneToOne: false
             referencedRelation: "benchmark_accounts"
             referencedColumns: ["id"]
           },
@@ -1039,6 +1096,54 @@ export type Database = {
           impressions?: number
           reach?: number
           synced_at?: string
+        }
+        Relationships: []
+      }
+      raw_instagram_audience_demographics: {
+        Row: {
+          account_id: string
+          breakdown: string
+          date: string
+          fetched_via: string
+          id: string
+          key: string
+          label: string | null
+          raw_json: Json
+          reason: string | null
+          synced_at: string
+          threshold_state: string
+          timeframe: string
+          value: number
+        }
+        Insert: {
+          account_id: string
+          breakdown: string
+          date: string
+          fetched_via?: string
+          id?: string
+          key: string
+          label?: string | null
+          raw_json?: Json
+          reason?: string | null
+          synced_at?: string
+          threshold_state: string
+          timeframe: string
+          value?: number
+        }
+        Update: {
+          account_id?: string
+          breakdown?: string
+          date?: string
+          fetched_via?: string
+          id?: string
+          key?: string
+          label?: string | null
+          raw_json?: Json
+          reason?: string | null
+          synced_at?: string
+          threshold_state?: string
+          timeframe?: string
+          value?: number
         }
         Relationships: []
       }
@@ -1218,18 +1323,21 @@ export type Database = {
           {
             foreignKeyName: "tasks_linked_brand_id_fkey"
             columns: ["linked_brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_linked_contact_id_fkey"
             columns: ["linked_contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "tasks_linked_opportunity_id_fkey"
             columns: ["linked_opportunity_id"]
+            isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
@@ -1264,12 +1372,14 @@ export type Database = {
           {
             foreignKeyName: "touchpoints_brand_id_fkey"
             columns: ["brand_id"]
+            isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "touchpoints_contact_id_fkey"
             columns: ["contact_id"]
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
@@ -1388,6 +1498,7 @@ export type Database = {
           {
             foreignKeyName: "posts_account_id_fkey"
             columns: ["account_id"]
+            isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -1419,29 +1530,7 @@ export type Database = {
       }
     }
     Functions: {
-      dearmor: { Args: { "": string }; Returns: string }
-      gen_random_uuid: { Args: never; Returns: string }
-      gen_salt: { Args: { "": string }; Returns: string }
-      pgp_armor_headers: {
-        Args: { "": string }
-        Returns: Record<string, unknown>[]
-      }
-      uuid_generate_v1: { Args: never; Returns: string }
-      uuid_generate_v1mc: { Args: never; Returns: string }
-      uuid_generate_v3: {
-        Args: { name: string; namespace: string }
-        Returns: string
-      }
-      uuid_generate_v4: { Args: never; Returns: string }
-      uuid_generate_v5: {
-        Args: { name: string; namespace: string }
-        Returns: string
-      }
-      uuid_nil: { Args: never; Returns: string }
-      uuid_ns_dns: { Args: never; Returns: string }
-      uuid_ns_oid: { Args: never; Returns: string }
-      uuid_ns_url: { Args: never; Returns: string }
-      uuid_ns_x500: { Args: never; Returns: string }
+      [_ in never]: never
     }
     Enums: {
       asset_event_type: "opened" | "completed" | "clicked"
@@ -1614,6 +1703,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       asset_event_type: ["opened", "completed", "clicked"],
@@ -1669,3 +1761,4 @@ export const Constants = {
     },
   },
 } as const
+

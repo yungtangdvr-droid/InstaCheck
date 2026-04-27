@@ -1,14 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
-import type { FullSyncResult } from '@creator-hub/types'
+import type { FullSyncResult, SyncDemographicsResult } from '@creator-hub/types'
 import { syncAccount } from './sync-account'
 import { syncMedia } from './sync-media'
 import { syncInsightsForAllPosts } from './sync-insights'
+import { syncFollowerDemographics } from './sync-demographics'
 
-export { fetchAccount, fetchAllMedia, fetchMediaInsights } from './instagram-client'
+export { fetchAccount, fetchAllMedia, fetchMediaInsights, fetchFollowerDemographics } from './instagram-client'
 export { syncAccount } from './sync-account'
 export { syncMedia } from './sync-media'
 export { syncInsightsForMedia, syncInsightsForAllPosts } from './sync-insights'
+export { syncFollowerDemographics, DEFAULT_DEMOGRAPHICS_TIMEFRAME } from './sync-demographics'
 
 export async function runFullSync(config: {
   supabaseUrl:  string
@@ -56,11 +58,25 @@ export async function runFullSync(config: {
     console.error('[fullSync] insights error:', msg)
   }
 
+  let demographicsResult: SyncDemographicsResult | null = null
+  try {
+    demographicsResult = await syncFollowerDemographics(
+      supabase,
+      config.igUserId,
+      config.accessToken,
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'demographics sync failed'
+    errors.push(msg)
+    console.error('[fullSync] demographics error:', msg)
+  }
+
   return {
-    account:    accountResult,
-    media:      mediaResult,
-    insights:   insightsResults,
+    account:      accountResult,
+    media:        mediaResult,
+    insights:     insightsResults,
+    demographics: demographicsResult,
     errors,
-    durationMs: Date.now() - start,
+    durationMs:   Date.now() - start,
   }
 }
