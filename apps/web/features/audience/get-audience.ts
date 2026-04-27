@@ -1,6 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@creator-hub/types/supabase'
-import type { TAnalyticsPeriod } from '@creator-hub/types'
+import type { Database } from '@creator-hub/types/supabase-extensions'
+import {
+  AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY,
+  type TAnalyticsPeriod,
+  type TAudienceBreakdownState,
+  type TAudienceDemographicBreakdown,
+  type TAudienceDemographicsTimeframe,
+  type TAudienceDemographicsView,
+} from '@creator-hub/types'
 import {
   baselineRatesForPost,
   computeDistributionScore,
@@ -65,11 +72,13 @@ export type TAudienceData = {
   formatsByShares: TAudienceFormatRate[]
   topPosts:        TAudienceTopPost[]
   habitsSummary:   string
-  demographics: {
-    available: false
-    reason: string
-  }
+  demographics:    TAudienceDemographicsView
 }
+
+const DEMOGRAPHICS_TIMEFRAME: TAudienceDemographicsTimeframe = 'last_30_days'
+const DEMOGRAPHICS_BREAKDOWNS: ReadonlyArray<TAudienceDemographicBreakdown> = [
+  'country', 'city', 'age', 'gender',
+]
 
 /**
  * Read-only aggregation feeding /audience. Pure on top of existing tables —
@@ -90,6 +99,7 @@ export async function getAudienceData(
     postsRes,
     windowsRes,
     engagement,
+    demographicsRes,
   ] = await Promise.all([
     supabase
       .from('accounts')
@@ -113,6 +123,11 @@ export async function getAudienceData(
       .eq('period_days', period)
       .is('media_type', null),
     getAccountEngagementHealth(supabase, period),
+    supabase
+      .from('raw_instagram_audience_demographics')
+      .select('breakdown, key, label, value, threshold_state, reason, date, synced_at')
+      .eq('timeframe', DEMOGRAPHICS_TIMEFRAME)
+      .order('date', { ascending: false }),
   ])
 
   const posts = postsRes.data ?? []
@@ -202,6 +217,8 @@ export async function getAudienceData(
     hasReach:        engagement.current.hasReach,
   })
 
+  const demographics = buildDemographicsView(demographicsRes.data ?? [])
+
   return {
     account: accountRes.data
       ? {
@@ -223,11 +240,112 @@ export async function getAudienceData(
     formatsByShares,
     topPosts:        ranked,
     habitsSummary,
-    demographics: {
-      available: false,
-      reason:    'Données démographiques non encore synchronisées.',
-    },
+    demographics,
   }
+}
+
+type DemographicsRow = {
+  breakdown:       string
+  key:             string
+  label:           string | null
+  value:           number
+  threshold_state: string
+  reason:          string | null
+  date:            string
+  synced_at:       string
+}
+
+// Group rows by breakdown, keep only the latest snapshot date per
+// breakdown, and project to a TAudienceBreakdownState. Rows are
+// pre-sorted desc by date — we read the first date we see per
+// breakdown and keep all rows with that date.
+function buildDemographicsView(rows: DemographicsRow[]): TAudienceDemographicsView {
+  const view: TAudienceDemographicsView = {
+    timeframe: DEMOGRAPHICS_TIMEFRAME,
+    syncedAt:  null,
+    country: { state: 'not_synced' },
+    city:    { state: 'not_synced' },
+    age:     { state: 'not_synced' },
+    gender:  { state: 'not_synced' },
+  }
+
+  let latestSyncedAt: string | null = null
+  const grouped: Record<TAudienceDemographicBreakdown, DemographicsRow[]> = {
+    country: [], city: [], age: [], gender: [],
+  }
+  const latestDate: Partial<Record<TAudienceDemographicBreakdown, string>> = {}
+
+  for (const r of rows) {
+    if (!isBreakdown(r.breakdown)) continue
+    const seen = latestDate[r.breakdown]
+    if (seen === undefined) {
+      latestDate[r.breakdown] = r.date
+    } else if (r.date !== seen) {
+      // Older snapshot — skip.
+      continue
+    }
+    grouped[r.breakdown].push(r)
+    if (latestSyncedAt === null || r.synced_at > latestSyncedAt) {
+      latestSyncedAt = r.synced_at
+    }
+  }
+
+  view.syncedAt = latestSyncedAt
+
+  for (const breakdown of DEMOGRAPHICS_BREAKDOWNS) {
+    view[breakdown] = projectBreakdown(grouped[breakdown])
+  }
+
+  return view
+}
+
+function isBreakdown(s: string): s is TAudienceDemographicBreakdown {
+  return s === 'country' || s === 'city' || s === 'age' || s === 'gender'
+}
+
+function projectBreakdown(rows: DemographicsRow[]): TAudienceBreakdownState {
+  if (rows.length === 0) return { state: 'not_synced' }
+
+  // Single-row sentinel cases.
+  const sentinel = rows.find(r => r.key === AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY)
+  if (sentinel && rows.length === 1) {
+    if (sentinel.threshold_state === 'available_below_threshold') {
+      return {
+        state:  'available_below_threshold',
+        reason: sentinel.reason ?? 'Sous le seuil Meta pour cet axe.',
+      }
+    }
+    if (sentinel.threshold_state === 'unavailable') {
+      return {
+        state:  'unavailable',
+        reason: sentinel.reason ?? 'Indisponible côté Meta.',
+      }
+    }
+  }
+
+  const realRows = rows
+    .filter(r => r.key !== AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY && r.threshold_state === 'available')
+    .map(r => ({ key: r.key, label: r.label, value: Number(r.value) || 0 }))
+    .filter(r => r.value > 0)
+
+  if (realRows.length === 0) {
+    return {
+      state:  'available_below_threshold',
+      reason: sentinel?.reason ?? 'Réponse Meta sans valeur exploitable pour cet axe.',
+    }
+  }
+
+  const sum = realRows.reduce((a, r) => a + r.value, 0)
+  const projected = realRows
+    .map(r => ({
+      key:   r.key,
+      label: r.label,
+      value: r.value,
+      share: sum > 0 ? r.value / sum : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+
+  return { state: 'available', rows: projected }
 }
 
 function buildHabitsSummary(input: {

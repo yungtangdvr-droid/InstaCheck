@@ -101,6 +101,70 @@ export type IGInsightsResponse = {
   data: IGMediaInsight[]
 }
 
+// Audience demographics — `follower_demographics` insight on
+// `/{ig-user-id}/insights`. One HTTP call per breakdown axis.
+// PR5 wires `last_30_days`; the schema persists `timeframe` so
+// future windows (last_14_days, last_90_days, …) can coexist.
+
+export type TAudienceDemographicBreakdown = 'country' | 'city' | 'age' | 'gender'
+
+export type TAudienceDemographicsTimeframe = 'last_30_days'
+
+export type TAudienceThresholdState =
+  | 'available'
+  | 'available_below_threshold'
+  | 'unavailable'
+
+// Sentinel `key` value for rows that do not represent a real
+// demographic dimension value (i.e. when threshold_state is
+// 'available_below_threshold' or 'unavailable'). Meta does not
+// emit this string for any axis.
+export const AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY = '__meta_unavailable__'
+
+// Raw Meta response shape. Only the fields PR5 reads are typed.
+// `total_value.breakdowns` is empty / missing when the cohort is
+// below Meta's ~100-follower threshold for that axis.
+export type IGFollowerDemographicsResponse = {
+  data: Array<{
+    name:    string
+    period:  string
+    title?:  string
+    id?:     string
+    total_value?: {
+      breakdowns?: Array<{
+        dimension_keys?: string[]
+        results?: Array<{
+          dimension_values?: string[]
+          value?:            number
+        }>
+      }>
+    }
+  }>
+  error?: {
+    message?: string
+    type?:    string
+    code?:    number
+    error_subcode?: number
+  }
+}
+
+// Per-breakdown state surfaced to /audience. Mirrors the four
+// states defined in the audit doc.
+export type TAudienceBreakdownState =
+  | { state: 'available'; rows: Array<{ key: string; label: string | null; value: number; share: number }> }
+  | { state: 'available_below_threshold'; reason: string }
+  | { state: 'unavailable';               reason: string }
+  | { state: 'not_synced' }
+
+export type TAudienceDemographicsView = {
+  timeframe: TAudienceDemographicsTimeframe
+  syncedAt:  string | null
+  country:   TAudienceBreakdownState
+  city:      TAudienceBreakdownState
+  age:       TAudienceBreakdownState
+  gender:    TAudienceBreakdownState
+}
+
 // --- Sync results ---
 
 export type SyncAccountResult = {
@@ -122,12 +186,22 @@ export type SyncInsightsResult = {
   metricsStored: number
 }
 
+export type SyncDemographicsResult = {
+  timeframe:                TAudienceDemographicsTimeframe
+  status:                   'available' | 'partial' | 'unavailable'
+  written:                  number
+  breakdownsAvailable:      TAudienceDemographicBreakdown[]
+  breakdownsBelowThreshold: TAudienceDemographicBreakdown[]
+  breakdownsUnavailable:    TAudienceDemographicBreakdown[]
+}
+
 export type FullSyncResult = {
-  account:  SyncAccountResult
-  media:    SyncMediaResult
-  insights: SyncInsightsResult[]
-  errors:   string[]
-  durationMs: number
+  account:      SyncAccountResult
+  media:        SyncMediaResult
+  insights:     SyncInsightsResult[]
+  demographics: SyncDemographicsResult | null
+  errors:       string[]
+  durationMs:   number
 }
 
 // --- Entités métier (vues frontales) ---

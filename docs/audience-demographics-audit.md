@@ -180,3 +180,35 @@ Single follow-up PR (not started). Outline:
 
 PR4 does not perform any of the above. This document only records
 the audit so the follow-up can be opened with full context.
+
+## 9. Status: shipped in PR5
+
+Implemented per outline above with the following PR5-specific
+choices:
+
+- Migration `0009_audience_demographics.sql` (mirrored at
+  `packages/db/migrations/0006_audience_demographics.sql`) adds a
+  `timeframe text not null` column to the candidate schema in §4.
+  Unique key is `(account_id, date, timeframe, breakdown, key)`
+  so future timeframes (`last_14_days`, `last_90_days`,
+  `this_month`, …) can coexist without collision. PR5 wires
+  `last_30_days` only.
+- Meta call adds `metric_type=total_value` and
+  `timeframe=last_30_days` to the params listed in §3.
+- Sentinel `key='__meta_unavailable__'` (replaces the
+  `__none__` proposal — clearer, less likely to be confused with
+  a real demographic key).
+- `runFullSync` now invokes `syncFollowerDemographics` after
+  `syncInsightsForAllPosts` inside its own try/catch. One
+  breakdown failing does not fail the whole sync; sentinel rows
+  are persisted per failed breakdown. If all four 4xx, the sync
+  still completes with `demographics.status='unavailable'`.
+- `/audience` renders **four** UI states per breakdown
+  (available, available_below_threshold, unavailable,
+  not_synced) under the section title
+  *"Démographie audience — 30 derniers jours"*. The legacy
+  single empty-state block is removed.
+- PR5 does not perform app review, scope upgrade, or token
+  reauth. When the token is missing
+  `instagram_manage_insights`, the unavailable copy explicitly
+  hints at the missing scope so the operator can act.
