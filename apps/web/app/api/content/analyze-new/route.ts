@@ -37,6 +37,19 @@ function resolveLimit(): number {
   return Math.min(envLimit, UI_HARD_MAX)
 }
 
+// Per-post failure reasons we treat as "try again later" rather than a hard
+// failure. Gemini surfaces 503/UNAVAILABLE under load, plus 429/quota when
+// the project is rate-limited. The route reports these to the UI as
+// retryable so the operator sees a "relance dans quelques minutes" hint
+// instead of a generic error.
+const RETRYABLE_REASON_RE =
+  /(\b503\b|unavailable|overloaded|high demand|resource_exhausted|\b429\b|rate.?limit|quota)/i
+
+function isRetryableReason(reason: string | null | undefined): boolean {
+  if (!reason) return false
+  return RETRYABLE_REASON_RE.test(reason)
+}
+
 export async function POST(_request: NextRequest) {
   const authClient = await createServerSupabaseClient()
   const { data: { user }, error: authError } = await authClient.auth.getUser()
@@ -57,9 +70,13 @@ export async function POST(_request: NextRequest) {
     // continue to render success without flagging the operator.
     return Response.json({
       ok:         true,
+      partial:    false,
+      retryable:  false,
       disabled:   true,
       processed:  0,
       completed:  0,
+      failed:     0,
+      skipped:    0,
       noOpReason: 'content_analysis_disabled',
     })
   }
@@ -117,6 +134,8 @@ export async function POST(_request: NextRequest) {
       })
       return Response.json({
         ok:         true,
+        partial:    false,
+        retryable:  false,
         processed:  0,
         completed:  0,
         failed:     0,
@@ -127,20 +146,30 @@ export async function POST(_request: NextRequest) {
       })
     }
 
-    const success = result.failed === 0
-    const errorsSummary = result.outcomes
-      .filter((o) => o.status === 'failed')
+    const failedOutcomes = result.outcomes.filter((o) => o.status === 'failed')
+    const errorsSummary  = failedOutcomes
       .slice(0, 5)
       .map((o) => ({ postId: o.postId, reason: o.reason ?? null }))
 
+    // Per-post failures are not route-level failures: the API call itself
+    // succeeded, we just couldn't classify some posts. We always return
+    // ok:true here and let the UI render the partial/retryable hints.
+    // Only an unhandled exception below (caught in the catch block) returns
+    // ok:false / HTTP 500.
+    const partial   = failedOutcomes.length > 0
+    const retryable = partial && failedOutcomes.every((o) => isRetryableReason(o.reason))
+
+    // automation_runs still distinguishes a clean batch from anything that
+    // hit a per-post failure so the operator can audit it later.
     await supabase.from('automation_runs').insert({
       automation_name: AUTOMATION_NAME,
-      status:          success ? 'success' : 'failed',
+      status:          partial ? 'failed' : 'success',
       result_summary:  JSON.stringify({
         processed:     result.processed,
         completed:     result.completed,
         failed:        result.failed,
         skipped:       result.skipped,
+        retryable,
         model:         result.model,
         promptVersion: result.promptVersion,
         limit,
@@ -150,7 +179,9 @@ export async function POST(_request: NextRequest) {
     })
 
     return Response.json({
-      ok:            success,
+      ok:            true,
+      partial,
+      retryable,
       processed:     result.processed,
       completed:     result.completed,
       failed:        result.failed,
