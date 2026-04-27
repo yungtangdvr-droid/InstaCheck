@@ -114,6 +114,12 @@ export default async function AnalyticsPage({
             >
               Vue par format →
             </Link>
+            <Link
+              href="/analytics/benchmark"
+              className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+            >
+              Vue benchmark →
+            </Link>
           </div>
         </div>
         <PostExplorer posts={topPosts} themesByPostId={themesByPostId} />
