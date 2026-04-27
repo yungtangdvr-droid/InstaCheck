@@ -1,9 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
-import type { SyncMediaResult } from '@creator-hub/types'
+import type { MediaType, SyncMediaResult } from '@creator-hub/types'
 import { fetchAllMedia } from './instagram-client'
 
 const DEFAULT_MEDIA_SYNC_LIMIT = 200
+
+type DbMediaType = Database['public']['Enums']['media_type']
+
+// Meta's /me/media field union (`MediaType`) is wider than our DB enum:
+// REEL is the short-form video format and folds into VIDEO for storage;
+// STORY is theoretically reachable through the Meta SDK type union but
+// /me/media never returns one, so the branch is here only to keep the
+// switch exhaustive. The DB enum (IMAGE / VIDEO / CAROUSEL_ALBUM) stays
+// unchanged.
+function normalizeMediaType(mt: MediaType): DbMediaType {
+  switch (mt) {
+    case 'REEL':  return 'VIDEO'
+    case 'STORY': return 'IMAGE'
+    case 'IMAGE':
+    case 'VIDEO':
+    case 'CAROUSEL_ALBUM':
+      return mt
+  }
+}
 
 function resolveMediaSyncLimit(): number {
   const raw = process.env.META_SYNC_MEDIA_LIMIT
@@ -31,7 +50,7 @@ export async function syncMedia(
         {
           media_id:   media.id,
           account_id: igUserId,
-          media_type: media.media_type,
+          media_type: normalizeMediaType(media.media_type),
           caption:    media.caption ?? null,
           permalink:  media.permalink,
           timestamp:  media.timestamp,
@@ -52,7 +71,7 @@ export async function syncMedia(
       const { error } = await supabase
         .from('posts')
         .update({
-          media_type: media.media_type,
+          media_type: normalizeMediaType(media.media_type),
           caption:    media.caption ?? null,
           permalink:  media.permalink,
           posted_at:  media.timestamp,
@@ -64,7 +83,7 @@ export async function syncMedia(
       const { error } = await supabase.from('posts').insert({
         account_id: accountRowId,
         media_id:   media.id,
-        media_type: media.media_type,
+        media_type: normalizeMediaType(media.media_type),
         caption:    media.caption ?? null,
         permalink:  media.permalink,
         posted_at:  media.timestamp,

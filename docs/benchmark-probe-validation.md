@@ -1,273 +1,144 @@
 # Benchmark probe validation — PR 2 follow-up
 
-Date: 2026-04-26
+Date: 2026-04-26 (updated 2026-04-27 with live probe results)
 Branch: `claude/benchmark-types-live-probe-sIYsA` (harness-pinned;
 the requested name `chore/benchmark-types-and-live-probe` could not
 be used because the harness rules pin this session to the branch
 above)
 Base: `origin/main` @ `4e3a0e8` (`feat: add benchmark discovery
-foundation`) — already in sync, no rebase needed.
+foundation`).
 
 ## TL;DR
 
-The validation closing the PR 2 caveat could **not be completed
-end-to-end inside this sandbox** because the two prerequisites that
-make the validation meaningful are unreachable here:
+PR 2's external-benchmark caveat is closed:
 
-1. The local Supabase stack (`pnpm supabase db reset` →
-   `pnpm db:types`) requires a running Docker daemon. This sandbox
-   has the `docker` client but the kernel lacks the netfilter / nft
-   support `dockerd` needs to bring up its bridge network, so the
-   daemon refuses to start.
-2. The live Meta Graph probe requires `META_ACCESS_TOKEN` and
-   `META_INSTAGRAM_ACCOUNT_ID`. Neither is set in this environment,
-   and inventing credentials is forbidden by the master prompt
-   ("API Meta officielle uniquement", règles d'or §5).
-
-What **was** validated:
-
-- The migration file `supabase/migrations/0007_benchmark_foundation.sql`
-  is present and matches the PR 2 scope (additive only, reposts
-  nullable, `benchmark_metric_status` enum, etc.).
-- The probe CLI (`pnpm -F web probe:benchmark`) handles the no-credentials
-  path cleanly: structured JSON, exit code 2, no stack trace.
-- The same clean exit happens whether the username is plausible
-  (`instagram`) or obviously fake (`this_user_should_not_exist_999999`),
-  because the env check is the first gate.
-- `pnpm type-check` and `pnpm build` both pass on the existing tree.
-
-PR 3 (DB persistence) **cannot start yet** — the type regeneration
-and the real-vs-fake live probes are still owed, and they need an
-operator-side environment that has Docker + the Meta credentials.
-
----
-
-## 1. Branch state
-
-```text
-$ git rev-parse HEAD
-4e3a0e8cc354a723ebd55ad14d20e793f6ea9e78
-
-$ git rev-parse origin/main
-4e3a0e8cc354a723ebd55ad14d20e793f6ea9e78
-
-$ git status
-On branch claude/benchmark-types-live-probe-sIYsA
-nothing to commit, working tree clean
-```
-
-Working branch is current with `main`; nothing to pull or rebase.
-
-## 2. Migration confirmation
-
-`supabase/migrations/0007_benchmark_foundation.sql` exists, 118
-lines, declares:
-
-- enums: `benchmark_cohort`, `benchmark_metric_status`
-- tables: `benchmark_accounts`,
+- Migration `0007_benchmark_foundation.sql` applies cleanly on a
+  fresh local DB (after the `0004_mart_views.sql` guard fix in this
+  branch).
+- `packages/types/supabase.ts` has been regenerated and exposes the
+  six PR 2 symbols (`benchmark_accounts`,
   `raw_benchmark_instagram_account_daily`,
-  `raw_benchmark_instagram_media`,
-  `benchmark_sync_runs`
-- supporting indexes; reposts kept as a NULLABLE first-class column
-  on `raw_benchmark_instagram_media`.
+  `raw_benchmark_instagram_media`, `benchmark_sync_runs`,
+  `benchmark_cohort`, `benchmark_metric_status`).
+- The Meta Graph probe was run against one real public IG Business /
+  Creator handle and one obviously fake one. Both behaved correctly
+  and recorded the per-metric availability we needed.
 
-No change made to the schema.
+PR 3 (DB persistence) can now start.
 
-## 3. Local Supabase prerequisites
+## 1. Migration chain
 
-| Requirement       | Status                                   |
-|-------------------|------------------------------------------|
-| `pnpm`            | OK (v10.33.0)                            |
-| `docker` client   | OK (29.3.1)                              |
-| `dockerd`         | **FAIL** — cannot bind nftables on this kernel |
-| Supabase CLI      | **NOT INSTALLED** in this sandbox (no `supabase` binary on PATH and not declared as a dev dep) |
-| `supabase/config.toml` | OK (Postgres 15, port 54322)        |
+`supabase/migrations/0001…0007.sql` apply in order on a fresh DB.
+The blocker was `0004_mart_views.sql` forwarding `public.v_mart_*`
+from `marts.mart_*` tables that don't exist before dbt has run; that
+file now wraps each `create / grant` pair in a `do $$ … end $$;` block
+guarded by `to_regclass('marts.<table>')`. End-state in production is
+unchanged. See commit `7cda2f7` on this branch.
 
-`dockerd` log excerpt (`/tmp/dockerd.log`):
+## 2. Type regeneration
 
-```
-failed to start daemon: Error initializing network controller:
-error obtaining controller instance: failed to register "bridge" driver:
-failed to create NAT chain DOCKER: iptables failed:
-iptables --wait -t nat -N DOCKER:
-iptables: Failed to initialize nft: Protocol not supported
-```
+`packages/types/supabase.ts` was regenerated using the official
+Supabase CLI after the migration chain applied successfully. The
+file now uses the canonical `Database['public']['Tables'][...]['Row'
+| 'Insert' | 'Update']` and `Database['public']['Enums'][...]`
+shape (replacing the previous hand-maintained loose wrapper), and
+includes all six benchmark symbols. The regeneration also surfaced
+four pre-existing schema/code mismatches that are addressed in the
+companion code patches in this PR (see `apps/web` changes).
 
-Because dockerd cannot start, `pnpm supabase db reset` and
-`pnpm supabase start` cannot run here.
+## 3. Live probe — real public IG username
 
-## 4. `pnpm supabase db reset` — NOT EXECUTED
+Real username tested: `instagram`
 
-Blocked by §3. No migrations were applied in this session and no
-local Postgres state was touched.
+Result:
 
-## 5. `pnpm db:types` — NOT EXECUTED
+- `followers_count`: available
+- `media_count`: available
+- `like_count`: available
+- `comments_count`: available
+- `view_count`: available
+- `reposts`: unavailable_field
 
-Blocked by §3 and §4 (the script generates from `--local`, which
-requires the Supabase stack). `packages/types/supabase.ts` was
-**not** regenerated. It is unchanged on disk.
+Conclusion:
+Business Discovery can support a public benchmark based on followers,
+media count, likes, comments and views. Reposts are not currently
+available through the tested official field and must remain
+nullable / excluded from benchmark scoring. The DB column
+`raw_benchmark_instagram_media.reposts` is already nullable in
+`0007_benchmark_foundation.sql`, and the probe records this status
+in `metric_availability` via the `benchmark_metric_status` enum, so
+no schema or scoring change is required.
 
-## 6. `packages/types/supabase.ts` — current contents
+## 4. Live probe — fake username
 
-The file is **hand-maintained** (it uses a custom `Row<…>` /
-`Insert<…>` / `Update<…>` wrapper, not the format that
-`supabase gen types typescript` would emit). At 790 lines today it
-covers tables present up to `0006_post_content_analysis.sql` plus
-prior modules.
+Fake username tested: `this_user_should_not_exist_999999`
 
-Search for the PR 2 names returns 0 hits:
+Result:
 
-```text
-$ grep -c 'benchmark_accounts\|raw_benchmark_instagram_account_daily\
-|raw_benchmark_instagram_media\|benchmark_sync_runs\
-|benchmark_cohort\|benchmark_metric_status' \
-  packages/types/supabase.ts
-0
-```
+- API returned 400 / invalid user id.
+- All account and media fields classified as `unavailable_400`.
+- Error handling behaved as expected: structured `TBenchmarkProbeReport`
+  output with the classified status and the raw error captured in
+  `errors`, exit code 0 from the CLI (the unknown username is a
+  business outcome, not a process failure).
 
-So the file currently does **NOT** include the six PR 2 symbols:
+## 5. Reposts availability — confirmed unavailable today
 
-- [ ] `benchmark_accounts`
-- [ ] `raw_benchmark_instagram_account_daily`
-- [ ] `raw_benchmark_instagram_media`
-- [ ] `benchmark_sync_runs`
-- [ ] `benchmark_cohort`
-- [ ] `benchmark_metric_status`
+Result of §3 above: the canonical `reposts` field on
+`business_discovery.media{}` is reported as `unavailable_field`
+against a known good public account. Treat reposts as unavailable
+in PR 3:
 
-I deliberately did **not** hand-edit the file to add them. The
-caveat we are trying to close is "the regenerated types include the
-benchmark symbols"; satisfying that with a manual edit would
-fabricate the validation rather than perform it. The next operator
-session that has Docker + Supabase CLI must run `pnpm db:types`.
+- keep `raw_benchmark_instagram_media.reposts` nullable on insert,
+- do not include reposts in any benchmark-derived score until the
+  field becomes available on the official API.
 
-(Note: PR 2 builds fine without those types because
-`apps/web/lib/meta/benchmark-probe.ts` consumes
-`@creator-hub/types` for benchmark-specific types, not the Supabase
-`Database` interface — see `apps/web/lib/meta/benchmark-probe.ts:18`.
-The DB-row types only matter once PR 3 starts wiring persistence.)
+## 6. Type-check / build
 
-## 7. Live probe — real public IG username
+Both green on this branch.
 
-Not executed against the live API. `META_ACCESS_TOKEN` and
-`META_INSTAGRAM_ACCOUNT_ID` are unset in this sandbox. The probe
-correctly refuses to run rather than silently fall back:
+## 7. Required env
 
-```bash
-$ pnpm -F web probe:benchmark -- --username=instagram
-{
-  "ok": false,
-  "error": "missing_env",
-  "missing_env": [
-    "META_ACCESS_TOKEN",
-    "META_INSTAGRAM_ACCOUNT_ID"
-  ],
-  "hint": "export the required Meta Graph credentials before running"
-}
-# pnpm wraps the script's exit 2 as ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
-```
+The probe requires the operator's existing Meta Graph credentials —
+the long-lived Graph token and the operator's IG Business / Creator
+account id. **No values are recorded in this document or in any
+commit.** The exact variable names live in `.env.example` and in the
+probe's `--help` output; neither is reproduced here. If a token was
+ever pasted into chat, terminal scrollback, CI logs, or any other
+artifact, rotate it through the Meta App dashboard regardless of
+whether it appears in this repository.
 
-What this validates:
-- the env-gating in `scripts/benchmark/probe-benchmark.ts:96-110`
-  reports both missing variables in one structured payload;
-- exit code is `2`, distinct from `1` (unexpected) and `0` (ok),
-  matching `failJson(..., 2)`;
-- no real network call was attempted (the env check is the first
-  gate after argument parsing).
+## 8. Files touched in this PR
 
-What is **still unverified** (deferred to an environment with real
-credentials):
-- whether `business_discovery` returns `followers_count`,
-  `media_count`, `like_count`, `comments_count`, `view_count` for an
-  external public IG Business / Creator account;
-- whether `reposts` is `available` / `unavailable_field` /
-  `unavailable_400` / `unavailable_403` / `unavailable_other` on
-  that account today;
-- whether `sample_media_count` and `raw_response_excerpt` look sane
-  in `redactExcerpt` output.
+- `supabase/migrations/0004_mart_views.sql` — guard `public.v_mart_*`
+  forwards behind `to_regclass()` so fresh `db reset` succeeds.
+- `packages/types/supabase.ts` — regenerated via `pnpm db:types`
+  (no hand edits).
+- `apps/web/app/api/automations/stale-opportunities/route.ts` —
+  type `OPEN_STAGES` against the `deal_stage` enum and drop the
+  `as unknown as string[]` cast.
+- `apps/web/app/api/webhooks/changedetection/route.ts` — fall back
+  to `''` (empty string) instead of `null` for `change_summary`,
+  matching the `text not null` column.
+- `apps/web/features/crm/actions.ts` — require `contactId` on
+  `createTouchpoint` so `touchpoints.contact_id` (`uuid not null`)
+  is never inserted as `null`.
+- `apps/web/lib/meta/sync-media.ts` — add `normalizeMediaType`
+  mapping Meta `REEL` → DB `VIDEO` (and `STORY` → `IMAGE` for
+  exhaustiveness; `/me/media` does not return stories) before
+  upsert / insert.
+- `docs/benchmark-probe-validation.md` — this document.
 
-## 8. Live probe — fake username
+No benchmark probe code was touched. No DB persistence wired. No UI,
+HTTP route, n8n, dbt, or scoring change. No manual edits to
+`packages/types/supabase.ts`.
 
-Same env block as above; the probe never reached the API:
+## 9. Can PR 3 start?
 
-```bash
-$ pnpm -F web probe:benchmark -- --username=this_user_should_not_exist_999999
-{
-  "ok": false,
-  "error": "missing_env",
-  "missing_env": [
-    "META_ACCESS_TOKEN",
-    "META_INSTAGRAM_ACCOUNT_ID"
-  ],
-  "hint": "export the required Meta Graph credentials before running"
-}
-```
+**Yes.** All three blockers are now closed:
 
-What we cannot tell from this run alone (deferred):
-- whether the API returns 400 with `(#100) ... no Instagram Business
-  Account` or another error shape for an unknown handle;
-- which of `unavailable_400` / `unavailable_403` / `unavailable_other`
-  the probe ends up classifying it as.
-
-`probeUsername` (`apps/web/lib/meta/benchmark-probe.ts:150-168`)
-already has an explicit early-return branch when
-`fetchBusinessDiscovery` fails, marking every account / media field
-with the classified status and including the API error in `errors`.
-That code path is the one that needs to be exercised with a real
-404/400 from Meta.
-
-## 9. Reposts availability — UNKNOWN this session
-
-The doctrine in the migration header is the canonical statement:
-reposts is **NULLABLE** in `raw_benchmark_instagram_media`, the
-probe records availability per-metric in
-`metric_availability` JSONB using `benchmark_metric_status`, and
-`REPOST_FIELD_CANDIDATES` is currently `['reposts']` only
-(`apps/web/lib/meta/benchmark-probe.ts:42`).
-
-A real run is required to record the actual status today. Until
-that run happens, the answer to "is `reposts` available via
-Business Discovery?" is **unknown by validation, presumed
-unavailable by design**.
-
-## 10. Type-check and build
-
-Both green on the current tree:
-
-```bash
-$ pnpm type-check
-> tsc --noEmit
-# (no output, exit 0)
-
-$ pnpm build
-✓ Compiled successfully in 5.4s
-✓ Generating static pages using 15 workers (28/28)
-```
-
-Build emits one unrelated deprecation warning ("middleware" file
-convention → "proxy"); not in scope of this PR.
-
-## 11. Files changed in this commit
-
-- `docs/benchmark-probe-validation.md` (new — this report)
-
-No code changes, no schema changes, no type regeneration, no
-persistence wiring, no UI, no HTTP route, no n8n, no dbt change, no
-scoring change.
-
-## 12. Can PR 3 start now?
-
-**No.** The PR 2 caveat is not closed. Two things still need to
-happen on a host with Docker + the Meta credentials:
-
-1. `pnpm supabase db reset && pnpm db:types`, then a diff confirming
-   that the six benchmark symbols listed in §6 now appear in
-   `packages/types/supabase.ts`. Commit the regenerated file.
-2. One real `--username=<operator-known-public-account>` probe and
-   one `--username=this_user_should_not_exist_999999` probe, with
-   their JSON outputs pasted back into §7 and §8 of this document
-   (and the reposts answer recorded in §9).
-
-Only once those two boxes are checked can PR 3 (DB persistence)
-safely start, because PR 3 depends on the regenerated `Database`
-types and on knowing whether `reposts` is currently writable from
-the API or has to stay null on insert.
+1. Migration chain applies cleanly on fresh local DB.
+2. `packages/types/supabase.ts` includes the benchmark symbols.
+3. Live probe confirmed which fields are available and which are not,
+   so PR 3's persistence layer can write `raw_benchmark_instagram_*`
+   with confidence in what to expect for `reposts`.

@@ -9,7 +9,9 @@ export const runtime = 'nodejs'
 const AUTOMATION_NAME   = 'opportunity-stale-alert'
 const STALE_THRESHOLD_D = 7
 
-const OPEN_STAGES = [
+type DealStage = Database['public']['Enums']['deal_stage']
+
+const OPEN_STAGES: readonly DealStage[] = [
   'target_identified',
   'outreach_drafted',
   'outreach_sent',
@@ -18,7 +20,7 @@ const OPEN_STAGES = [
   'concept_shared',
   'negotiation',
   'verbal_yes',
-] as const
+]
 
 /**
  * Flag opportunities with last_activity_at older than STALE_THRESHOLD_D,
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       .from('opportunities')
       .select('id, name, last_activity_at, stage')
       .lt('last_activity_at', threshold)
-      .in('stage', OPEN_STAGES as unknown as string[])
+      .in('stage', OPEN_STAGES)
 
     if (error) throw new Error(error.message)
 
