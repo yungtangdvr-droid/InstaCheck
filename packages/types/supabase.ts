@@ -1460,15 +1460,10 @@ export type Database = {
       attribution_target_type: "opportunity" | "brand" | "asset"
       automation_status: "success" | "failed" | "skipped"
       benchmark_cohort:
-        | "meme"
-        | "lifestyle"
-        | "fashion"
-        | "beauty"
-        | "food"
-        | "travel"
-        | "fitness"
-        | "gaming"
-        | "other"
+        | "core_peer"
+        | "adjacent_culture"
+        | "french_francophone"
+        | "aspirational"
       benchmark_metric_status:
         | "available"
         | "unavailable_field"
@@ -1639,15 +1634,10 @@ export const Constants = {
       attribution_target_type: ["opportunity", "brand", "asset"],
       automation_status: ["success", "failed", "skipped"],
       benchmark_cohort: [
-        "meme",
-        "lifestyle",
-        "fashion",
-        "beauty",
-        "food",
-        "travel",
-        "fitness",
-        "gaming",
-        "other",
+        "core_peer",
+        "adjacent_culture",
+        "french_francophone",
+        "aspirational",
       ],
       benchmark_metric_status: [
         "available",

@@ -710,22 +710,22 @@ export type TEventToTaskResult = {
 //
 // Schema-level enums are mirrored here as TS unions. Source of truth is
 // the `benchmark_cohort` and `benchmark_metric_status` Postgres enums in
-// supabase/migrations/0007_benchmark_foundation.sql.
+// supabase/migrations/0007_benchmark_foundation.sql, with
+// `benchmark_cohort` corrected to the peer-pool taxonomy in
+// supabase/migrations/0008_benchmark_cohort_peer_pool.sql.
+//
+// `benchmark_cohort` encodes a peer-pool axis (not a content category):
+// `aspirational` is excluded from peer percentile computations.
 //
 // Reposts are first-class but nullable: the official Graph API may or may
 // not expose a reshare/share field for a given media object. The probe
 // records availability per metric — never assumed.
 
 export type TBenchmarkCohort =
-  | 'meme'
-  | 'lifestyle'
-  | 'fashion'
-  | 'beauty'
-  | 'food'
-  | 'travel'
-  | 'fitness'
-  | 'gaming'
-  | 'other'
+  | 'core_peer'
+  | 'adjacent_culture'
+  | 'french_francophone'
+  | 'aspirational'
 
 export type TBenchmarkMetricStatus =
   | 'available'
