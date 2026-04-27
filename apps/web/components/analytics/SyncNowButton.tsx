@@ -3,119 +3,117 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-type Status = 'idle' | 'syncing' | 'analyzing' | 'success' | 'warning' | 'error'
+import {
+  formatAnalyzeNewResult,
+  type TAnalyzeNewBody,
+} from './format-analyze-result'
 
 const NBSP = ' '
 
-type AnalyzeResponse = {
-  ok?:           boolean
-  partial?:      boolean
-  retryable?:    boolean
-  disabled?:     boolean
-  processed?:    number
-  completed?:    number
-  failed?:       number
-  skipped?:      number
-  noOpReason?:   string | null
-  error?:        string
+// Single state machine — same shape as AnalyzeNewButton — so a stale
+// error from a previous click cannot leak into the next request.
+type TResult =
+  | { kind: 'idle' }
+  | { kind: 'syncing' }
+  | { kind: 'analyzing' }
+  | { kind: 'success' | 'warning' | 'error'; message: string }
+
+type TSyncBody = {
+  ok?:        boolean
+  error?:     string
+  message?:   string
+  durationMs?:number
+  errors?:    string[]
 }
 
 export function SyncNowButton() {
   const router = useRouter()
-  const [status,  setStatus]  = useState<Status>('idle')
-  const [message, setMessage] = useState<string | null>(null)
+  const [result, setResult] = useState<TResult>({ kind: 'idle' })
   const [isPending, startTransition] = useTransition()
 
   async function trigger() {
-    setStatus('syncing')
-    setMessage(null)
+    // Hard reset before the network calls so the previous run's error or
+    // warning disappears the moment the operator clicks again.
+    setResult({ kind: 'syncing' })
 
     try {
       const syncRes = await fetch('/api/meta/sync-now', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
       })
-
-      const syncBody = await syncRes.json().catch(() => null) as
-        | { ok?: boolean; error?: string; message?: string; durationMs?: number; errors?: string[] }
-        | null
+      const syncBody = await syncRes.json().catch(() => null) as TSyncBody | null
 
       if (!syncRes.ok || !syncBody?.ok) {
         const detail =
           syncBody?.message
           ?? syncBody?.error
           ?? `Erreur ${syncRes.status}`
-        setStatus('error')
-        setMessage(detail)
+        setResult({ kind: 'error', message: detail.slice(0, 160) })
         return
       }
 
       // Sync succeeded → chain content analysis on newly synced posts.
-      // A failure here must NOT poison the sync result: surface a warning
-      // and keep the page refresh.
-      setStatus('analyzing')
-      setMessage('Analyse des nouveaux posts…')
+      // A failure of this second call must NOT poison the sync result:
+      // surface a warning and keep the page refresh.
+      setResult({ kind: 'analyzing' })
 
-      let analysis: AnalyzeResponse | null = null
+      let analysis: TAnalyzeNewBody | null = null
+      let analysisStatus = 0
+      let analysisOk     = false
       let analysisFailed = false
       try {
         const aRes = await fetch('/api/content/analyze-new', {
           method:  'POST',
           headers: { 'content-type': 'application/json' },
         })
-        analysis = await aRes.json().catch(() => null) as AnalyzeResponse | null
-        if (!aRes.ok || !analysis?.ok) {
-          analysisFailed = true
-        }
+        analysisStatus = aRes.status
+        analysisOk     = aRes.ok
+        analysis = await aRes.json().catch(() => null) as TAnalyzeNewBody | null
       } catch {
         analysisFailed = true
       }
 
-      const completed = analysis?.completed ?? 0
-      const failed    = analysis?.failed    ?? 0
-      const processed = analysis?.processed ?? 0
-      const plural    = (n: number) => (n > 1 ? 's' : '')
-
-      if (analysisFailed) {
-        setStatus('warning')
-        setMessage('Sync OK · analyse contenu à relancer')
-      } else if (analysis?.disabled || analysis?.noOpReason === 'content_analysis_disabled') {
-        setStatus('success')
-        setMessage('Sync terminée')
-      } else if (analysis?.noOpReason || processed === 0) {
-        setStatus('success')
-        setMessage('Sync terminée · aucun nouveau post à analyser')
-      } else if (completed === 0 && failed > 0 && analysis?.retryable) {
-        setStatus('warning')
-        setMessage('Sync OK · Gemini indisponible, relance dans quelques minutes')
-      } else if (completed > 0 && failed > 0) {
-        setStatus('warning')
-        setMessage(
-          `Sync OK · analyse partielle · ${completed} analysé${plural(completed)}, ${failed} erreur${plural(failed)}`,
-        )
-      } else if (completed === 0 && failed > 0) {
-        setStatus('warning')
-        setMessage(`Sync OK · analyse échouée · ${failed} erreur${plural(failed)}`)
-      } else {
-        setStatus('success')
-        setMessage(`Sync terminée · ${completed} post${plural(completed)} analysé${plural(completed)}`)
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[SyncNowButton] /api/content/analyze-new', {
+          httpStatus: analysisStatus,
+          httpOk:     analysisOk,
+          ok:         analysis?.ok,
+          partial:    analysis?.partial,
+          retryable:  analysis?.retryable,
+          processed:  analysis?.processed,
+          completed:  analysis?.completed,
+          failed:     analysis?.failed,
+          noOpReason: analysis?.noOpReason,
+        })
       }
 
-      // Pull fresh server data into the page (Data Health, charts, etc.).
+      if (analysisFailed) {
+        setResult({ kind: 'warning', message: 'Sync OK · analyse contenu à relancer' })
+      } else {
+        const formatted = formatAnalyzeNewResult(
+          { status: analysisStatus, ok: analysisOk },
+          analysis,
+        )
+        setResult(mapAnalysisToSync(formatted, analysis))
+      }
+
       startTransition(() => router.refresh())
     } catch (err) {
-      setStatus('error')
-      setMessage(err instanceof Error ? err.message : 'Erreur réseau')
+      setResult({
+        kind:    'error',
+        message: err instanceof Error ? err.message.slice(0, 160) : 'Erreur réseau',
+      })
     }
   }
 
-  const isLoading = status === 'syncing' || status === 'analyzing' || isPending
+  const isLoading = result.kind === 'syncing' || result.kind === 'analyzing' || isPending
   const label =
-    status === 'syncing'   ? 'Synchronisation en cours…' :
-    status === 'analyzing' ? 'Analyse des nouveaux posts…' :
-    isPending              ? 'Mise à jour…' :
-    status === 'success' || status === 'warning' ? 'Resynchroniser' :
-                             'Synchroniser maintenant'
+    result.kind === 'syncing'   ? 'Synchronisation en cours…' :
+    result.kind === 'analyzing' ? 'Analyse des nouveaux posts…' :
+    isPending                   ? 'Mise à jour…' :
+    result.kind === 'success' || result.kind === 'warning' ? 'Resynchroniser' :
+                                  'Synchroniser maintenant'
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -135,30 +133,81 @@ export function SyncNowButton() {
         )}
         {label}
       </button>
-      {status === 'idle' && (
+      {result.kind === 'idle' && (
         <span className="text-[10px] text-neutral-600">
           Sync puis analyse · ne ferme pas l&apos;onglet
         </span>
       )}
-      {status === 'syncing' && (
+      {result.kind === 'syncing' && (
         <span className="text-[10px] text-neutral-500">
           Peut prendre 1 à 3{NBSP}min · garde l&apos;onglet ouvert
         </span>
       )}
-      {status === 'analyzing' && message && (
-        <span className="text-[10px] text-neutral-400">{message}</span>
+      {result.kind === 'analyzing' && (
+        <span className="text-[10px] text-neutral-400">Analyse des nouveaux posts…</span>
       )}
-      {status === 'success' && message && (
-        <span className="text-[10px] text-emerald-400">{message}</span>
+      {result.kind === 'success' && (
+        <span className="text-[10px] text-emerald-400">{result.message}</span>
       )}
-      {status === 'warning' && message && (
-        <span className="text-[10px] text-amber-400">{message}</span>
+      {result.kind === 'warning' && (
+        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
+          {result.message}
+        </span>
       )}
-      {status === 'error' && message && (
+      {result.kind === 'error' && (
         <span className="max-w-[14rem] text-right text-[10px] text-red-400">
-          {message.slice(0, 160)}
+          {result.message.slice(0, 160)}
         </span>
       )}
     </div>
   )
+}
+
+// Map the shared analyze-new outcome to the sync button's vocabulary
+// (success / warning) and prepend a "Sync OK ·" prefix when the analysis
+// step degraded — the sync itself succeeded by the time we get here.
+function mapAnalysisToSync(
+  formatted: ReturnType<typeof formatAnalyzeNewResult>,
+  body:      TAnalyzeNewBody | null,
+): { kind: 'success' | 'warning' | 'error'; message: string } {
+  const completed = body?.completed ?? 0
+  const failed    = body?.failed    ?? 0
+  const plural    = (n: number) => (n > 1 ? 's' : '')
+
+  switch (formatted.kind) {
+    case 'success':
+      return {
+        kind:    'success',
+        message: `Sync terminée · ${completed} post${plural(completed)} analysé${plural(completed)}`,
+      }
+    case 'empty':
+      // Either disabled or no candidates — both are clean states for the
+      // sync flow.
+      return {
+        kind:    'success',
+        message: body?.disabled || body?.noOpReason === 'content_analysis_disabled'
+          ? 'Sync terminée'
+          : 'Sync terminée · aucun nouveau post à analyser',
+      }
+    case 'retry':
+      return {
+        kind:    'warning',
+        message: 'Sync OK · Gemini indisponible, relance dans quelques minutes',
+      }
+    case 'partial':
+      return {
+        kind:    'warning',
+        message: `Sync OK · analyse partielle · ${completed} analysé${plural(completed)}, ${failed} erreur${plural(failed)}`,
+      }
+    case 'error':
+      // Per-post total failure that's not retryable, OR a route-level
+      // failure on /api/content/analyze-new. Either way the sync itself
+      // succeeded, so warn rather than red-flag.
+      return {
+        kind:    'warning',
+        message: failed > 0
+          ? `Sync OK · analyse échouée · ${failed} erreur${plural(failed)}`
+          : `Sync OK · analyse à relancer · ${formatted.message}`,
+      }
+  }
 }

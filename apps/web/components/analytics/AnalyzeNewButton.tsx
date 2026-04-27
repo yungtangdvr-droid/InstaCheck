@@ -3,20 +3,20 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-type Status = 'idle' | 'analyzing' | 'success' | 'partial' | 'retry' | 'empty' | 'error'
+import {
+  formatAnalyzeNewResult,
+  type TAnalyzeKind,
+  type TAnalyzeNewBody,
+} from './format-analyze-result'
 
-type AnalyzeResponse = {
-  ok?:          boolean
-  partial?:     boolean
-  retryable?:   boolean
-  disabled?:    boolean
-  processed?:   number
-  completed?:   number
-  failed?:      number
-  skipped?:     number
-  noOpReason?:  string | null
-  error?:       string
-}
+// Single state machine for the button so a stale error message can never
+// outlive the next click. Setting `result` overwrites both kind and message
+// in one update — no chance of `status='analyzing'` with the old error
+// string still bound to the DOM.
+type TResult =
+  | { kind: 'idle' }
+  | { kind: 'analyzing' }
+  | { kind: TAnalyzeKind; message: string }
 
 type Variant = 'default' | 'compact'
 
@@ -28,86 +28,76 @@ export function AnalyzeNewButton({
   pendingCount?: number
 }) {
   const router = useRouter()
-  const [status,  setStatus]  = useState<Status>('idle')
-  const [message, setMessage] = useState<string | null>(null)
+  const [result, setResult] = useState<TResult>({ kind: 'idle' })
   const [isPending, startTransition] = useTransition()
 
   async function trigger() {
-    setStatus('analyzing')
-    setMessage(null)
+    // Hard reset before the network call so any previous error/partial
+    // hint disappears immediately while the new request is in flight.
+    setResult({ kind: 'analyzing' })
 
     try {
       const res = await fetch('/api/content/analyze-new', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
       })
-      const body = await res.json().catch(() => null) as AnalyzeResponse | null
+      const body = await res.json().catch(() => null) as TAnalyzeNewBody | null
 
-      // ok:false is reserved for route-level fatal errors (auth, missing env,
-      // unhandled exception). Per-post Gemini failures come back as ok:true
-      // with partial/retryable flags so we never display "Erreur 200".
-      if (!res.ok || !body?.ok) {
-        const detail = body?.error ?? `Erreur ${res.status}`
-        setStatus('error')
-        setMessage(detail.slice(0, 160))
-        return
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.debug('[AnalyzeNewButton] /api/content/analyze-new', {
+          httpStatus: res.status,
+          httpOk:     res.ok,
+          ok:         body?.ok,
+          partial:    body?.partial,
+          retryable:  body?.retryable,
+          processed:  body?.processed,
+          completed:  body?.completed,
+          failed:     body?.failed,
+          skipped:    body?.skipped,
+          noOpReason: body?.noOpReason,
+        })
       }
 
-      const completed = body.completed ?? 0
-      const failed    = body.failed    ?? 0
-      const processed = body.processed ?? 0
-      const plural    = (n: number) => (n > 1 ? 's' : '')
+      const formatted = formatAnalyzeNewResult(
+        { status: res.status, ok: res.ok },
+        body,
+      )
+      setResult({ kind: formatted.kind, message: formatted.message })
 
-      if (body.disabled || body.noOpReason === 'content_analysis_disabled') {
-        setStatus('empty')
-        setMessage('Analyse IA désactivée')
-      } else if (body.noOpReason || processed === 0) {
-        setStatus('empty')
-        setMessage('Aucun nouveau post à analyser')
-      } else if (completed === 0 && failed > 0 && body.retryable) {
-        setStatus('retry')
-        setMessage('Gemini indisponible · relance dans quelques minutes')
-      } else if (completed > 0 && failed > 0) {
-        setStatus('partial')
-        setMessage(
-          `Analyse partielle · ${completed} analysé${plural(completed)}, ${failed} erreur${plural(failed)}`,
-        )
-      } else if (completed === 0 && failed > 0) {
-        setStatus('error')
-        setMessage(`Échec de l’analyse · ${failed} erreur${plural(failed)}`)
-      } else {
-        setStatus('success')
-        setMessage(`Analyse terminée · ${completed} post${plural(completed)} analysé${plural(completed)}`)
-      }
-
+      // Pull fresh server data (Data Health, posts list) regardless of the
+      // outcome — even a no-op should refresh "last analyzed at" hints.
       startTransition(() => router.refresh())
     } catch (err) {
-      setStatus('error')
-      setMessage(err instanceof Error ? err.message.slice(0, 160) : 'Erreur réseau')
+      setResult({
+        kind:    'error',
+        message: err instanceof Error ? err.message.slice(0, 160) : 'Erreur réseau',
+      })
     }
   }
 
-  const isLoading = status === 'analyzing' || isPending
+  const isLoading  = result.kind === 'analyzing' || isPending
   const isResolved =
-    status === 'success' ||
-    status === 'partial' ||
-    status === 'retry'   ||
-    status === 'empty'   ||
-    status === 'error'
+    result.kind === 'success' ||
+    result.kind === 'partial' ||
+    result.kind === 'retry'   ||
+    result.kind === 'empty'   ||
+    result.kind === 'error'
+
   const fullLabel =
-    status === 'analyzing' ? 'Analyse IA en cours…' :
-    isPending              ? 'Mise à jour…' :
-    isResolved             ? 'Relancer l’analyse IA' :
-                             'Analyser les nouveaux posts'
+    result.kind === 'analyzing' ? 'Analyse IA en cours…' :
+    isPending                   ? 'Mise à jour…' :
+    isResolved                  ? 'Relancer l’analyse IA' :
+                                  'Analyser les nouveaux posts'
   const compactLabel =
-    status === 'analyzing' ? 'Analyse IA…' :
-    isPending              ? 'Mise à jour…' :
-    isResolved             ? 'Relancer IA' :
-                             'Analyse IA'
+    result.kind === 'analyzing' ? 'Analyse IA…' :
+    isPending                   ? 'Mise à jour…' :
+    isResolved                  ? 'Relancer IA' :
+                                  'Analyse IA'
   const label = variant === 'compact' ? compactLabel : fullLabel
 
   const showPendingHint =
-    status === 'idle' && typeof pendingCount === 'number'
+    result.kind === 'idle' && typeof pendingCount === 'number'
   const pendingHint =
     pendingCount === 0
       ? 'Aucun post en attente'
@@ -136,28 +126,23 @@ export function AnalyzeNewButton({
       {showPendingHint && (
         <span className="text-[10px] text-neutral-600">{pendingHint}</span>
       )}
-      {status === 'analyzing' && (
+      {result.kind === 'analyzing' && (
         <span className="text-[10px] text-neutral-500">Peut prendre 1 min</span>
       )}
-      {status === 'success' && message && (
-        <span className="text-[10px] text-emerald-400">{message}</span>
+      {result.kind === 'success' && (
+        <span className="text-[10px] text-emerald-400">{result.message}</span>
       )}
-      {status === 'partial' && message && (
+      {(result.kind === 'partial' || result.kind === 'retry') && (
         <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
-          {message}
+          {result.message}
         </span>
       )}
-      {status === 'retry' && message && (
-        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
-          {message}
-        </span>
+      {result.kind === 'empty' && (
+        <span className="text-[10px] text-neutral-500">{result.message}</span>
       )}
-      {status === 'empty' && message && (
-        <span className="text-[10px] text-neutral-500">{message}</span>
-      )}
-      {status === 'error' && message && (
+      {result.kind === 'error' && (
         <span className="max-w-[14rem] text-right text-[10px] text-red-400">
-          {message}
+          {result.message}
         </span>
       )}
     </div>
