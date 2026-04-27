@@ -1,5 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
+import type { TAnalyticsPeriod } from '@creator-hub/types'
+import {
+  baselineRatesForPost,
+  computeDistributionScore,
+  computeFormatRateMedians,
+  type TDistributionLabel,
+  type TDistributionSignal,
+} from '@/features/analytics/engagement-score'
+import { extractPreviewUrls } from '@/features/analytics/media-preview'
 
 type Supabase = SupabaseClient<Database>
 
@@ -284,4 +293,204 @@ export async function getThemePerformance(
   rows.sort((a, b) => b.adjustedScore - a.adjustedScore)
 
   return rows
+}
+
+// ---------------------------------------------------------------------------
+// Theme Explorer — read-only post grid feeding /content-lab/themes/[theme].
+// Pure aggregate over post_content_analysis × v_mart_post_performance ×
+// raw_instagram_media. No Gemini calls, no writes.
+// ---------------------------------------------------------------------------
+
+export type TThemePost = {
+  postId:          string
+  permalink:       string | null
+  caption:         string | null
+  visibleText:     string | null
+  mediaType:       string
+  postedAt:        string | null
+  reach:           number
+  saves:           number
+  shares:          number
+  // Score circulation (v2 — same algorithm as PostExplorer / audience top
+  // posts) so the Theme Explorer ranks consistently with the rest of the app.
+  circulationScore: number
+  circulationLabel: TDistributionLabel
+  dominantSignal:   TDistributionSignal | null
+  previewUrl:       string | null
+  primaryTheme:     string
+}
+
+export type TThemePostSort = 'shares' | 'saves' | 'reach' | 'circulation'
+
+export const THEME_POST_SORTS: readonly TThemePostSort[] = [
+  'shares',
+  'saves',
+  'reach',
+  'circulation',
+] as const
+
+function periodFlagColumn(period: TAnalyticsPeriod): 'in_last_7d' | 'in_last_30d' | 'in_last_90d' {
+  if (period === 7)  return 'in_last_7d'
+  if (period === 30) return 'in_last_30d'
+  return 'in_last_90d'
+}
+
+function sortPosts(posts: TThemePost[], sort: TThemePostSort): TThemePost[] {
+  const key: (p: TThemePost) => number =
+    sort === 'shares'      ? (p) => p.shares :
+    sort === 'saves'       ? (p) => p.saves :
+    sort === 'reach'       ? (p) => p.reach :
+                             (p) => p.circulationScore
+  return posts.slice().sort((a, b) => key(b) - key(a))
+}
+
+/**
+ * Fetch every post classified under `primaryTheme`, joined with mart
+ * performance and the raw media row for the preview thumbnail. Filters by
+ * period (in_last_*d flag), optional media_type, and a sort key.
+ *
+ * Volume is bounded by post_content_analysis (≤ THEME_AGGREGATE_CAP) which
+ * already excludes pending / failed analyses.
+ */
+export async function getThemePosts(
+  supabase: Supabase,
+  primaryTheme: string,
+  options: {
+    period:     TAnalyticsPeriod
+    mediaType?: string | null
+    sort?:      TThemePostSort
+  },
+): Promise<TThemePost[]> {
+  const sort = options.sort ?? 'shares'
+
+  const { data: analyses } = await supabase
+    .from('post_content_analysis')
+    .select('post_id, primary_theme, visible_text')
+    .eq('status', 'completed')
+    .eq('primary_theme', primaryTheme)
+    .limit(THEME_AGGREGATE_CAP)
+
+  if (!analyses || analyses.length === 0) return []
+
+  const visibleTextByPostId = new Map<string, string | null>()
+  for (const a of analyses) visibleTextByPostId.set(a.post_id, a.visible_text)
+  const postIds = Array.from(visibleTextByPostId.keys())
+
+  const flag = periodFlagColumn(options.period)
+
+  let perfQuery = supabase
+    .from('v_mart_post_performance')
+    .select('post_id, media_id, media_type, caption, permalink, posted_at, total_reach, total_saves, total_shares, total_likes, total_comments, total_profile_visits, baseline_saves, baseline_shares, baseline_comments, baseline_likes, baseline_profile_visits')
+    .in('post_id', postIds)
+    .eq(flag, true)
+
+  if (options.mediaType && options.mediaType !== 'ALL') {
+    perfQuery = perfQuery.eq('media_type', options.mediaType)
+  }
+
+  const { data: perfRows } = await perfQuery
+
+  const rows = perfRows ?? []
+  if (rows.length === 0) return []
+
+  // Pull the raw_json blob for each media in one round-trip so we can extract
+  // a thumbnail URL the same way PostExplorer / post detail do.
+  const mediaIds = rows.map(r => r.media_id).filter((m): m is string => typeof m === 'string')
+  const previewByMediaId = new Map<string, string | null>()
+  if (mediaIds.length > 0) {
+    const { data: rawMedia } = await supabase
+      .from('raw_instagram_media')
+      .select('media_id, raw_json')
+      .in('media_id', mediaIds)
+    for (const m of rawMedia ?? []) {
+      const { previewUrl } = extractPreviewUrls(m.raw_json, m.media_id)
+      previewByMediaId.set(m.media_id, previewUrl)
+    }
+  }
+
+  // Same baseline-rate logic as PostExplorer / audience: per-format median
+  // rates within the active set provide the second-tier baseline.
+  const formatRateMedians = computeFormatRateMedians(rows)
+
+  const posts: TThemePost[] = rows.map((r) => {
+    const reach    = Number(r.total_reach    ?? 0)
+    const saves    = Number(r.total_saves    ?? 0)
+    const shares   = Number(r.total_shares   ?? 0)
+    const comments = Number(r.total_comments ?? 0)
+    const likes    = Number(r.total_likes    ?? 0)
+    const pv       = r.total_profile_visits == null ? null : Number(r.total_profile_visits)
+
+    const eng = computeDistributionScore({
+      reach,
+      shares,
+      saves,
+      comments,
+      likes,
+      profileVisits: pv,
+      baselineRates: baselineRatesForPost(r, formatRateMedians),
+    })
+
+    return {
+      postId:           r.post_id ?? '',
+      permalink:        r.permalink ?? null,
+      caption:          r.caption ?? null,
+      visibleText:      visibleTextByPostId.get(r.post_id ?? '') ?? null,
+      mediaType:        r.media_type ?? 'UNKNOWN',
+      postedAt:         r.posted_at ?? null,
+      reach,
+      saves,
+      shares,
+      circulationScore: eng.score,
+      circulationLabel: eng.label,
+      dominantSignal:   eng.dominantSignal,
+      previewUrl:       r.media_id ? previewByMediaId.get(r.media_id) ?? null : null,
+      primaryTheme,
+    }
+  })
+
+  return sortPosts(posts, sort)
+}
+
+export type TThemeIndexEntry = {
+  primaryTheme: string
+  postCount:    number
+  // Most recent post date in the theme (used as a "freshness" hint on the index).
+  lastPostedAt: string | null
+}
+
+/**
+ * Lightweight roll-up used by the /content-lab/themes index. Counts only —
+ * the heavy per-post join lives in getThemePosts. Excludes 'unknown' /
+ * null themes for the same reason getThemePerformance does.
+ */
+export async function getThemeIndex(supabase: Supabase): Promise<TThemeIndexEntry[]> {
+  const { data: analyses } = await supabase
+    .from('post_content_analysis')
+    .select('post_id, primary_theme, analyzed_at')
+    .eq('status', 'completed')
+    .not('primary_theme', 'is', null)
+    .neq('primary_theme', 'unknown')
+    .limit(THEME_AGGREGATE_CAP)
+
+  if (!analyses || analyses.length === 0) return []
+
+  const byTheme = new Map<string, { count: number; last: string | null }>()
+  for (const a of analyses) {
+    const key = a.primary_theme
+    if (!key) continue
+    const acc = byTheme.get(key) ?? { count: 0, last: null }
+    acc.count += 1
+    if (a.analyzed_at && (!acc.last || a.analyzed_at > acc.last)) {
+      acc.last = a.analyzed_at
+    }
+    byTheme.set(key, acc)
+  }
+
+  return Array.from(byTheme.entries())
+    .map(([primaryTheme, v]) => ({
+      primaryTheme,
+      postCount:    v.count,
+      lastPostedAt: v.last,
+    }))
+    .sort((a, b) => b.postCount - a.postCount)
 }

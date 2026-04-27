@@ -2,12 +2,28 @@ import {
   DISTRIBUTION_LABEL_CLASS,
   DISTRIBUTION_LABEL_FR,
   DISTRIBUTION_SIGNAL_FR,
+  type TDistributionLabel,
 } from '@/features/analytics/engagement-score'
 import type { TAccountEngagementHealth } from '@/features/analytics/get-engagement-health'
+
+// Minimum number of posts in the active period before we trust a comparative
+// verdict. Below this we stop rendering the red/amber label and only show the
+// raw rates — small samples produce alarmist deltas the operator can't act on.
+const MIN_POSTS_FOR_VERDICT = 5
+
+// Labels we never render in the loud red variant. The current baseline window
+// (30 d for period == 7, 90 d for period == 30) overlaps the active window, so
+// a "Très sous ta baseline" verdict is structurally biased; we re-route those
+// to the neutral amber band.
+const ALARM_LABELS: ReadonlySet<TDistributionLabel> = new Set(['faible'])
 
 function pct(rate: number | null): string {
   if (rate == null || !Number.isFinite(rate) || rate <= 0) return '—'
   return `${(rate * 100).toFixed(2)}%`
+}
+
+function softenLabel(label: TDistributionLabel): TDistributionLabel {
+  return ALARM_LABELS.has(label) ? 'moyen' : label
 }
 
 export function AccountEngagementCard({
@@ -17,107 +33,60 @@ export function AccountEngagementCard({
   health: TAccountEngagementHealth
   period: number
 }) {
-  const { current, baseline, baselinePeriod, baselineQualifier, scoreDelta, interpretation, postCount, highPerformerCount } = health
-  const labelCls = DISTRIBUTION_LABEL_CLASS[current.label]
-  const labelFr  = DISTRIBUTION_LABEL_FR[current.label]
+  const {
+    current,
+    baseline,
+    baselinePeriod,
+    baselineQualifier,
+    scoreDelta,
+    postCount,
+    highPerformerCount,
+  } = health
+
+  // A verdict is only honest when we have BOTH a longer-window baseline AND
+  // enough posts in the active period to make a delta meaningful. Otherwise
+  // we suppress the badge and the score becomes purely descriptive.
+  const hasVerdict =
+    baseline != null && baselinePeriod != null && postCount >= MIN_POSTS_FOR_VERDICT
+
+  const displayedLabel = hasVerdict ? softenLabel(current.label) : null
+  const labelCls       = displayedLabel ? DISTRIBUTION_LABEL_CLASS[displayedLabel] : null
+  const labelFr        = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel]    : null
+
   const dominantFr = current.dominantSignal
     ? DISTRIBUTION_SIGNAL_FR[current.dominantSignal]
     : null
 
+  // Δ colouring is also gated on `hasVerdict`. Without a clean baseline the
+  // delta is null already, but we keep the same neutral colour ramp here so a
+  // small negative delta on a low sample never goes red.
   const deltaColor =
-    scoreDelta == null   ? 'text-neutral-500' :
-    scoreDelta >=  5     ? 'text-emerald-400' :
-    scoreDelta >= -5     ? 'text-neutral-400' :
-                           'text-red-400'
+    !hasVerdict || scoreDelta == null ? 'text-neutral-500' :
+    scoreDelta >=  5                  ? 'text-emerald-400' :
+    scoreDelta >= -5                  ? 'text-neutral-400' :
+                                        'text-amber-400'
   const deltaSign = scoreDelta != null && scoreDelta > 0 ? '+' : ''
 
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900/60">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-800 px-5 py-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-neutral-800 px-5 py-3">
+        <div>
           <p className="text-xs uppercase tracking-wide text-neutral-500">
-            Santé de circulation — {period} j
+            Signaux de circulation — {period} j
           </p>
-          <p className="mt-1 text-sm text-neutral-300">{interpretation}</p>
-          {dominantFr && current.hasReach && (
-            <p className="mt-1 text-[11px] text-neutral-500">
-              Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
-            </p>
-          )}
+          <p className="mt-1 text-sm text-neutral-300">
+            Métriques observées sur la période. Pas de jugement absolu — ces taux décrivent
+            comment ton audience interagit, sans benchmark externe.
+          </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span
-            className={`inline-flex h-7 items-center rounded border px-2 text-xs font-medium ${labelCls}`}
-          >
-            {labelFr}
-          </span>
-          <span className="text-[10px] text-neutral-500" title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe.">
-            {baselineQualifier}
-          </span>
+        <div className="text-[11px] text-neutral-500">
+          {postCount.toLocaleString('fr-FR')} post{postCount > 1 ? 's' : ''} analysé{postCount > 1 ? 's' : ''}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-5 gap-y-3 px-5 py-4 sm:grid-cols-6">
-        <div className="col-span-2">
-          <p className="text-[11px] uppercase tracking-wide text-neutral-500">Score circulation</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold tabular-nums text-white">
-              {current.hasReach ? current.score : '—'}
-            </span>
-            <span className="text-xs text-neutral-500">/ 100</span>
-            {scoreDelta != null && current.hasReach && (
-              <span
-                className={`text-xs tabular-nums ${deltaColor}`}
-                title={`Δ vs ${baselinePeriod} j`}
-              >
-                {deltaSign}{scoreDelta}
-              </span>
-            )}
-          </div>
-          {baseline && baselinePeriod && (
-            <p className="mt-0.5 text-[11px] text-neutral-600">
-              Base {baselinePeriod} j : {baseline.score}/100
-            </p>
-          )}
-          {!baseline && (
-            <p className="mt-0.5 text-[11px] text-neutral-600">
-              {postCount > 0 ? 'Pas de fenêtre de référence' : 'Aucun post analysé'}
-            </p>
-          )}
-        </div>
-
-        {/* v2 composite breakdown — explicitly labelled so the operator can see
-            why the single score moved (median post, % top, share rate, regularity). */}
-        <ComponentTile
-          label="Médiane post"
-          value={`${current.components.medianPostScore}`}
-          suffix="/100"
-          accent={current.components.medianPostScore >= 65}
-          title="Score médian de circulation des posts publiés sur la période (40 % du score global)."
-        />
-        <ComponentTile
-          label="% au-dessus"
-          value={`${current.components.pctHighPerformers}%`}
-          accent={current.components.pctHighPerformers >= 30}
-          title={`Part des posts au-dessus de ta baseline (score ≥ 65, 30 % du score global). ${highPerformerCount}/${postCount} post${postCount > 1 ? 's' : ''}.`}
-        />
-        <ComponentTile
-          label="Shares globaux"
-          value={`${current.components.globalShareRateScore}`}
-          suffix="/100"
-          accent={current.components.globalShareRateScore >= 50}
-          title="Taux de partages global du compte vs fenêtre de référence (20 % du score global)."
-        />
-        <ComponentTile
-          label="Régularité"
-          value={`${current.components.consistency}`}
-          suffix="/100"
-          accent={current.components.consistency >= 60}
-          title="Pénalise les écarts entre posts. 100 = scores très homogènes (10 % du score global)."
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-5 gap-y-3 border-t border-neutral-800 px-5 py-3 sm:grid-cols-5">
+      {/* Lead with the factual rates — the operator sees what's measured before
+          any interpretation. */}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-3 px-5 py-4 sm:grid-cols-5">
         <RateTile label="Shares"   value={pct(current.rates.shares)}   accent={current.dominantSignal === 'shares'} />
         <RateTile label="Saves"    value={pct(current.rates.saves)}    accent={current.dominantSignal === 'saves'} />
         <RateTile label="Comments" value={pct(current.rates.comments)} accent={current.dominantSignal === 'comments'} />
@@ -128,36 +97,115 @@ export function AccountEngagementCard({
           accent={current.dominantSignal === 'profileVisits'}
         />
       </div>
+
+      {dominantFr && current.hasReach && (
+        <p className="border-t border-neutral-800 px-5 py-2 text-[11px] text-neutral-500">
+          Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
+        </p>
+      )}
+
+      {/* Comparative section — demoted to a small footer band. Either shows a
+          score + verdict (when the baseline is sound) or an honest disclaimer. */}
+      <div className="border-t border-neutral-800 bg-neutral-950/40 px-5 py-3">
+        {hasVerdict ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-neutral-500">Comparaison</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-base font-semibold tabular-nums text-neutral-200">
+                  {current.score}
+                </span>
+                <span className="text-[11px] text-neutral-500">/ 100</span>
+                {scoreDelta != null && (
+                  <span
+                    className={`text-[11px] tabular-nums ${deltaColor}`}
+                    title={`Δ vs baseline ${baselinePeriod} j (Note : la fenêtre baseline englobe la période active, donc le delta est conservateur).`}
+                  >
+                    {deltaSign}{scoreDelta}
+                  </span>
+                )}
+                <span className="text-[10px] text-neutral-600">
+                  Base {baselinePeriod} j : {baseline?.score ?? '—'}/100
+                </span>
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+                <ComponentChip
+                  label="Médiane post"
+                  value={`${current.components.medianPostScore}`}
+                  title="Score médian de circulation des posts publiés sur la période (40 % du score global)."
+                />
+                <ComponentChip
+                  label="% au-dessus"
+                  value={`${current.components.pctHighPerformers}%`}
+                  title={`Part des posts au-dessus de ta baseline (score ≥ 65, 30 % du score global). ${highPerformerCount}/${postCount} post${postCount > 1 ? 's' : ''}.`}
+                />
+                <ComponentChip
+                  label="Shares globaux"
+                  value={`${current.components.globalShareRateScore}`}
+                  title="Taux de partages global du compte vs fenêtre de référence (20 % du score global)."
+                />
+                <ComponentChip
+                  label="Régularité"
+                  value={`${current.components.consistency}`}
+                  title="Pénalise les écarts entre posts. 100 = scores très homogènes (10 % du score global)."
+                />
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {labelFr && labelCls && (
+                <span
+                  className={`inline-flex h-6 items-center rounded border px-2 text-[11px] font-medium ${labelCls}`}
+                >
+                  {labelFr}
+                </span>
+              )}
+              <span
+                className="text-[10px] text-neutral-500"
+                title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
+              >
+                {baselineQualifier}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-neutral-500">Comparaison</p>
+              <p className="mt-1 text-sm text-neutral-400">
+                Comparaison indisponible : historique insuffisant.
+              </p>
+              <p className="mt-1 text-[11px] text-neutral-600">
+                {postCount < MIN_POSTS_FOR_VERDICT
+                  ? `Moins de ${MIN_POSTS_FOR_VERDICT} posts dans la période — un delta serait trompeur.`
+                  : 'Pas de fenêtre de référence plus longue disponible pour cette période.'}
+              </p>
+            </div>
+            <span
+              className="text-[10px] text-neutral-600"
+              title="Aucune fenêtre baseline non recouvrante n'a pu être construite."
+            >
+              {baselineQualifier}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-function ComponentTile({
+function ComponentChip({
   label,
   value,
-  suffix,
-  accent,
   title,
 }: {
-  label:   string
-  value:   string
-  suffix?: string
-  accent?: boolean
-  title?:  string
+  label: string
+  value: string
+  title?: string
 }) {
   return (
     <div className="min-w-0" title={title}>
-      <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
-      <div className="mt-0.5 flex items-baseline gap-1">
-        <span
-          className={`text-base font-semibold tabular-nums ${
-            accent ? 'text-emerald-400' : 'text-neutral-200'
-          }`}
-        >
-          {value}
-        </span>
-        {suffix && <span className="text-[10px] text-neutral-500">{suffix}</span>}
-      </div>
+      <p className="text-[10px] uppercase tracking-wide text-neutral-600">{label}</p>
+      <p className="text-xs font-medium tabular-nums text-neutral-300">{value}</p>
     </div>
   )
 }
@@ -175,7 +223,7 @@ function RateTile({
     <div className="min-w-0">
       <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
       <p
-        className={`mt-0.5 text-sm font-semibold tabular-nums ${
+        className={`mt-0.5 text-base font-semibold tabular-nums ${
           accent ? 'text-emerald-400' : 'text-neutral-200'
         }`}
         title={accent ? 'Signal dominant' : undefined}
