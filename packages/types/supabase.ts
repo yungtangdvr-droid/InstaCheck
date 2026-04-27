@@ -1,6 +1,3 @@
-// Types générés depuis le schéma Supabase
-// Régénérer avec : pnpm db:types
-
 export type Json =
   | string
   | number
@@ -9,782 +6,1676 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-type Row<T extends Record<string, unknown>> = T
-type Insert<T extends Record<string, unknown>> = T
-type Update<T extends Record<string, unknown>> = Partial<T>
-
-export interface Database {
+export type Database = {
   public: {
     Tables: {
-      raw_instagram_account_daily: {
-        Row: Row<{
-          id:              string
-          account_id:      string
-          date:            string
-          followers_count: number | null
-          reach:           number | null
-          impressions:     number | null
-          synced_at:       string
-        }>
-        Insert: Insert<{
-          id?:             string
-          account_id:      string
-          date:            string
-          followers_count?: number | null
-          reach?:          number | null
-          impressions?:    number | null
-          synced_at?:      string
-        }>
-        Update: Update<Database['public']['Tables']['raw_instagram_account_daily']['Insert']>
-        Relationships: []
-      }
-      raw_instagram_media: {
-        Row: Row<{
-          id:         string
-          media_id:   string
-          account_id: string
-          media_type: string | null
-          caption:    string | null
-          permalink:  string | null
-          timestamp:  string | null
-          raw_json:   Json | null
-          synced_at:  string
-        }>
-        Insert: Insert<{
-          id?:        string
-          media_id:   string
-          account_id: string
-          media_type?: string | null
-          caption?:   string | null
-          permalink?: string | null
-          timestamp?: string | null
-          raw_json?:  Json | null
-          synced_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['raw_instagram_media']['Insert']>
-        Relationships: []
-      }
-      raw_instagram_media_insights: {
-        Row: Row<{
-          id:          string
-          media_id:    string
-          metric_name: string
-          value:       number | null
-          period:      string | null
-          synced_at:   string
-        }>
-        Insert: Insert<{
-          id?:         string
-          media_id:    string
-          metric_name: string
-          value?:      number | null
-          period?:     string | null
-          synced_at?:  string
-        }>
-        Update: Update<Database['public']['Tables']['raw_instagram_media_insights']['Insert']>
-        Relationships: []
-      }
-      raw_papermark_events: {
-        Row: Row<{
-          id:          string
-          event_id:    string
-          asset_id:    string
-          event_type:  string
-          viewer_id:   string | null
-          duration_ms: number | null
-          occurred_at: string
-        }>
-        Insert: Insert<{
-          id?:         string
-          event_id:    string
-          asset_id:    string
-          event_type:  string
-          viewer_id?:  string | null
-          duration_ms?: number | null
-          occurred_at: string
-        }>
-        Update: Update<Database['public']['Tables']['raw_papermark_events']['Insert']>
-        Relationships: []
-      }
-      raw_umami_events: {
-        Row: Row<{
-          id:          string
-          event_id:    string
-          session_id:  string | null
-          url:         string | null
-          event_name:  string | null
-          referrer:    string | null
-          occurred_at: string
-        }>
-        Insert: Insert<{
-          id?:         string
-          event_id:    string
-          session_id?: string | null
-          url?:        string | null
-          event_name?: string | null
-          referrer?:   string | null
-          occurred_at: string
-        }>
-        Update: Update<Database['public']['Tables']['raw_umami_events']['Insert']>
-        Relationships: []
-      }
-      raw_watchlist_events: {
-        Row: Row<{
-          id:             string
-          url:            string
-          change_summary: string | null
-          detected_at:    string
-        }>
-        Insert: Insert<{
-          id?:             string
-          url:             string
-          change_summary?: string | null
-          detected_at:     string
-        }>
-        Update: Update<Database['public']['Tables']['raw_watchlist_events']['Insert']>
-        Relationships: []
-      }
       accounts: {
-        Row: Row<{
-          id:           string
-          instagram_id: string
-          username:     string
-          avatar_url:   string | null
-          created_at:   string
-        }>
-        Insert: Insert<{
-          id?:          string
-          instagram_id: string
-          username:     string
-          avatar_url?:  string | null
-          created_at?:  string
-        }>
-        Update: Update<Database['public']['Tables']['accounts']['Insert']>
-        Relationships: []
-      }
-      posts: {
-        Row: Row<{
-          id:         string
-          account_id: string
-          media_id:   string
-          media_type: string
-          caption:    string | null
-          permalink:  string | null
-          posted_at:  string | null
-        }>
-        Insert: Insert<{
-          id?:        string
-          account_id: string
-          media_id:   string
-          media_type: string
-          caption?:   string | null
-          permalink?: string | null
-          posted_at?: string | null
-        }>
-        Update: Update<Database['public']['Tables']['posts']['Insert']>
-        Relationships: []
-      }
-      post_metrics_daily: {
-        Row: Row<{
-          id:             string
-          post_id:        string
-          date:           string
-          reach:          number
-          impressions:    number
-          saves:          number
-          shares:         number
-          likes:          number
-          comments:       number
-          profile_visits: number
-          follower_delta: number
-        }>
-        Insert: Insert<{
-          id?:             string
-          post_id:         string
-          date:            string
-          reach?:          number
-          impressions?:    number
-          saves?:          number
-          shares?:         number
-          likes?:          number
-          comments?:       number
-          profile_visits?: number
-          follower_delta?: number
-        }>
-        Update: Update<Database['public']['Tables']['post_metrics_daily']['Insert']>
-        Relationships: []
-      }
-      post_tags: {
-        Row: Row<{
-          id:         string
-          post_id:    string
-          tag:        string
+        Row: {
+          avatar_url: string | null
           created_at: string
-        }>
-        Insert: Insert<{
-          id?:        string
-          post_id:    string
-          tag:        string
+          id: string
+          instagram_id: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
           created_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['post_tags']['Insert']>
-        Relationships: []
-      }
-      content_themes: {
-        Row: Row<{
-          id:          string
-          name:        string
-          description: string | null
-          tags:        string[]
-        }>
-        Insert: Insert<{
-          id?:          string
-          name:         string
-          description?: string | null
-          tags?:        string[]
-        }>
-        Update: Update<Database['public']['Tables']['content_themes']['Insert']>
-        Relationships: []
-      }
-      content_recommendations: {
-        Row: Row<{
-          id:         string
-          post_id:    string | null
-          type:       string
-          reason:     string | null
-          created_at: string
-        }>
-        Insert: Insert<{
-          id?:        string
-          post_id?:   string | null
-          type:       string
-          reason?:    string | null
+          id?: string
+          instagram_id: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
           created_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['content_recommendations']['Insert']>
-        Relationships: []
-      }
-      brands: {
-        Row: Row<{
-          id:                  string
-          name:                string
-          website:             string | null
-          country:             string | null
-          category:            string | null
-          premium_level:       number
-          aesthetic_fit_score: number
-          business_fit_score:  number
-          status:              string
-          notes:               string | null
-          created_at:          string
-        }>
-        Insert: Insert<{
-          id?:                  string
-          name:                 string
-          website?:             string | null
-          country?:             string | null
-          category?:            string | null
-          premium_level?:       number
-          aesthetic_fit_score?: number
-          business_fit_score?:  number
-          status?:              string
-          notes?:               string | null
-          created_at?:          string
-        }>
-        Update: Update<Database['public']['Tables']['brands']['Insert']>
+          id?: string
+          instagram_id?: string
+          username?: string
+        }
         Relationships: []
       }
       agencies: {
-        Row: Row<{
-          id:         string
-          name:       string
-          website:    string | null
-          country:    string | null
-          notes:      string | null
+        Row: {
+          country: string | null
           created_at: string
-        }>
-        Insert: Insert<{
-          id?:       string
-          name:      string
-          website?:  string | null
-          country?:  string | null
-          notes?:    string | null
+          id: string
+          name: string
+          notes: string | null
+          website: string | null
+        }
+        Insert: {
+          country?: string | null
           created_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['agencies']['Insert']>
-        Relationships: []
-      }
-      contacts: {
-        Row: Row<{
-          id:                string
-          full_name:         string
-          email:             string | null
-          title:             string | null
-          company_id:        string | null
-          company_type:      string | null
-          linkedin_url:      string | null
-          instagram_handle:  string | null
-          warmness:          number
-          last_contact_at:   string | null
-          next_follow_up_at: string | null
-          notes:             string | null
-        }>
-        Insert: Insert<{
-          id?:                string
-          full_name:          string
-          email?:             string | null
-          title?:             string | null
-          company_id?:        string | null
-          company_type?:      string | null
-          linkedin_url?:      string | null
-          instagram_handle?:  string | null
-          warmness?:          number
-          last_contact_at?:   string | null
-          next_follow_up_at?: string | null
-          notes?:             string | null
-        }>
-        Update: Update<Database['public']['Tables']['contacts']['Insert']>
-        Relationships: []
-      }
-      brand_contacts: {
-        Row: Row<{
-          brand_id:   string
-          contact_id: string
-        }>
-        Insert: Insert<{
-          brand_id:   string
-          contact_id: string
-        }>
-        Update: Update<Database['public']['Tables']['brand_contacts']['Insert']>
-        Relationships: []
-      }
-      touchpoints: {
-        Row: Row<{
-          id:          string
-          contact_id:  string | null
-          brand_id:    string | null
-          type:        string
-          note:        string | null
-          occurred_at: string
-        }>
-        Insert: Insert<{
-          id?:         string
-          contact_id?: string | null
-          brand_id?:   string | null
-          type:        string
-          note?:       string | null
-          occurred_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['touchpoints']['Insert']>
-        Relationships: []
-      }
-      opportunities: {
-        Row: Row<{
-          id:               string
-          name:             string
-          brand_id:         string | null
-          contact_id:       string | null
-          collab_type:      string | null
-          estimated_value:  number | null
-          currency:         string
-          stage:            string
-          probability:      number
-          expected_close_at: string | null
-          last_activity_at:  string
-          next_action:       string | null
-          deck_id:           string | null
-          booking_url:       string | null
-        }>
-        Insert: Insert<{
-          id?:               string
-          name:              string
-          brand_id?:         string | null
-          contact_id?:       string | null
-          collab_type?:      string | null
-          estimated_value?:  number | null
-          currency?:         string
-          stage?:            string
-          probability?:      number
-          expected_close_at?: string | null
-          last_activity_at?:  string
-          next_action?:       string | null
-          deck_id?:           string | null
-          booking_url?:       string | null
-        }>
-        Update: Update<Database['public']['Tables']['opportunities']['Insert']>
-        Relationships: []
-      }
-      opportunity_stage_history: {
-        Row: Row<{
-          id:             string
-          opportunity_id: string
-          stage:          string
-          changed_at:     string
-        }>
-        Insert: Insert<{
-          id?:             string
-          opportunity_id:  string
-          stage:           string
-          changed_at?:     string
-        }>
-        Update: Update<Database['public']['Tables']['opportunity_stage_history']['Insert']>
-        Relationships: []
-      }
-      assets: {
-        Row: Row<{
-          id:                 string
-          name:               string
-          type:               string
-          papermark_link_id:  string | null
-          papermark_link_url: string | null
-          created_at:         string
-        }>
-        Insert: Insert<{
-          id?:                 string
-          name:                string
-          type:                string
-          papermark_link_id?:  string | null
-          papermark_link_url?: string | null
-          created_at?:         string
-        }>
-        Update: Update<Database['public']['Tables']['assets']['Insert']>
+          id?: string
+          name: string
+          notes?: string | null
+          website?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          website?: string | null
+        }
         Relationships: []
       }
       asset_events: {
-        Row: Row<{
-          id:                 string
-          asset_id:           string
-          event_type:         string
+        Row: {
+          asset_id: string
+          duration_ms: number | null
+          event_type: Database["public"]["Enums"]["asset_event_type"]
+          id: string
+          occurred_at: string
           viewer_fingerprint: string | null
-          duration_ms:        number | null
-          occurred_at:        string
-        }>
-        Insert: Insert<{
-          id?:                 string
-          asset_id:            string
-          event_type:          string
+        }
+        Insert: {
+          asset_id: string
+          duration_ms?: number | null
+          event_type: Database["public"]["Enums"]["asset_event_type"]
+          id?: string
+          occurred_at?: string
           viewer_fingerprint?: string | null
-          duration_ms?:        number | null
-          occurred_at:         string
-        }>
-        Update: Update<Database['public']['Tables']['asset_events']['Insert']>
-        Relationships: []
+        }
+        Update: {
+          asset_id?: string
+          duration_ms?: number | null
+          event_type?: Database["public"]["Enums"]["asset_event_type"]
+          id?: string
+          occurred_at?: string
+          viewer_fingerprint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_events_asset_id_fkey"
+            columns: ["asset_id"]
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      tasks: {
-        Row: Row<{
-          id:                     string
-          label:                  string
-          status:                 string
-          due_at:                 string | null
-          linked_brand_id:        string | null
-          linked_opportunity_id:  string | null
-          linked_contact_id:      string | null
-          created_at:             string
-        }>
-        Insert: Insert<{
-          id?:                     string
-          label:                   string
-          status?:                 string
-          due_at?:                 string | null
-          linked_brand_id?:        string | null
-          linked_opportunity_id?:  string | null
-          linked_contact_id?:      string | null
-          created_at?:             string
-        }>
-        Update: Update<Database['public']['Tables']['tasks']['Insert']>
-        Relationships: []
-      }
-      automation_runs: {
-        Row: Row<{
-          id:               string
-          automation_name:  string
-          status:           string
-          result_summary:   string | null
-          ran_at:           string
-        }>
-        Insert: Insert<{
-          id?:              string
-          automation_name:  string
-          status:           string
-          result_summary?:  string | null
-          ran_at?:          string
-        }>
-        Update: Update<Database['public']['Tables']['automation_runs']['Insert']>
-        Relationships: []
-      }
-      weekly_summaries: {
-        Row: Row<{
-          id:           string
-          week_start:   string
-          reach_delta:  number
-          saves_delta:  number
-          new_leads:    number
-          deals_moved:  number
-          deck_opens:   number
-          created_at:   string
-        }>
-        Insert: Insert<{
-          id?:          string
-          week_start:   string
-          reach_delta?: number
-          saves_delta?: number
-          new_leads?:   number
-          deals_moved?: number
-          deck_opens?:  number
-          created_at?:  string
-        }>
-        Update: Update<Database['public']['Tables']['weekly_summaries']['Insert']>
-        Relationships: []
-      }
-      brand_watchlists: {
-        Row: Row<{
-          id:             string
-          brand_id:       string | null
-          url:            string
-          label:          string | null
-          last_change_at: string | null
-          active:         boolean
-        }>
-        Insert: Insert<{
-          id?:             string
-          brand_id?:       string | null
-          url:             string
-          label?:          string | null
-          last_change_at?: string | null
-          active?:         boolean
-        }>
-        Update: Update<Database['public']['Tables']['brand_watchlists']['Insert']>
-        Relationships: []
-      }
-      attribution_rules: {
-        Row: Row<{
-          id:          string
-          label:       string
-          match_type:  string
-          pattern:     string
-          target_type: string
-          target_id:   string
-          priority:    number
-          active:      boolean
-          created_at:  string
-        }>
-        Insert: Insert<{
-          id?:         string
-          label:       string
-          match_type:  string
-          pattern:     string
-          target_type: string
-          target_id:   string
-          priority?:   number
-          active?:     boolean
+      assets: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          papermark_link_id: string | null
+          papermark_link_url: string | null
+          type: Database["public"]["Enums"]["asset_type"]
+        }
+        Insert: {
           created_at?: string
-        }>
-        Update: Update<Database['public']['Tables']['attribution_rules']['Insert']>
+          id?: string
+          name: string
+          papermark_link_id?: string | null
+          papermark_link_url?: string | null
+          type: Database["public"]["Enums"]["asset_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          papermark_link_id?: string | null
+          papermark_link_url?: string | null
+          type?: Database["public"]["Enums"]["asset_type"]
+        }
         Relationships: []
       }
       attribution_events: {
-        Row: Row<{
-          id:             string
-          raw_event_id:   string
-          rule_id:        string | null
+        Row: {
+          asset_id: string | null
+          brand_id: string | null
+          event_name: string | null
+          id: string
+          matched_by: Database["public"]["Enums"]["attribution_match_type"]
+          occurred_at: string
           opportunity_id: string | null
-          brand_id:       string | null
-          asset_id:       string | null
-          matched_by:     string
-          url:            string
-          referrer:       string | null
-          event_name:     string | null
-          occurred_at:    string
-        }>
-        Insert: Insert<{
-          id?:             string
-          raw_event_id:    string
-          rule_id?:        string | null
+          raw_event_id: string
+          referrer: string | null
+          rule_id: string | null
+          url: string
+        }
+        Insert: {
+          asset_id?: string | null
+          brand_id?: string | null
+          event_name?: string | null
+          id?: string
+          matched_by: Database["public"]["Enums"]["attribution_match_type"]
+          occurred_at: string
           opportunity_id?: string | null
-          brand_id?:       string | null
-          asset_id?:       string | null
-          matched_by:      string
-          url:             string
-          referrer?:       string | null
-          event_name?:     string | null
-          occurred_at:     string
-        }>
-        Update: Update<Database['public']['Tables']['attribution_events']['Insert']>
+          raw_event_id: string
+          referrer?: string | null
+          rule_id?: string | null
+          url: string
+        }
+        Update: {
+          asset_id?: string | null
+          brand_id?: string | null
+          event_name?: string | null
+          id?: string
+          matched_by?: Database["public"]["Enums"]["attribution_match_type"]
+          occurred_at?: string
+          opportunity_id?: string | null
+          raw_event_id?: string
+          referrer?: string | null
+          rule_id?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attribution_events_asset_id_fkey"
+            columns: ["asset_id"]
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attribution_events_brand_id_fkey"
+            columns: ["brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attribution_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attribution_events_raw_event_id_fkey"
+            columns: ["raw_event_id"]
+            referencedRelation: "raw_umami_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attribution_events_rule_id_fkey"
+            columns: ["rule_id"]
+            referencedRelation: "attribution_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attribution_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          label: string
+          match_type: Database["public"]["Enums"]["attribution_match_type"]
+          pattern: string
+          priority: number
+          target_id: string
+          target_type: Database["public"]["Enums"]["attribution_target_type"]
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label: string
+          match_type: Database["public"]["Enums"]["attribution_match_type"]
+          pattern: string
+          priority?: number
+          target_id: string
+          target_type: Database["public"]["Enums"]["attribution_target_type"]
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          match_type?: Database["public"]["Enums"]["attribution_match_type"]
+          pattern?: string
+          priority?: number
+          target_id?: string
+          target_type?: Database["public"]["Enums"]["attribution_target_type"]
+        }
         Relationships: []
       }
+      automation_runs: {
+        Row: {
+          automation_name: string
+          id: string
+          ran_at: string
+          result_summary: string | null
+          status: Database["public"]["Enums"]["automation_status"]
+        }
+        Insert: {
+          automation_name: string
+          id?: string
+          ran_at?: string
+          result_summary?: string | null
+          status: Database["public"]["Enums"]["automation_status"]
+        }
+        Update: {
+          automation_name?: string
+          id?: string
+          ran_at?: string
+          result_summary?: string | null
+          status?: Database["public"]["Enums"]["automation_status"]
+        }
+        Relationships: []
+      }
+      benchmark_accounts: {
+        Row: {
+          active: boolean
+          cohort: Database["public"]["Enums"]["benchmark_cohort"]
+          created_at: string
+          display_name: string | null
+          id: string
+          ig_user_id: string | null
+          ig_username: string
+          language: string | null
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          cohort: Database["public"]["Enums"]["benchmark_cohort"]
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          ig_user_id?: string | null
+          ig_username: string
+          language?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          cohort?: Database["public"]["Enums"]["benchmark_cohort"]
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          ig_user_id?: string | null
+          ig_username?: string
+          language?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      benchmark_sync_runs: {
+        Row: {
+          accounts_attempted: number
+          accounts_succeeded: number
+          errors: Json
+          fetched_via: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          media_fetched: number
+          notes: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          accounts_attempted?: number
+          accounts_succeeded?: number
+          errors?: Json
+          fetched_via?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          media_fetched?: number
+          notes?: string | null
+          started_at?: string
+          status: string
+        }
+        Update: {
+          accounts_attempted?: number
+          accounts_succeeded?: number
+          errors?: Json
+          fetched_via?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          media_fetched?: number
+          notes?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      brand_contacts: {
+        Row: {
+          brand_id: string
+          contact_id: string
+        }
+        Insert: {
+          brand_id: string
+          contact_id: string
+        }
+        Update: {
+          brand_id?: string
+          contact_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_contacts_brand_id_fkey"
+            columns: ["brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_watchlists: {
+        Row: {
+          active: boolean
+          brand_id: string
+          id: string
+          label: string | null
+          last_change_at: string | null
+          url: string
+        }
+        Insert: {
+          active?: boolean
+          brand_id: string
+          id?: string
+          label?: string | null
+          last_change_at?: string | null
+          url: string
+        }
+        Update: {
+          active?: boolean
+          brand_id?: string
+          id?: string
+          label?: string | null
+          last_change_at?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_watchlists_brand_id_fkey"
+            columns: ["brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brands: {
+        Row: {
+          aesthetic_fit_score: number | null
+          business_fit_score: number | null
+          category: string | null
+          country: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          premium_level: string | null
+          status: Database["public"]["Enums"]["brand_status"]
+          website: string | null
+        }
+        Insert: {
+          aesthetic_fit_score?: number | null
+          business_fit_score?: number | null
+          category?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          premium_level?: string | null
+          status?: Database["public"]["Enums"]["brand_status"]
+          website?: string | null
+        }
+        Update: {
+          aesthetic_fit_score?: number | null
+          business_fit_score?: number | null
+          category?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          premium_level?: string | null
+          status?: Database["public"]["Enums"]["brand_status"]
+          website?: string | null
+        }
+        Relationships: []
+      }
+      contacts: {
+        Row: {
+          company_id: string | null
+          company_type: Database["public"]["Enums"]["company_type"] | null
+          email: string | null
+          full_name: string
+          id: string
+          instagram_handle: string | null
+          last_contact_at: string | null
+          linkedin_url: string | null
+          next_follow_up_at: string | null
+          notes: string | null
+          title: string | null
+          warmness: number
+        }
+        Insert: {
+          company_id?: string | null
+          company_type?: Database["public"]["Enums"]["company_type"] | null
+          email?: string | null
+          full_name: string
+          id?: string
+          instagram_handle?: string | null
+          last_contact_at?: string | null
+          linkedin_url?: string | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          title?: string | null
+          warmness?: number
+        }
+        Update: {
+          company_id?: string | null
+          company_type?: Database["public"]["Enums"]["company_type"] | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          instagram_handle?: string | null
+          last_contact_at?: string | null
+          linkedin_url?: string | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          title?: string | null
+          warmness?: number
+        }
+        Relationships: []
+      }
+      content_recommendations: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          reason: string
+          type: Database["public"]["Enums"]["content_recommendation_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          reason: string
+          type: Database["public"]["Enums"]["content_recommendation_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          reason?: string
+          type?: Database["public"]["Enums"]["content_recommendation_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_recommendations_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_recommendations_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_format_performance"
+            referencedColumns: ["top_post_id"]
+          },
+          {
+            foreignKeyName: "content_recommendations_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_post_performance"
+            referencedColumns: ["post_id"]
+          },
+          {
+            foreignKeyName: "content_recommendations_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_theme_performance"
+            referencedColumns: ["top_post_id"]
+          },
+        ]
+      }
+      content_themes: {
+        Row: {
+          description: string | null
+          id: string
+          name: string
+          tags: string[]
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          name: string
+          tags?: string[]
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          name?: string
+          tags?: string[]
+        }
+        Relationships: []
+      }
+      opportunities: {
+        Row: {
+          booking_url: string | null
+          brand_id: string | null
+          collab_type: string | null
+          contact_id: string | null
+          currency: string
+          deck_id: string | null
+          estimated_value: number | null
+          expected_close_at: string | null
+          id: string
+          last_activity_at: string | null
+          name: string
+          next_action: string | null
+          probability: number
+          stage: Database["public"]["Enums"]["deal_stage"]
+        }
+        Insert: {
+          booking_url?: string | null
+          brand_id?: string | null
+          collab_type?: string | null
+          contact_id?: string | null
+          currency?: string
+          deck_id?: string | null
+          estimated_value?: number | null
+          expected_close_at?: string | null
+          id?: string
+          last_activity_at?: string | null
+          name: string
+          next_action?: string | null
+          probability?: number
+          stage?: Database["public"]["Enums"]["deal_stage"]
+        }
+        Update: {
+          booking_url?: string | null
+          brand_id?: string | null
+          collab_type?: string | null
+          contact_id?: string | null
+          currency?: string
+          deck_id?: string | null
+          estimated_value?: number | null
+          expected_close_at?: string | null
+          id?: string
+          last_activity_at?: string | null
+          name?: string
+          next_action?: string | null
+          probability?: number
+          stage?: Database["public"]["Enums"]["deal_stage"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_brand_id_fkey"
+            columns: ["brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_contact_id_fkey"
+            columns: ["contact_id"]
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_deck_id_fkey"
+            columns: ["deck_id"]
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_stage_history: {
+        Row: {
+          changed_at: string
+          id: string
+          opportunity_id: string
+          stage: Database["public"]["Enums"]["deal_stage"]
+        }
+        Insert: {
+          changed_at?: string
+          id?: string
+          opportunity_id: string
+          stage: Database["public"]["Enums"]["deal_stage"]
+        }
+        Update: {
+          changed_at?: string
+          id?: string
+          opportunity_id?: string
+          stage?: Database["public"]["Enums"]["deal_stage"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_stage_history_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_content_analysis: {
-        Row: Row<{
-          id:                    string
-          post_id:               string
-          provider:              string
-          model:                 string
-          prompt_version:        string
-          status:                'pending' | 'completed' | 'failed' | 'skipped'
-          visible_text:          string | null
-          language:              string | null
-          primary_theme:         string | null
-          secondary_themes:      string[]
-          humor_type:            string | null
-          format_pattern:        string | null
-          cultural_reference:    string | null
-          niche_level:           string | null
+        Row: {
+          analysis_json: Json | null
+          analyzed_at: string | null
+          confidence: number | null
+          created_at: string
+          cultural_reference: string | null
+          error_message: string | null
+          format_pattern: string | null
+          humor_type: string | null
+          id: string
+          input_tokens: number | null
+          language: string | null
+          model: string
+          niche_level: string | null
+          output_tokens: number | null
+          post_id: string
+          primary_theme: string | null
+          prompt_version: string
+          provider: string
           replication_potential: string | null
-          confidence:            number | null
-          short_reason:          string | null
-          analysis_json:         Json | null
-          source_media_url:      string | null
-          input_tokens:          number | null
-          output_tokens:         number | null
-          error_message:         string | null
-          analyzed_at:           string | null
-          created_at:            string
-          updated_at:            string
-        }>
-        Insert: Insert<{
-          id?:                    string
-          post_id:                string
-          provider:               string
-          model:                  string
-          prompt_version:         string
-          status?:                'pending' | 'completed' | 'failed' | 'skipped'
-          visible_text?:          string | null
-          language?:              string | null
-          primary_theme?:         string | null
-          secondary_themes?:      string[]
-          humor_type?:            string | null
-          format_pattern?:        string | null
-          cultural_reference?:    string | null
-          niche_level?:           string | null
+          secondary_themes: string[]
+          short_reason: string | null
+          source_media_url: string | null
+          status: Database["public"]["Enums"]["content_analysis_status"]
+          updated_at: string
+          visible_text: string | null
+        }
+        Insert: {
+          analysis_json?: Json | null
+          analyzed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          cultural_reference?: string | null
+          error_message?: string | null
+          format_pattern?: string | null
+          humor_type?: string | null
+          id?: string
+          input_tokens?: number | null
+          language?: string | null
+          model: string
+          niche_level?: string | null
+          output_tokens?: number | null
+          post_id: string
+          primary_theme?: string | null
+          prompt_version: string
+          provider: string
           replication_potential?: string | null
-          confidence?:            number | null
-          short_reason?:          string | null
-          analysis_json?:         Json | null
-          source_media_url?:      string | null
-          input_tokens?:          number | null
-          output_tokens?:         number | null
-          error_message?:         string | null
-          analyzed_at?:           string | null
-          created_at?:            string
-          updated_at?:            string
-        }>
-        Update: Update<Database['public']['Tables']['post_content_analysis']['Insert']>
+          secondary_themes?: string[]
+          short_reason?: string | null
+          source_media_url?: string | null
+          status?: Database["public"]["Enums"]["content_analysis_status"]
+          updated_at?: string
+          visible_text?: string | null
+        }
+        Update: {
+          analysis_json?: Json | null
+          analyzed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          cultural_reference?: string | null
+          error_message?: string | null
+          format_pattern?: string | null
+          humor_type?: string | null
+          id?: string
+          input_tokens?: number | null
+          language?: string | null
+          model?: string
+          niche_level?: string | null
+          output_tokens?: number | null
+          post_id?: string
+          primary_theme?: string | null
+          prompt_version?: string
+          provider?: string
+          replication_potential?: string | null
+          secondary_themes?: string[]
+          short_reason?: string | null
+          source_media_url?: string | null
+          status?: Database["public"]["Enums"]["content_analysis_status"]
+          updated_at?: string
+          visible_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_content_analysis_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_content_analysis_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_format_performance"
+            referencedColumns: ["top_post_id"]
+          },
+          {
+            foreignKeyName: "post_content_analysis_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_post_performance"
+            referencedColumns: ["post_id"]
+          },
+          {
+            foreignKeyName: "post_content_analysis_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_theme_performance"
+            referencedColumns: ["top_post_id"]
+          },
+        ]
+      }
+      post_metrics_daily: {
+        Row: {
+          comments: number
+          date: string
+          follower_delta: number
+          id: string
+          impressions: number
+          likes: number
+          post_id: string
+          profile_visits: number
+          reach: number
+          saves: number
+          shares: number
+        }
+        Insert: {
+          comments?: number
+          date: string
+          follower_delta?: number
+          id?: string
+          impressions?: number
+          likes?: number
+          post_id: string
+          profile_visits?: number
+          reach?: number
+          saves?: number
+          shares?: number
+        }
+        Update: {
+          comments?: number
+          date?: string
+          follower_delta?: number
+          id?: string
+          impressions?: number
+          likes?: number
+          post_id?: string
+          profile_visits?: number
+          reach?: number
+          saves?: number
+          shares?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_metrics_daily_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_metrics_daily_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_format_performance"
+            referencedColumns: ["top_post_id"]
+          },
+          {
+            foreignKeyName: "post_metrics_daily_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_post_performance"
+            referencedColumns: ["post_id"]
+          },
+          {
+            foreignKeyName: "post_metrics_daily_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_theme_performance"
+            referencedColumns: ["top_post_id"]
+          },
+        ]
+      }
+      post_tags: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          tag: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          tag: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_tags_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_tags_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_format_performance"
+            referencedColumns: ["top_post_id"]
+          },
+          {
+            foreignKeyName: "post_tags_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_post_performance"
+            referencedColumns: ["post_id"]
+          },
+          {
+            foreignKeyName: "post_tags_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "v_mart_theme_performance"
+            referencedColumns: ["top_post_id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          account_id: string
+          caption: string | null
+          id: string
+          media_id: string
+          media_type: Database["public"]["Enums"]["media_type"]
+          permalink: string
+          posted_at: string
+        }
+        Insert: {
+          account_id: string
+          caption?: string | null
+          id?: string
+          media_id: string
+          media_type: Database["public"]["Enums"]["media_type"]
+          permalink: string
+          posted_at: string
+        }
+        Update: {
+          account_id?: string
+          caption?: string | null
+          id?: string
+          media_id?: string
+          media_type?: Database["public"]["Enums"]["media_type"]
+          permalink?: string
+          posted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_account_id_fkey"
+            columns: ["account_id"]
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_benchmark_instagram_account_daily: {
+        Row: {
+          benchmark_account_id: string
+          date: string
+          fetched_via: string
+          followers_count: number | null
+          id: string
+          media_count: number | null
+          metric_availability: Json
+          raw_json: Json
+          synced_at: string
+        }
+        Insert: {
+          benchmark_account_id: string
+          date: string
+          fetched_via: string
+          followers_count?: number | null
+          id?: string
+          media_count?: number | null
+          metric_availability?: Json
+          raw_json: Json
+          synced_at?: string
+        }
+        Update: {
+          benchmark_account_id?: string
+          date?: string
+          fetched_via?: string
+          followers_count?: number | null
+          id?: string
+          media_count?: number | null
+          metric_availability?: Json
+          raw_json?: Json
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_benchmark_instagram_account_daily_benchmark_account_id_fkey"
+            columns: ["benchmark_account_id"]
+            referencedRelation: "benchmark_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_benchmark_instagram_media: {
+        Row: {
+          benchmark_account_id: string
+          comments_count: number | null
+          fetched_via: string
+          id: string
+          like_count: number | null
+          media_id: string
+          media_type: string | null
+          metric_availability: Json
+          permalink: string | null
+          posted_at: string | null
+          raw_json: Json
+          reposts: number | null
+          synced_at: string
+          view_count: number | null
+        }
+        Insert: {
+          benchmark_account_id: string
+          comments_count?: number | null
+          fetched_via: string
+          id?: string
+          like_count?: number | null
+          media_id: string
+          media_type?: string | null
+          metric_availability?: Json
+          permalink?: string | null
+          posted_at?: string | null
+          raw_json: Json
+          reposts?: number | null
+          synced_at?: string
+          view_count?: number | null
+        }
+        Update: {
+          benchmark_account_id?: string
+          comments_count?: number | null
+          fetched_via?: string
+          id?: string
+          like_count?: number | null
+          media_id?: string
+          media_type?: string | null
+          metric_availability?: Json
+          permalink?: string | null
+          posted_at?: string | null
+          raw_json?: Json
+          reposts?: number | null
+          synced_at?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_benchmark_instagram_media_benchmark_account_id_fkey"
+            columns: ["benchmark_account_id"]
+            referencedRelation: "benchmark_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_instagram_account_daily: {
+        Row: {
+          account_id: string
+          date: string
+          followers_count: number
+          id: string
+          impressions: number
+          reach: number
+          synced_at: string
+        }
+        Insert: {
+          account_id: string
+          date: string
+          followers_count?: number
+          id?: string
+          impressions?: number
+          reach?: number
+          synced_at?: string
+        }
+        Update: {
+          account_id?: string
+          date?: string
+          followers_count?: number
+          id?: string
+          impressions?: number
+          reach?: number
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      raw_instagram_media: {
+        Row: {
+          account_id: string
+          caption: string | null
+          id: string
+          media_id: string
+          media_type: Database["public"]["Enums"]["media_type"]
+          permalink: string
+          raw_json: Json
+          timestamp: string
+        }
+        Insert: {
+          account_id: string
+          caption?: string | null
+          id?: string
+          media_id: string
+          media_type: Database["public"]["Enums"]["media_type"]
+          permalink: string
+          raw_json?: Json
+          timestamp: string
+        }
+        Update: {
+          account_id?: string
+          caption?: string | null
+          id?: string
+          media_id?: string
+          media_type?: Database["public"]["Enums"]["media_type"]
+          permalink?: string
+          raw_json?: Json
+          timestamp?: string
+        }
+        Relationships: []
+      }
+      raw_instagram_media_insights: {
+        Row: {
+          id: string
+          media_id: string
+          metric_name: string
+          period: string
+          synced_at: string
+          value: number
+        }
+        Insert: {
+          id?: string
+          media_id: string
+          metric_name: string
+          period: string
+          synced_at?: string
+          value?: number
+        }
+        Update: {
+          id?: string
+          media_id?: string
+          metric_name?: string
+          period?: string
+          synced_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      raw_papermark_events: {
+        Row: {
+          asset_id: string
+          duration_ms: number | null
+          event_id: string
+          event_type: string
+          id: string
+          occurred_at: string
+          viewer_id: string
+        }
+        Insert: {
+          asset_id: string
+          duration_ms?: number | null
+          event_id: string
+          event_type: string
+          id?: string
+          occurred_at: string
+          viewer_id: string
+        }
+        Update: {
+          asset_id?: string
+          duration_ms?: number | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          viewer_id?: string
+        }
+        Relationships: []
+      }
+      raw_umami_events: {
+        Row: {
+          event_id: string
+          event_name: string
+          id: string
+          occurred_at: string
+          referrer: string | null
+          session_id: string
+          url: string
+        }
+        Insert: {
+          event_id: string
+          event_name: string
+          id?: string
+          occurred_at: string
+          referrer?: string | null
+          session_id: string
+          url: string
+        }
+        Update: {
+          event_id?: string
+          event_name?: string
+          id?: string
+          occurred_at?: string
+          referrer?: string | null
+          session_id?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      raw_watchlist_events: {
+        Row: {
+          change_summary: string
+          detected_at: string
+          id: string
+          url: string
+        }
+        Insert: {
+          change_summary: string
+          detected_at?: string
+          id?: string
+          url: string
+        }
+        Update: {
+          change_summary?: string
+          detected_at?: string
+          id?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          due_at: string | null
+          id: string
+          label: string
+          linked_brand_id: string | null
+          linked_contact_id: string | null
+          linked_opportunity_id: string | null
+          status: Database["public"]["Enums"]["task_status"]
+        }
+        Insert: {
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          label: string
+          linked_brand_id?: string | null
+          linked_contact_id?: string | null
+          linked_opportunity_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+        }
+        Update: {
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          label?: string
+          linked_brand_id?: string | null
+          linked_contact_id?: string | null
+          linked_opportunity_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_linked_brand_id_fkey"
+            columns: ["linked_brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_linked_contact_id_fkey"
+            columns: ["linked_contact_id"]
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_linked_opportunity_id_fkey"
+            columns: ["linked_opportunity_id"]
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      touchpoints: {
+        Row: {
+          brand_id: string | null
+          contact_id: string
+          id: string
+          note: string | null
+          occurred_at: string
+          type: Database["public"]["Enums"]["touchpoint_type"]
+        }
+        Insert: {
+          brand_id?: string | null
+          contact_id: string
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          type: Database["public"]["Enums"]["touchpoint_type"]
+        }
+        Update: {
+          brand_id?: string | null
+          contact_id?: string
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          type?: Database["public"]["Enums"]["touchpoint_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "touchpoints_brand_id_fkey"
+            columns: ["brand_id"]
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "touchpoints_contact_id_fkey"
+            columns: ["contact_id"]
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_summaries: {
+        Row: {
+          created_at: string
+          deals_moved: number
+          deck_opens: number
+          id: string
+          new_leads: number
+          reach_delta: number
+          saves_delta: number
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          deals_moved?: number
+          deck_opens?: number
+          id?: string
+          new_leads?: number
+          reach_delta?: number
+          saves_delta?: number
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          deals_moved?: number
+          deck_opens?: number
+          id?: string
+          new_leads?: number
+          reach_delta?: number
+          saves_delta?: number
+          week_start?: string
+        }
         Relationships: []
       }
     }
     Views: {
-      // dbt mart surfaces. These are read-only views defined in
-      // supabase/migrations/0004_mart_views.sql that forward `select *`
-      // from marts.mart_*. Postgres does not track NOT NULL on view
-      // columns, so Supabase `gen types` (the authoritative generator)
-      // emits every column as `T | null`. Columns guarded by dbt
-      // `not_null` tests in infrastructure/dbt/models/marts/schema.yml
-      // are null-coalesced (?? 0 / ?? '') in the fetchers rather than
-      // asserted non-null at the type level.
-      v_mart_post_performance: {
-        Row: Row<{
-          post_id:                  string       | null
-          account_id:               string       | null
-          media_id:                 string       | null
-          media_type:               string       | null
-          caption:                  string       | null
-          permalink:                string       | null
-          posted_at:                string       | null
-          posted_at_local:          string       | null
-          posted_date_local:        string       | null
-          posted_dow:               number       | null
-          posted_hour:              number       | null
-          in_last_7d:               boolean      | null
-          in_last_30d:              boolean      | null
-          in_last_90d:              boolean      | null
-          tags:                     string[]     | null
-          theme_names:              string[]     | null
-          total_reach:              number       | null
-          total_impressions:        number       | null
-          total_saves:              number       | null
-          total_shares:             number       | null
-          total_likes:              number       | null
-          total_comments:           number       | null
-          total_profile_visits:     number       | null
-          baseline_saves:           number       | null
-          baseline_shares:          number       | null
-          baseline_comments:        number       | null
-          baseline_likes:           number       | null
-          baseline_profile_visits:  number       | null
-          format_sample_size:       number       | null
-          performance_score:        number       | null
-          baseline_score:           number       | null
-          score_delta:              number       | null
-        }>
+      v_mart_best_posting_windows: {
+        Row: {
+          avg_reach: number | null
+          avg_saves: number | null
+          avg_score: number | null
+          day_of_week: number | null
+          hour: number | null
+          low_sample_flag: boolean | null
+          media_type: string | null
+          period_days: number | null
+          post_count: number | null
+          sample_confidence: number | null
+        }
         Relationships: []
       }
       v_mart_format_performance: {
-        Row: Row<{
-          media_type:                  string  | null
-          period_days:                 number  | null
-          post_count:                  number  | null
-          total_reach:                 number  | null
-          total_saves:                 number  | null
-          total_shares:                number  | null
-          total_likes:                 number  | null
-          total_comments:              number  | null
-          total_profile_visits:        number  | null
-          avg_reach_per_post:          number  | null
-          avg_saves_per_post:          number  | null
-          avg_shares_per_post:         number  | null
-          avg_likes_per_post:          number  | null
-          avg_comments_per_post:       number  | null
-          avg_profile_visits_per_post: number  | null
-          avg_score:                   number  | null
-          baseline_score:              number  | null
-          top_post_id:                 string  | null
-          top_post_score:              number  | null
-        }>
+        Row: {
+          avg_comments_per_post: number | null
+          avg_likes_per_post: number | null
+          avg_profile_visits_per_post: number | null
+          avg_reach_per_post: number | null
+          avg_saves_per_post: number | null
+          avg_score: number | null
+          avg_shares_per_post: number | null
+          baseline_score: number | null
+          media_type: string | null
+          period_days: number | null
+          post_count: number | null
+          top_post_id: string | null
+          top_post_score: number | null
+          total_comments: number | null
+          total_likes: number | null
+          total_profile_visits: number | null
+          total_reach: number | null
+          total_saves: number | null
+          total_shares: number | null
+        }
         Relationships: []
+      }
+      v_mart_post_performance: {
+        Row: {
+          account_id: string | null
+          baseline_comments: number | null
+          baseline_likes: number | null
+          baseline_profile_visits: number | null
+          baseline_saves: number | null
+          baseline_score: number | null
+          baseline_shares: number | null
+          caption: string | null
+          format_sample_size: number | null
+          in_last_30d: boolean | null
+          in_last_7d: boolean | null
+          in_last_90d: boolean | null
+          media_id: string | null
+          media_type: string | null
+          performance_score: number | null
+          permalink: string | null
+          post_id: string | null
+          posted_at: string | null
+          posted_at_local: string | null
+          posted_date_local: string | null
+          posted_dow: number | null
+          posted_hour: number | null
+          score_delta: number | null
+          tags: string[] | null
+          theme_names: string[] | null
+          total_comments: number | null
+          total_impressions: number | null
+          total_likes: number | null
+          total_profile_visits: number | null
+          total_reach: number | null
+          total_saves: number | null
+          total_shares: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_account_id_fkey"
+            columns: ["account_id"]
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_mart_theme_performance: {
-        Row: Row<{
-          theme_name:              string  | null
-          theme_id:                string  | null
-          is_mapped_theme:         boolean | null
-          period_days:             number  | null
-          post_count:              number  | null
-          total_saves:             number  | null
-          total_reach:             number  | null
-          total_shares:            number  | null
-          total_likes:             number  | null
-          total_comments:          number  | null
-          avg_saves_per_post:      number  | null
-          avg_reach_per_post:      number  | null
-          avg_score:               number  | null
-          baseline_score:          number  | null
-          last_posted_at:          string  | null
-          top_post_id:             string  | null
-          top_post_score:          number  | null
-          low_sample_flag:         boolean | null
-          sample_size_confidence:  number  | null
-        }>
-        Relationships: []
-      }
-      v_mart_best_posting_windows: {
-        Row: Row<{
-          // day_of_week is ISO 1–7 (1 = Monday … 7 = Sunday) in Europe/Paris.
-          // The app converts to 0–6 Sunday-first in getPostingWindows.
-          period_days:       number  | null
-          day_of_week:       number  | null
-          hour:              number  | null
-          media_type:        string  | null
-          post_count:        number  | null
-          avg_saves:         number  | null
-          avg_reach:         number  | null
-          avg_score:         number  | null
-          sample_confidence: number  | null
-          low_sample_flag:   boolean | null
-        }>
+        Row: {
+          avg_reach_per_post: number | null
+          avg_saves_per_post: number | null
+          avg_score: number | null
+          baseline_score: number | null
+          is_mapped_theme: boolean | null
+          last_posted_at: string | null
+          low_sample_flag: boolean | null
+          period_days: number | null
+          post_count: number | null
+          sample_size_confidence: number | null
+          theme_id: string | null
+          theme_name: string | null
+          top_post_id: string | null
+          top_post_score: number | null
+          total_comments: number | null
+          total_likes: number | null
+          total_reach: number | null
+          total_saves: number | null
+          total_shares: number | null
+        }
         Relationships: []
       }
     }
-    Functions:      Record<string, never>
-    Enums:          Record<string, never>
-    CompositeTypes: Record<string, never>
+    Functions: {
+      dearmor: { Args: { "": string }; Returns: string }
+      gen_random_uuid: { Args: never; Returns: string }
+      gen_salt: { Args: { "": string }; Returns: string }
+      pgp_armor_headers: {
+        Args: { "": string }
+        Returns: Record<string, unknown>[]
+      }
+      uuid_generate_v1: { Args: never; Returns: string }
+      uuid_generate_v1mc: { Args: never; Returns: string }
+      uuid_generate_v3: {
+        Args: { name: string; namespace: string }
+        Returns: string
+      }
+      uuid_generate_v4: { Args: never; Returns: string }
+      uuid_generate_v5: {
+        Args: { name: string; namespace: string }
+        Returns: string
+      }
+      uuid_nil: { Args: never; Returns: string }
+      uuid_ns_dns: { Args: never; Returns: string }
+      uuid_ns_oid: { Args: never; Returns: string }
+      uuid_ns_url: { Args: never; Returns: string }
+      uuid_ns_x500: { Args: never; Returns: string }
+    }
+    Enums: {
+      asset_event_type: "opened" | "completed" | "clicked"
+      asset_type:
+        | "creator_deck"
+        | "case_study"
+        | "concept"
+        | "proposal"
+        | "media_kit"
+        | "pitch"
+      attribution_match_type:
+        | "url_pattern"
+        | "utm_source"
+        | "referrer"
+        | "asset_link_url"
+      attribution_target_type: "opportunity" | "brand" | "asset"
+      automation_status: "success" | "failed" | "skipped"
+      benchmark_cohort:
+        | "meme"
+        | "lifestyle"
+        | "fashion"
+        | "beauty"
+        | "food"
+        | "travel"
+        | "fitness"
+        | "gaming"
+        | "other"
+      benchmark_metric_status:
+        | "available"
+        | "unavailable_field"
+        | "unavailable_400"
+        | "unavailable_403"
+        | "unavailable_other"
+      brand_status: "cold" | "warm" | "intro" | "active"
+      company_type: "brand" | "agency"
+      content_analysis_status: "pending" | "completed" | "failed" | "skipped"
+      content_recommendation_type: "replicate" | "adapt" | "drop"
+      deal_stage:
+        | "target_identified"
+        | "outreach_drafted"
+        | "outreach_sent"
+        | "opened"
+        | "replied"
+        | "concept_shared"
+        | "negotiation"
+        | "verbal_yes"
+        | "won"
+        | "lost"
+        | "dormant"
+      media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM"
+      task_status: "todo" | "done" | "snoozed"
+      touchpoint_type: "email" | "dm" | "call" | "meeting" | "other"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      asset_event_type: ["opened", "completed", "clicked"],
+      asset_type: [
+        "creator_deck",
+        "case_study",
+        "concept",
+        "proposal",
+        "media_kit",
+        "pitch",
+      ],
+      attribution_match_type: [
+        "url_pattern",
+        "utm_source",
+        "referrer",
+        "asset_link_url",
+      ],
+      attribution_target_type: ["opportunity", "brand", "asset"],
+      automation_status: ["success", "failed", "skipped"],
+      benchmark_cohort: [
+        "meme",
+        "lifestyle",
+        "fashion",
+        "beauty",
+        "food",
+        "travel",
+        "fitness",
+        "gaming",
+        "other",
+      ],
+      benchmark_metric_status: [
+        "available",
+        "unavailable_field",
+        "unavailable_400",
+        "unavailable_403",
+        "unavailable_other",
+      ],
+      brand_status: ["cold", "warm", "intro", "active"],
+      company_type: ["brand", "agency"],
+      content_analysis_status: ["pending", "completed", "failed", "skipped"],
+      content_recommendation_type: ["replicate", "adapt", "drop"],
+      deal_stage: [
+        "target_identified",
+        "outreach_drafted",
+        "outreach_sent",
+        "opened",
+        "replied",
+        "concept_shared",
+        "negotiation",
+        "verbal_yes",
+        "won",
+        "lost",
+        "dormant",
+      ],
+      media_type: ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"],
+      task_status: ["todo", "done", "snoozed"],
+      touchpoint_type: ["email", "dm", "call", "meeting", "other"],
+    },
+  },
+} as const
