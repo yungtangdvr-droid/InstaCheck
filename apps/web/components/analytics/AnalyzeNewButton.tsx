@@ -3,10 +3,12 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-type Status = 'idle' | 'analyzing' | 'success' | 'empty' | 'error'
+type Status = 'idle' | 'analyzing' | 'success' | 'partial' | 'retry' | 'empty' | 'error'
 
 type AnalyzeResponse = {
   ok?:          boolean
+  partial?:     boolean
+  retryable?:   boolean
   disabled?:    boolean
   processed?:   number
   completed?:   number
@@ -41,6 +43,9 @@ export function AnalyzeNewButton({
       })
       const body = await res.json().catch(() => null) as AnalyzeResponse | null
 
+      // ok:false is reserved for route-level fatal errors (auth, missing env,
+      // unhandled exception). Per-post Gemini failures come back as ok:true
+      // with partial/retryable flags so we never display "Erreur 200".
       if (!res.ok || !body?.ok) {
         const detail = body?.error ?? `Erreur ${res.status}`
         setStatus('error')
@@ -48,17 +53,31 @@ export function AnalyzeNewButton({
         return
       }
 
+      const completed = body.completed ?? 0
+      const failed    = body.failed    ?? 0
+      const processed = body.processed ?? 0
+      const plural    = (n: number) => (n > 1 ? 's' : '')
+
       if (body.disabled || body.noOpReason === 'content_analysis_disabled') {
         setStatus('empty')
         setMessage('Analyse IA désactivée')
-      } else if (body.noOpReason === 'no_new_posts_to_analyze' || (body.processed ?? 0) === 0) {
+      } else if (body.noOpReason || processed === 0) {
         setStatus('empty')
         setMessage('Aucun nouveau post à analyser')
+      } else if (completed === 0 && failed > 0 && body.retryable) {
+        setStatus('retry')
+        setMessage('Gemini indisponible · relance dans quelques minutes')
+      } else if (completed > 0 && failed > 0) {
+        setStatus('partial')
+        setMessage(
+          `Analyse partielle · ${completed} analysé${plural(completed)}, ${failed} erreur${plural(failed)}`,
+        )
+      } else if (completed === 0 && failed > 0) {
+        setStatus('error')
+        setMessage(`Échec de l’analyse · ${failed} erreur${plural(failed)}`)
       } else {
-        const completed = body.completed ?? 0
-        const plural = completed > 1 ? 's' : ''
         setStatus('success')
-        setMessage(`Analyse terminée · ${completed} post${plural} analysé${plural}`)
+        setMessage(`Analyse terminée · ${completed} post${plural(completed)} analysé${plural(completed)}`)
       }
 
       startTransition(() => router.refresh())
@@ -69,15 +88,21 @@ export function AnalyzeNewButton({
   }
 
   const isLoading = status === 'analyzing' || isPending
+  const isResolved =
+    status === 'success' ||
+    status === 'partial' ||
+    status === 'retry'   ||
+    status === 'empty'   ||
+    status === 'error'
   const fullLabel =
     status === 'analyzing' ? 'Analyse IA en cours…' :
     isPending              ? 'Mise à jour…' :
-    status === 'success' || status === 'empty' || status === 'error' ? 'Relancer l’analyse IA' :
+    isResolved             ? 'Relancer l’analyse IA' :
                              'Analyser les nouveaux posts'
   const compactLabel =
     status === 'analyzing' ? 'Analyse IA…' :
     isPending              ? 'Mise à jour…' :
-    status === 'success' || status === 'empty' || status === 'error' ? 'Relancer IA' :
+    isResolved             ? 'Relancer IA' :
                              'Analyse IA'
   const label = variant === 'compact' ? compactLabel : fullLabel
 
@@ -116,6 +141,16 @@ export function AnalyzeNewButton({
       )}
       {status === 'success' && message && (
         <span className="text-[10px] text-emerald-400">{message}</span>
+      )}
+      {status === 'partial' && message && (
+        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
+          {message}
+        </span>
+      )}
+      {status === 'retry' && message && (
+        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
+          {message}
+        </span>
       )}
       {status === 'empty' && message && (
         <span className="text-[10px] text-neutral-500">{message}</span>

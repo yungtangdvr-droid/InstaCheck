@@ -9,6 +9,8 @@ const NBSP = ' '
 
 type AnalyzeResponse = {
   ok?:           boolean
+  partial?:      boolean
+  retryable?:    boolean
   disabled?:     boolean
   processed?:    number
   completed?:    number
@@ -69,20 +71,34 @@ export function SyncNowButton() {
         analysisFailed = true
       }
 
+      const completed = analysis?.completed ?? 0
+      const failed    = analysis?.failed    ?? 0
+      const processed = analysis?.processed ?? 0
+      const plural    = (n: number) => (n > 1 ? 's' : '')
+
       if (analysisFailed) {
         setStatus('warning')
         setMessage('Sync OK · analyse contenu à relancer')
       } else if (analysis?.disabled || analysis?.noOpReason === 'content_analysis_disabled') {
         setStatus('success')
         setMessage('Sync terminée')
-      } else if (analysis?.noOpReason === 'no_new_posts_to_analyze' || (analysis?.processed ?? 0) === 0) {
+      } else if (analysis?.noOpReason || processed === 0) {
         setStatus('success')
         setMessage('Sync terminée · aucun nouveau post à analyser')
+      } else if (completed === 0 && failed > 0 && analysis?.retryable) {
+        setStatus('warning')
+        setMessage('Sync OK · Gemini indisponible, relance dans quelques minutes')
+      } else if (completed > 0 && failed > 0) {
+        setStatus('warning')
+        setMessage(
+          `Sync OK · analyse partielle · ${completed} analysé${plural(completed)}, ${failed} erreur${plural(failed)}`,
+        )
+      } else if (completed === 0 && failed > 0) {
+        setStatus('warning')
+        setMessage(`Sync OK · analyse échouée · ${failed} erreur${plural(failed)}`)
       } else {
-        const completed = analysis?.completed ?? 0
-        const plural = completed > 1 ? 's' : ''
         setStatus('success')
-        setMessage(`Sync terminée · ${completed} post${plural} analysé${plural}`)
+        setMessage(`Sync terminée · ${completed} post${plural(completed)} analysé${plural(completed)}`)
       }
 
       // Pull fresh server data into the page (Data Health, charts, etc.).
