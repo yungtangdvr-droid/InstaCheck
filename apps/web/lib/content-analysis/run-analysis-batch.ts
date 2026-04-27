@@ -17,6 +17,7 @@ import type { Database } from '@creator-hub/types/supabase'
 import { analyzePostMedia } from '../gemini/analyze'
 import { PROMPT_VERSION } from '../gemini/prompt'
 import { refreshMediaUrl, pickAnalyzableUrl } from '../meta/refresh-media-url'
+import { isPendingForCurrentVersion } from './eligibility'
 
 export const PROVIDER          = 'gemini'
 export const DEFAULT_MODEL     = 'gemini-2.5-flash'
@@ -28,10 +29,12 @@ export type ReanalyzeStatus = 'completed' | 'failed' | 'skipped'
 export const ALL_REANALYZE_STATUSES: ReanalyzeStatus[] = ['completed', 'failed', 'skipped']
 
 // Two selection modes:
-// - `new-only` is the operator UX flow ("analyze posts that just got synced"):
-//   only posts with NO existing row are eligible, ordered by posted_at desc,
-//   so the freshest content gets picked up first. This naturally avoids
-//   re-analyzing completed v2 rows or migrating old-prompt rows.
+// - `new-only` is the operator UX flow ("analyze posts the operator can see
+//   in the app but that aren't analyzed yet"). A post is eligible unless it
+//   has a row with BOTH status='completed' AND prompt_version=current. So
+//   missing rows, failed/skipped rows, and completed rows on an older
+//   prompt version are all picked up. Ordered by posted_at desc so the
+//   freshest content wins under the UI hard cap.
 // - `cli` is the legacy `pnpm content:analyze` path, supporting --reanalyze
 //   and --outdated-only flags for explicit re-runs and prompt migrations.
 export type SelectionMode =
@@ -130,11 +133,10 @@ async function pickCandidates(
   )
 
   if (selection.kind === 'new-only') {
-    // Only posts with no existing row are eligible. This satisfies all four
-    // brief constraints at once: don't reanalyze completed current-PV rows,
-    // don't burn quota retrying failed rows, don't migrate old-PV rows from
-    // the UI button, and never analyze the full historical archive.
-    return usable.filter((r) => !byPost.has(r.post_id)).slice(0, limit)
+    // Eligible = no row OR row that isn't (completed AND current PROMPT_VERSION).
+    // The UI hard cap in /api/content/analyze-new still bounds the total work,
+    // so retrying failed/skipped rows and migrating old-PV rows is safe.
+    return usable.filter((r) => isPendingForCurrentVersion(byPost.get(r.post_id))).slice(0, limit)
   }
 
   const { reanalyze, reanalyzeStatus, outdatedOnly } = selection
