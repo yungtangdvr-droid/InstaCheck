@@ -30,7 +30,9 @@ import {
   type BenchmarkApiResult,
   type BusinessDiscoveryAccount,
   type BusinessDiscoveryEnvelope,
+  type BusinessDiscoveryMedia,
 } from './benchmark-public-client'
+import { scrubAccessToken } from './benchmark-sanitize'
 
 // Repost candidate field names on Instagram media via Business
 // Discovery. We only ask for the canonical `reposts` name. Any
@@ -55,6 +57,16 @@ export type ProbeUsernameArgs = {
   username:    string
   igUserId:    string
   accessToken: string
+}
+
+// Detailed result variant — used by the persistence layer in PR 3
+// so it can write account- and media-level rows without re-fetching
+// the Business Discovery payload. The public stdout JSON shape on
+// the dry-run path keeps using `TBenchmarkProbeReport` only.
+export type BenchmarkProbeDetailed = {
+  report:  TBenchmarkProbeReport
+  account: BusinessDiscoveryAccount | null
+  media:   BusinessDiscoveryMedia[]
 }
 
 function classifyApiError(err: BenchmarkApiError): TBenchmarkMetricStatus {
@@ -123,10 +135,10 @@ async function probeRepostsField(args: {
   return lastErrorStatus
 }
 
-export async function probeUsername(
+export async function probeUsernameDetailed(
   args: ProbeUsernameArgs,
   deps: BenchmarkProbeDeps = DEFAULT_DEPS
-): Promise<TBenchmarkProbeReport> {
+): Promise<BenchmarkProbeDetailed> {
   const errors: TBenchmarkProbeError[] = []
 
   const accountFields: Record<TBenchmarkAccountFieldKey, TBenchmarkMetricStatus> = {
@@ -157,20 +169,24 @@ export async function probeUsername(
     mediaFields.view_count        = status
     mediaFields.reposts           = status
     return {
-      username:             args.username,
-      ig_user_id:           null,
-      fetched_via:          null,
-      account_fields:       accountFields,
-      media_fields:         mediaFields,
-      sample_media_count:   0,
-      errors,
-      raw_response_excerpt: main.error.body,
+      report: {
+        username:             args.username,
+        ig_user_id:           null,
+        fetched_via:          null,
+        account_fields:       accountFields,
+        media_fields:         mediaFields,
+        sample_media_count:   0,
+        errors,
+        raw_response_excerpt: scrubAccessToken(main.error.body),
+      },
+      account: null,
+      media:   [],
     }
   }
 
-  const account = main.data.business_discovery
+  const account = main.data.business_discovery ?? null
   const mediaList = account?.media?.data ?? []
-  const firstMedia = pickFirstMedia(account)
+  const firstMedia = pickFirstMedia(account ?? undefined)
 
   accountFields.followers_count = statusFromValue(account?.followers_count)
   accountFields.media_count     = statusFromValue(account?.media_count)
@@ -195,24 +211,37 @@ export async function probeUsername(
   }
 
   return {
-    username:             args.username,
-    ig_user_id:           account?.id ?? null,
-    fetched_via:          'business_discovery',
-    account_fields:       accountFields,
-    media_fields:         mediaFields,
-    sample_media_count:   mediaList.length,
-    errors,
-    raw_response_excerpt: redactExcerpt(main.data),
+    report: {
+      username:             args.username,
+      ig_user_id:           account?.id ?? null,
+      fetched_via:          'business_discovery',
+      account_fields:       accountFields,
+      media_fields:         mediaFields,
+      sample_media_count:   mediaList.length,
+      errors,
+      raw_response_excerpt: redactExcerpt(main.data),
+    },
+    account,
+    media: mediaList,
   }
+}
+
+export async function probeUsername(
+  args: ProbeUsernameArgs,
+  deps: BenchmarkProbeDeps = DEFAULT_DEPS
+): Promise<TBenchmarkProbeReport> {
+  const detailed = await probeUsernameDetailed(args, deps)
+  return detailed.report
 }
 
 // Trim the excerpt so stdout JSON stays small and we don't
 // accidentally surface long permalinks or thumbnail URLs in
-// logs. We keep only top-level keys + first 2 media items.
+// logs. We keep only top-level keys + first 2 media items, and
+// route everything through the access-token scrubber.
 function redactExcerpt(envelope: BusinessDiscoveryEnvelope): unknown {
   const account = envelope.business_discovery
-  if (!account) return envelope
-  return {
+  if (!account) return scrubAccessToken(envelope)
+  return scrubAccessToken({
     business_discovery: {
       username:        account.username,
       id:              account.id,
@@ -224,5 +253,5 @@ function redactExcerpt(envelope: BusinessDiscoveryEnvelope): unknown {
           }
         : undefined,
     },
-  }
+  })
 }

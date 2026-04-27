@@ -736,7 +736,15 @@ export type TBenchmarkMetricStatus =
 
 export type TBenchmarkFetchedVia = 'business_discovery' | 'oembed'
 
-export type TBenchmarkSyncRunStatus = 'started' | 'success' | 'partial' | 'failed'
+// `running` is the status the PR3 CLI writes when it inserts the
+// initial run row. `started` is kept for backward compatibility
+// with any historical row written before PR3.
+export type TBenchmarkSyncRunStatus =
+  | 'running'
+  | 'started'
+  | 'success'
+  | 'partial'
+  | 'failed'
 
 export type TBenchmarkAccountFieldKey = 'followers_count' | 'media_count'
 
@@ -761,4 +769,25 @@ export type TBenchmarkProbeReport = {
   sample_media_count:   number
   errors:               TBenchmarkProbeError[]
   raw_response_excerpt: unknown
+}
+
+// Structured warning surfaced in CLI stdout when a non-fatal
+// behavior diverges from operator intent (e.g. cohort immutable
+// from CLI, deprecated --no-dry-run flag).
+export type TBenchmarkCliWarning = {
+  code:    string
+  message: string
+  detail?: Record<string, unknown>
+}
+
+// Persistence result returned by the PR3 persist path. Surfaced
+// verbatim as the `persistence` block in stdout JSON.
+export type TBenchmarkPersistResult = {
+  run_id:                  string
+  status:                  TBenchmarkSyncRunStatus
+  benchmark_account_id:    string | null
+  account_inserted:        boolean
+  account_daily_written:   boolean
+  media_rows_written:      number
+  media_rows_attempted:    number
 }
