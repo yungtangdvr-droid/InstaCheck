@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@creator-hub/types/supabase-extensions'
+import type { Database } from '@creator-hub/types/supabase'
 import type { MediaType, SyncMediaResult } from '@creator-hub/types'
 import { fetchAllMedia } from './instagram-client'
 

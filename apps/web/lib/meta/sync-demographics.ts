@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@creator-hub/types/supabase-extensions'
-import type { AudienceDemographicsInsert } from '@creator-hub/types/supabase-extensions'
+import type { Database } from '@creator-hub/types/supabase'
 import {
   AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY,
   type SyncDemographicsResult,
@@ -8,6 +7,9 @@ import {
   type TAudienceDemographicsTimeframe,
 } from '@creator-hub/types'
 import { fetchFollowerDemographics } from './instagram-client'
+
+type AudienceDemographicsInsert =
+  Database['public']['Tables']['raw_instagram_audience_demographics']['Insert']
 
 const BREAKDOWNS: ReadonlyArray<TAudienceDemographicBreakdown> = [
   'country', 'city', 'age', 'gender',
@@ -57,7 +59,7 @@ export async function syncFollowerDemographics(
           threshold_state: 'available',
           fetched_via:     'graph_api',
           reason:          null,
-          raw_json:        outcome.raw as Database['public']['Tables']['raw_instagram_audience_demographics']['Insert']['raw_json'],
+          raw_json:        outcome.raw as AudienceDemographicsInsert['raw_json'],
         })
       }
       result.breakdownsAvailable.push(breakdown)

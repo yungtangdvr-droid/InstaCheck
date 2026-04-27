@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '@creator-hub/types/supabase-extensions'
+import type { Database } from '@creator-hub/types/supabase'
 import type { SyncAccountResult } from '@creator-hub/types'
 import { fetchAccount } from './instagram-client'
 

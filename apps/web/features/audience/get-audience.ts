@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@creator-hub/types/supabase-extensions'
+import type { Database } from '@creator-hub/types/supabase'
 import {
   AUDIENCE_DEMOGRAPHICS_SENTINEL_KEY,
   type TAnalyticsPeriod,
