@@ -1,4 +1,5 @@
 import type { TDataHealth } from '@/features/analytics/get-data-health'
+import { SyncNowButton } from './SyncNowButton'
 
 const NBSP = ' '
 
@@ -83,6 +84,7 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
             </p>
           </div>
           <StatusBadge status={lastSync.status} />
+          <SyncNowButton />
         </div>
       </div>
 
