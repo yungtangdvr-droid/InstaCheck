@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
-import type { TAnalyticsPeriod } from '@creator-hub/types'
+import type { SyncDemographicsResult, TAnalyticsPeriod } from '@creator-hub/types'
 import { isPendingForCurrentVersion } from '@/lib/content-analysis/eligibility'
 
 type Supabase = SupabaseClient<Database>
@@ -22,6 +22,7 @@ type TSyncSummary = {
     processed?: number
   }
   insights?: { count?: number }
+  demographics?: SyncDemographicsResult | null
   errors?:   string[]
   durationMs?: number
 }
