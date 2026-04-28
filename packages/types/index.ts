@@ -865,3 +865,41 @@ export type TBenchmarkPersistResult = {
   media_rows_written:      number
   media_rows_attempted:    number
 }
+
+// --- Peer percentile mart (PR6) ---
+//
+// Read-model surfaced by `public.v_mart_benchmark_peer_percentile`
+// and consumed by the post-detail page. V1 ships likes + comments
+// only — both normalised per follower of the contributing peer.
+// `view_count` is intentionally absent: peer view rates are
+// dominated by Reels and would mislead non-Reel owner posts. It
+// will be added in a later PR alongside media-type bucketing.
+//
+// `aspirational` is excluded by the view's inclusion rule
+// (cohort IN ('core_peer','french_francophone')).
+
+export type TPeerPercentileMetric = 'likes' | 'comments'
+
+export type TPeerPercentilePoint = {
+  metric:        TPeerPercentileMetric
+  ownerRate:     number
+  percentile:    number
+  sampleSize:    number
+  accountCount:  number
+  p50:           number | null
+  p90:           number | null
+  insufficient:  boolean
+}
+
+export type TPeerPercentilePool = {
+  followersFloor:   number
+  followersCeiling: number
+  cohorts:          TBenchmarkCohort[]
+}
+
+export type TPeerPercentilePayload = {
+  ownerFollowers: number | null
+  pool:           TPeerPercentilePool
+  metrics:        TPeerPercentilePoint[]
+  generatedAt:    string
+}

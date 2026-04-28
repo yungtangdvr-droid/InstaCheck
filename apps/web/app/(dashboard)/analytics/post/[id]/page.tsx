@@ -8,6 +8,8 @@ import { extractPreviewUrls } from '@/features/analytics/media-preview'
 import { PostMediaPreview } from '@/features/analytics/PostMediaPreview'
 import { ContentAnalysisCard } from '@/features/content-lab/ContentAnalysisCard'
 import { getPostContentAnalysis } from '@/features/content-lab/get-content-analysis'
+import { PeerPercentileCard } from '@/features/benchmark/PeerPercentileCard'
+import { getPeerPercentile } from '@/features/benchmark/get-peer-percentile'
 import {
   computeDistributionScore,
   distributionInterpretation,
@@ -112,6 +114,11 @@ export default async function PostDetailPage({
           profileVisits: baselineRate(perf.baselines.profileVisits),
         }
       : undefined,
+  })
+
+  const peerPercentile = await getPeerPercentile(supabase, {
+    likes:    totals.likes,
+    comments: totals.comments,
   })
 
   return (
@@ -249,6 +256,9 @@ export default async function PostDetailPage({
           </p>
         </div>
       )}
+
+      {/* Pair francophone — distribution per-follower (read-only). */}
+      <PeerPercentileCard payload={peerPercentile} />
 
       {/* Analyse du contenu (read-only Gemini v2 classification) */}
       <ContentAnalysisCard analysis={contentAnalysis} />
