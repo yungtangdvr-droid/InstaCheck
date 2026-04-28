@@ -1008,6 +1008,13 @@ export type Database = {
             referencedRelation: "benchmark_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "raw_benchmark_instagram_account_daily_benchmark_account_id_fkey"
+            columns: ["benchmark_account_id"]
+            isOneToOne: false
+            referencedRelation: "v_mart_benchmark_peer_pool"
+            referencedColumns: ["benchmark_account_id"]
+          },
         ]
       }
       raw_benchmark_instagram_media: {
@@ -1066,6 +1073,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "benchmark_accounts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raw_benchmark_instagram_media_benchmark_account_id_fkey"
+            columns: ["benchmark_account_id"]
+            isOneToOne: false
+            referencedRelation: "v_mart_benchmark_peer_pool"
+            referencedColumns: ["benchmark_account_id"]
           },
         ]
       }
@@ -1420,6 +1434,38 @@ export type Database = {
       }
     }
     Views: {
+      v_mart_benchmark_peer_percentile: {
+        Row: {
+          account_count: number | null
+          computed_at: string | null
+          followers_ceiling: number | null
+          followers_floor: number | null
+          metric: string | null
+          p10: number | null
+          p25: number | null
+          p50: number | null
+          p75: number | null
+          p90: number | null
+          pool_cohorts: string[] | null
+          rates: number[] | null
+          sample_size: number | null
+        }
+        Relationships: []
+      }
+      v_mart_benchmark_peer_pool: {
+        Row: {
+          active: boolean | null
+          benchmark_account_id: string | null
+          cohort: Database["public"]["Enums"]["benchmark_cohort"] | null
+          eligible: boolean | null
+          followers_count: number | null
+          ig_username: string | null
+          language: string | null
+          latest_snapshot_date: string | null
+          media_sample_size: number | null
+        }
+        Relationships: []
+      }
       v_mart_best_posting_windows: {
         Row: {
           avg_reach: number | null

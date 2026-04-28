@@ -26,20 +26,6 @@ type Supabase = SupabaseClient<Database>
 // flag. Tuned with the manager: 30.
 const MIN_SAMPLE_SIZE = 30
 
-// Shape of a row from `v_mart_benchmark_peer_percentile`. Declared
-// inline because the view is added in migration 0010 and the
-// `Database` type regen happens AFTER the migration is applied
-// locally. Once `pnpm supabase gen types` is rerun, the bare
-// SupabaseClient cast below can drop back to the typed client.
-type PercentileViewRow = {
-  metric:        TPeerPercentileMetric | string
-  rates:         number[] | null
-  sample_size:   number | null
-  account_count: number | null
-  p50:           number | null
-  p90:           number | null
-}
-
 export type TPostLikeCommentTotals = {
   likes:    number
   comments: number
@@ -138,15 +124,12 @@ export async function getPeerPercentile(
 
   const ownerFollowers = toFiniteNumber(ownerSnapshot?.followers_count)
 
-  // Read the percentile view via an untyped client cast — see comment on
-  // PercentileViewRow above for why the cast is here and not on `supabase`.
-  const untyped = supabase as unknown as SupabaseClient
-  const { data: rows } = await untyped
+  const { data: rows } = await supabase
     .from('v_mart_benchmark_peer_percentile')
     .select('metric, rates, sample_size, account_count, p50, p90')
-    .returns<PercentileViewRow[]>()
 
-  const byMetric = new Map<TPeerPercentileMetric, PercentileViewRow>()
+  type PercentileRow = NonNullable<typeof rows>[number]
+  const byMetric = new Map<TPeerPercentileMetric, PercentileRow>()
   for (const row of rows ?? []) {
     if (row.metric === 'likes' || row.metric === 'comments') {
       byMetric.set(row.metric, row)
