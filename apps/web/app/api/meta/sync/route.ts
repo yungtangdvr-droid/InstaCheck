@@ -33,11 +33,12 @@ export async function POST(request: NextRequest) {
       automation_name: automationName,
       status:          result.errors.length === 0 ? 'success' : 'failed',
       result_summary:  JSON.stringify({
-        account:    result.account,
-        media:      result.media,
-        insights:   { count: result.insights.length },
-        errors:     result.errors,
-        durationMs: result.durationMs,
+        account:      result.account,
+        media:        result.media,
+        insights:     { count: result.insights.length },
+        demographics: result.demographics,
+        errors:       result.errors,
+        durationMs:   result.durationMs,
       }),
     })
 
