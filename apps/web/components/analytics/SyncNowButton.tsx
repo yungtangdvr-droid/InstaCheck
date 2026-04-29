@@ -123,39 +123,39 @@ export function SyncNowButton() {
         disabled={isLoading}
         aria-busy={isLoading}
         title="Sync puis analyse des nouveaux posts. Peut prendre quelques minutes."
-        className="inline-flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading && (
           <span
-            className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400"
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-success"
             aria-hidden
           />
         )}
         {label}
       </button>
       {result.kind === 'idle' && (
-        <span className="text-[10px] text-neutral-600">
+        <span className="text-[10px] text-muted-foreground">
           Sync puis analyse · ne ferme pas l&apos;onglet
         </span>
       )}
       {result.kind === 'syncing' && (
-        <span className="text-[10px] text-neutral-500">
+        <span className="text-[10px] text-muted-foreground">
           Peut prendre 1 à 3{NBSP}min · garde l&apos;onglet ouvert
         </span>
       )}
       {result.kind === 'analyzing' && (
-        <span className="text-[10px] text-neutral-400">Analyse des nouveaux posts…</span>
+        <span className="text-[10px] text-muted-foreground">Analyse des nouveaux posts…</span>
       )}
       {result.kind === 'success' && (
-        <span className="text-[10px] text-emerald-400">{result.message}</span>
+        <span className="text-[10px] text-success">{result.message}</span>
       )}
       {result.kind === 'warning' && (
-        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
+        <span className="max-w-[14rem] text-right text-[10px] text-warning">
           {result.message}
         </span>
       )}
       {result.kind === 'error' && (
-        <span className="max-w-[14rem] text-right text-[10px] text-red-400">
+        <span className="max-w-[14rem] text-right text-[10px] text-danger">
           {result.message.slice(0, 160)}
         </span>
       )}

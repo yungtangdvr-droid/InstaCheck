@@ -113,35 +113,35 @@ export function AnalyzeNewButton({
         disabled={isLoading}
         aria-busy={isLoading}
         title="Lance Gemini sur les posts déjà synchronisés sans analyse de contenu. Ne relance pas la sync Instagram."
-        className="inline-flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading && (
           <span
-            className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-400"
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent-chart"
             aria-hidden
           />
         )}
         {label}
       </button>
       {showPendingHint && (
-        <span className="text-[10px] text-neutral-600">{pendingHint}</span>
+        <span className="text-[10px] text-muted-foreground">{pendingHint}</span>
       )}
       {result.kind === 'analyzing' && (
-        <span className="text-[10px] text-neutral-500">Peut prendre 1 min</span>
+        <span className="text-[10px] text-muted-foreground">Peut prendre 1 min</span>
       )}
       {result.kind === 'success' && (
-        <span className="text-[10px] text-emerald-400">{result.message}</span>
+        <span className="text-[10px] text-success">{result.message}</span>
       )}
       {(result.kind === 'partial' || result.kind === 'retry') && (
-        <span className="max-w-[14rem] text-right text-[10px] text-amber-400">
+        <span className="max-w-[14rem] text-right text-[10px] text-warning">
           {result.message}
         </span>
       )}
       {result.kind === 'empty' && (
-        <span className="text-[10px] text-neutral-500">{result.message}</span>
+        <span className="text-[10px] text-muted-foreground">{result.message}</span>
       )}
       {result.kind === 'error' && (
-        <span className="max-w-[14rem] text-right text-[10px] text-red-400">
+        <span className="max-w-[14rem] text-right text-[10px] text-danger">
           {result.message}
         </span>
       )}
