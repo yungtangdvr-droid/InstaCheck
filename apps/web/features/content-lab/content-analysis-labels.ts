@@ -110,12 +110,12 @@ export function languageLabel(value: string | null | undefined): string {
 
 // Tailwind class for the replication potential chip. Greens for "high",
 // neutral for medium, dim red for low, very dim for unknown — matches the
-// emerald/neutral/red semantics used in PostExplorer & ReplicablePostCard.
+// success/neutral/danger semantics used in PostExplorer & ReplicablePostCard.
 export const REPLICATION_LEVEL_CLASS: Record<string, string> = {
-  high:    'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  medium:  'border-neutral-700 bg-neutral-900 text-neutral-300',
-  low:     'border-red-500/30 bg-red-500/5 text-red-300',
-  unknown: 'border-neutral-800 bg-neutral-900 text-neutral-500',
+  high:    'border-success/30 bg-success-soft text-success',
+  medium:  'border-border bg-muted text-foreground',
+  low:     'border-danger/30 bg-danger-soft text-danger',
+  unknown: 'border-border bg-muted text-muted-foreground',
 }
 
 export function replicationLevelClass(value: string | null | undefined): string {

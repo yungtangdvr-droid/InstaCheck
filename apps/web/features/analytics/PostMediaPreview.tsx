@@ -23,12 +23,12 @@ export function PostMediaPreview({
   const showPlaceholder = !previewUrl || broken
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="w-full max-w-xs">
           {showPlaceholder ? (
             <div
-              className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-950 text-xs text-neutral-600"
+              className="flex aspect-square w-full items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
               title={
                 previewUrl
                   ? "Aperçu indisponible — l'URL Meta a probablement expiré."
@@ -43,22 +43,22 @@ export function PostMediaPreview({
               src={previewUrl}
               alt={caption ?? ''}
               loading="lazy"
-              className="aspect-square w-full rounded-md bg-neutral-950 object-cover"
+              className="aspect-square w-full rounded-md bg-muted object-cover"
               onError={() => setBroken(true)}
             />
           )}
         </div>
-        <div className="flex-1 text-sm text-neutral-400">
-          <p className="text-xs uppercase tracking-wide text-neutral-500">
+        <div className="flex-1 text-sm text-muted-foreground">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
             Aperçu du post
           </p>
-          <p className="mt-1 text-neutral-300">
+          <p className="mt-1 text-card-foreground">
             {mediaType === 'VIDEO' || mediaType === 'REEL'
               ? "Image de couverture (thumbnail). Le lecteur vidéo n'est pas embarqué — ouvre Instagram pour le contenu vidéo."
               : 'Image telle que renvoyée par l\'API Meta au moment du sync.'}
           </p>
           {showPlaceholder && previewUrl && (
-            <p className="mt-2 text-xs text-amber-500/80">
+            <p className="mt-2 text-xs text-warning">
               Lien Meta CDN expiré ou inaccessible. Re-sync l&apos;ingestion pour rafraîchir.
             </p>
           )}
@@ -67,7 +67,7 @@ export function PostMediaPreview({
               href={permalink}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 inline-block text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+              className="mt-3 inline-block text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               Voir sur Instagram →
             </a>

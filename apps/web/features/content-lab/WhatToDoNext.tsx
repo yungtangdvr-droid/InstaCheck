@@ -4,6 +4,8 @@ import { ReplicablePostCard } from './ReplicablePostCard'
 import { computePercentiles, computeRankScore } from '@/features/analytics/ranking'
 import { extractPreviewUrls } from '@/features/analytics/media-preview'
 import { getContentSignalsForPosts } from './get-content-analysis'
+import { SectionHeader } from '@/components/ui/section-header'
+import { EmptyState } from '@/components/ui/empty-state'
 
 // Hard cap on the candidate pool pulled into JS for percentile ranking. The
 // 30 d window on this account is well under 500; if it ever grows, only the
@@ -24,11 +26,15 @@ export async function WhatToDoNext() {
 
   if (error || !data || data.length === 0) {
     return (
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-white">Quoi poster ensuite ?</h2>
-        <p className="text-sm text-neutral-500">
-          Aucun post indexé. Lance un sync Instagram d&apos;abord.
-        </p>
+      <section className="space-y-3">
+        <SectionHeader
+          title="Quoi poster ensuite ?"
+          description="Top posts à répliquer selon le score de circulation."
+        />
+        <EmptyState
+          title="Aucun post indexé"
+          description="Lance un sync Instagram d'abord pour alimenter les recommandations."
+        />
       </section>
     )
   }
@@ -119,11 +125,11 @@ export async function WhatToDoNext() {
   const signalMap = await getContentSignalsForPosts(supabase, top3.map(p => p.id))
 
   return (
-    <section>
-      <h2 className="mb-1 text-lg font-semibold text-white">Quoi poster ensuite ?</h2>
-      <p className="mb-4 text-xs text-neutral-500">
-        Top posts à répliquer selon le score de circulation (shares, saves, profil) sur 30 j
-      </p>
+    <section className="space-y-3">
+      <SectionHeader
+        title="Quoi poster ensuite ?"
+        description="Top posts à répliquer selon le score de circulation (shares, saves, profil) sur 30 j."
+      />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {top3.map((post) => {
           const signal = signalMap.get(post.id)

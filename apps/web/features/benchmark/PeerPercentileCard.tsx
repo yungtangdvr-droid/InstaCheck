@@ -12,6 +12,14 @@ import type {
   TPeerPercentilePoint,
 } from '@creator-hub/types'
 import { cohortLabelFr } from '@/features/benchmark/get-benchmark-overview'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { VerdictBadge, type VerdictBadgeProps } from '@/components/ui/verdict-badge'
 
 const METRIC_LABEL_FR: Record<TPeerPercentileMetric, string> = {
   likes:    'Likes / follower',
@@ -28,12 +36,12 @@ const BUCKET_LABEL_FR: Record<TBucket, string> = {
   lowQuartile: 'Quartile bas',
 }
 
-const BUCKET_CLASS: Record<TBucket, string> = {
-  top10:       'border-emerald-700/60 bg-emerald-950/40 text-emerald-300',
-  topQuartile: 'border-sky-700/60 bg-sky-950/40 text-sky-300',
-  aboveMedian: 'border-neutral-700 bg-neutral-900 text-neutral-200',
-  belowMedian: 'border-neutral-800 bg-neutral-950/60 text-neutral-400',
-  lowQuartile: 'border-rose-800/60 bg-rose-950/40 text-rose-300',
+const BUCKET_TONE: Record<TBucket, NonNullable<VerdictBadgeProps['tone']>> = {
+  top10:       'success',
+  topQuartile: 'info',
+  aboveMedian: 'neutral',
+  belowMedian: 'neutral',
+  lowQuartile: 'danger',
 }
 
 function bucketFor(percentile: number): TBucket {
@@ -52,42 +60,43 @@ export function PeerPercentileCard({ payload }: { payload: TPeerPercentilePayloa
     `followers ${formatBigNumber(pool.followersFloor)}–${formatBigNumber(pool.followersCeiling)}`
 
   return (
-    <section className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-neutral-300">
-          Pair francophone — distribution
-        </h2>
-        <p className="text-xs text-neutral-500">
-          Cohortes {cohortBlurb} · {followersBlurb}
-        </p>
-      </div>
-
-      {ownerFollowers === null ? (
-        <EmptyHint>
-          Followers du compte non synchronisés — comparaison peer indisponible.
-        </EmptyHint>
-      ) : metrics.length === 0 ? (
-        <EmptyHint>
-          Données peer indisponibles pour ce post.
-        </EmptyHint>
-      ) : metrics.every(m => m.insufficient) ? (
-        <EmptyHint>
-          Pool peer insuffisant ({metrics[0].sampleSize} médias &lt; 30 requis).
-          Lance plus de probes via la CLI benchmark.
-        </EmptyHint>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {metrics.map(point => (
-            <PercentileTile key={point.metric} point={point} />
-          ))}
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <CardTitle>Pair francophone — distribution</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Cohortes {cohortBlurb} · {followersBlurb}
+          </p>
         </div>
-      )}
-
-      <p className="mt-3 text-[11px] text-neutral-600">
-        Calculé sur les médias publics des comptes pairs francophones (Business
-        Discovery), normalisé par leur followers_count respectif. `aspirational` exclu.
-      </p>
-    </section>
+        <CardDescription>
+          Calculé sur les médias publics des comptes pairs francophones
+          (Business Discovery), normalisé par leur followers_count respectif.
+          `aspirational` exclu.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {ownerFollowers === null ? (
+          <EmptyHint>
+            Followers du compte non synchronisés — comparaison peer indisponible.
+          </EmptyHint>
+        ) : metrics.length === 0 ? (
+          <EmptyHint>
+            Données peer indisponibles pour ce post.
+          </EmptyHint>
+        ) : metrics.every(m => m.insufficient) ? (
+          <EmptyHint>
+            Pool peer insuffisant ({metrics[0].sampleSize} médias &lt; 30 requis).
+            Lance plus de probes via la CLI benchmark.
+          </EmptyHint>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {metrics.map(point => (
+              <PercentileTile key={point.metric} point={point} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -96,9 +105,9 @@ function PercentileTile({ point }: { point: TPeerPercentilePoint }) {
 
   if (point.insufficient) {
     return (
-      <div className="rounded-md border border-neutral-800 bg-neutral-950/60 p-4">
-        <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
-        <p className="mt-1 text-sm text-neutral-500">
+      <div className="rounded-md border border-border bg-muted/30 p-4">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           Pool insuffisant (n={point.sampleSize})
         </p>
       </div>
@@ -106,31 +115,28 @@ function PercentileTile({ point }: { point: TPeerPercentilePoint }) {
   }
 
   const bucket   = bucketFor(point.percentile)
-  const cls      = BUCKET_CLASS[bucket]
   const ownerStr = formatRate(point.ownerRate)
   const p50Str   = point.p50 == null ? '—' : formatRate(point.p50)
   const p90Str   = point.p90 == null ? '—' : formatRate(point.p90)
 
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-4">
+    <div className="rounded-md border border-border bg-muted/30 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
-        <span
-          className={`inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${cls}`}
-        >
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+        <VerdictBadge tone={BUCKET_TONE[bucket]}>
           {BUCKET_LABEL_FR[bucket]}
-        </span>
+        </VerdictBadge>
       </div>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
         {ownerStr}
       </p>
-      <p className="mt-0.5 text-[11px] text-neutral-400">
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
         P{Math.round(point.percentile)} dans le pool
-        <span className="text-neutral-600"> · n={point.sampleSize} médias / {point.accountCount} comptes</span>
+        <span className="text-muted-foreground"> · n={point.sampleSize} médias / {point.accountCount} comptes</span>
       </p>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-neutral-500">
-        <span>Médiane <span className="text-neutral-300 tabular-nums">{p50Str}</span></span>
-        <span>P90 <span className="text-neutral-300 tabular-nums">{p90Str}</span></span>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+        <span>Médiane <span className="text-foreground tabular-nums">{p50Str}</span></span>
+        <span>P90 <span className="text-foreground tabular-nums">{p90Str}</span></span>
       </div>
     </div>
   )
@@ -138,8 +144,8 @@ function PercentileTile({ point }: { point: TPeerPercentilePoint }) {
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-dashed border-neutral-800 bg-neutral-950/40 p-4">
-      <p className="text-sm text-neutral-400">{children}</p>
+    <div className="rounded-md border border-dashed border-border bg-muted/30 p-4">
+      <p className="text-sm text-muted-foreground">{children}</p>
     </div>
   )
 }

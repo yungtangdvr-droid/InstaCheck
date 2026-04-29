@@ -69,25 +69,25 @@ export function AccountEngagementCard({
   // delta is null already, but we keep the same neutral colour ramp here so a
   // small negative delta on a low sample never goes red.
   const deltaColor =
-    !hasVerdict || scoreDelta == null ? 'text-neutral-500' :
-    scoreDelta >=  5                  ? 'text-emerald-400' :
-    scoreDelta >= -5                  ? 'text-neutral-400' :
-                                        'text-amber-400'
+    !hasVerdict || scoreDelta == null ? 'text-muted-foreground' :
+    scoreDelta >=  5                  ? 'text-success'          :
+    scoreDelta >= -5                  ? 'text-muted-foreground' :
+                                        'text-warning'
   const deltaSign = scoreDelta != null && scoreDelta > 0 ? '+' : ''
 
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border px-5 py-3">
         <div>
-          <p className="text-xs uppercase tracking-wide text-neutral-500">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Signaux de circulation — {period} j
           </p>
-          <p className="mt-1 text-sm text-neutral-300">
+          <p className="mt-1 text-sm text-card-foreground">
             Métriques observées sur la période. Pas de jugement absolu — ces taux décrivent
             comment ton audience interagit, sans benchmark externe.
           </p>
         </div>
-        <div className="text-[11px] text-neutral-500">
+        <div className="text-[11px] text-muted-foreground">
           {postCount.toLocaleString('fr-FR')} post{postCount > 1 ? 's' : ''} analysé{postCount > 1 ? 's' : ''}
         </div>
       </div>
@@ -107,23 +107,23 @@ export function AccountEngagementCard({
       </div>
 
       {dominantFr && current.hasReach && (
-        <p className="border-t border-border px-5 py-2 text-[11px] text-neutral-500">
-          Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
+        <p className="border-t border-border px-5 py-2 text-[11px] text-muted-foreground">
+          Signal dominant : <span className="text-foreground">{dominantFr}</span>
         </p>
       )}
 
       {/* Comparative section — demoted to a small footer band. Either shows a
           score + verdict (when the baseline is sound) or an honest disclaimer. */}
-      <div className="border-t border-border bg-neutral-950/40 px-5 py-3">
+      <div className="border-t border-border bg-muted/30 px-5 py-3">
         {hasVerdict ? (
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-wide text-neutral-500">Comparaison</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Comparaison</p>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-base font-semibold tabular-nums text-neutral-200">
+                <span className="text-base font-semibold tabular-nums text-foreground">
                   {current.score}
                 </span>
-                <span className="text-[11px] text-neutral-500">/ 100</span>
+                <span className="text-[11px] text-muted-foreground">/ 100</span>
                 {scoreDelta != null && (
                   <span
                     className={`text-[11px] tabular-nums ${deltaColor}`}
@@ -132,7 +132,7 @@ export function AccountEngagementCard({
                     {deltaSign}{scoreDelta}
                   </span>
                 )}
-                <span className="text-[10px] text-neutral-600">
+                <span className="text-[10px] text-muted-foreground">
                   Base {baselinePeriod} j : {baseline?.score ?? '—'}/100
                 </span>
               </div>
@@ -166,7 +166,7 @@ export function AccountEngagementCard({
                 </VerdictBadge>
               )}
               <span
-                className="text-[10px] text-neutral-500"
+                className="text-[10px] text-muted-foreground"
                 title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
               >
                 {baselineQualifier}
@@ -176,18 +176,18 @@ export function AccountEngagementCard({
         ) : (
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-neutral-500">Comparaison</p>
-              <p className="mt-1 text-sm text-neutral-400">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Comparaison</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Comparaison indisponible : historique insuffisant.
               </p>
-              <p className="mt-1 text-[11px] text-neutral-600">
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 {postCount < MIN_POSTS_FOR_VERDICT
                   ? `Moins de ${MIN_POSTS_FOR_VERDICT} posts dans la période — un delta serait trompeur.`
                   : 'Pas de fenêtre de référence plus longue disponible pour cette période.'}
               </p>
             </div>
             <span
-              className="text-[10px] text-neutral-600"
+              className="text-[10px] text-muted-foreground"
               title="Aucune fenêtre baseline non recouvrante n'a pu être construite."
             >
               {baselineQualifier}
@@ -210,8 +210,8 @@ function ComponentChip({
 }) {
   return (
     <div className="min-w-0" title={title}>
-      <p className="text-[10px] uppercase tracking-wide text-neutral-600">{label}</p>
-      <p className="text-xs font-medium tabular-nums text-neutral-300">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium tabular-nums text-foreground">{value}</p>
     </div>
   )
 }
@@ -227,10 +227,10 @@ function RateTile({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={`mt-0.5 text-base font-semibold tabular-nums ${
-          accent ? 'text-emerald-400' : 'text-neutral-200'
+          accent ? 'text-success' : 'text-foreground'
         }`}
         title={accent ? 'Signal dominant' : undefined}
       >

@@ -47,15 +47,15 @@ export default async function AutomationsPage() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Automations</h1>
-        <p className="mt-1 text-sm text-neutral-400">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Automations</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Read-only view of n8n workflows and scheduled reports. Scheduling and
           triggers are managed in n8n; the hub only observes.
         </p>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Canonical automations
         </h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -75,10 +75,10 @@ export default async function AutomationsPage() {
 
       {extras.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Observed extras
           </h2>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted-foreground">
             Automations observed in <code>automation_runs</code> but outside the
             canonical Sprint 8 list.
           </p>
@@ -91,7 +91,7 @@ export default async function AutomationsPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Weekly summaries
         </h2>
         <WeeklySummaryCard summaries={weekly} />

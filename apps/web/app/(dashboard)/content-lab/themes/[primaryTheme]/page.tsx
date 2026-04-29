@@ -65,12 +65,12 @@ export default async function ThemeDetailPage({
   return (
     <div className="space-y-6">
       <div>
-        <div className="mb-2 flex items-center gap-1.5 text-xs text-neutral-500">
-          <Link href="/content-lab" className="hover:text-neutral-300">
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Link href="/content-lab" className="hover:text-foreground">
             Content Lab
           </Link>
           <span>/</span>
-          <Link href="/content-lab/themes" className="hover:text-neutral-300">
+          <Link href="/content-lab/themes" className="hover:text-foreground">
             Thèmes
           </Link>
           <span>/</span>
@@ -78,10 +78,10 @@ export default async function ThemeDetailPage({
         </div>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-white">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {primaryThemeLabel(primaryTheme)}
             </h1>
-            <p className="mt-1 text-sm text-neutral-400">
+            <p className="mt-1 text-sm text-muted-foreground">
               {posts.length} post{posts.length > 1 ? 's' : ''} dans ce thème sur{' '}
               {period} j {mediaType !== 'ALL' && (
                 <>· filtré sur {mediaType.toLowerCase()}</>
@@ -98,7 +98,7 @@ export default async function ThemeDetailPage({
       </div>
 
       {posts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
+        <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Aucun post dans ce thème sur la période sélectionnée.
         </div>
       ) : (

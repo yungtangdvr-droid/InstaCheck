@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { HypothesisEditor } from '@/features/content-lab/HypothesisEditor'
 import type { ContentRecommendation, ContentRecommendationType } from '@creator-hub/types'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default async function HypothesisPage({
   params,
@@ -46,16 +47,18 @@ export default async function HypothesisPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/content-lab"
-          className="text-sm text-neutral-500 transition-colors hover:text-white"
-        >
-          ← Content Lab
-        </Link>
-        <h1 className="text-2xl font-semibold text-white">Hypothèse éditoriale</h1>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow={
+          <Link
+            href="/content-lab"
+            className="transition-colors hover:text-foreground"
+          >
+            ← Content Lab
+          </Link>
+        }
+        title="Hypothèse éditoriale"
+      />
 
       <HypothesisEditor recommendation={recommendation} />
     </div>

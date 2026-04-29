@@ -8,11 +8,15 @@ import { WhatToDoNext } from '@/features/content-lab/WhatToDoNext'
 // future "Tags manuels" view.
 import { ContentThemePerformance } from '@/features/content-lab/ContentThemePerformance'
 import type { ContentRecommendationType } from '@creator-hub/types'
+import { PageHeader } from '@/components/ui/page-header'
+import { SectionHeader } from '@/components/ui/section-header'
+import { VerdictBadge, type VerdictBadgeProps } from '@/components/ui/verdict-badge'
+import { EmptyState } from '@/components/ui/empty-state'
 
-const TYPE_BADGE: Record<ContentRecommendationType, string> = {
-  replicate: 'bg-emerald-500/20 text-emerald-400',
-  adapt:     'bg-yellow-500/20 text-yellow-400',
-  drop:      'bg-red-500/20 text-red-400',
+const TYPE_TONE: Record<ContentRecommendationType, NonNullable<VerdictBadgeProps['tone']>> = {
+  replicate: 'success',
+  adapt:     'warning',
+  drop:      'danger',
 }
 
 const TYPE_LABEL: Record<ContentRecommendationType, string> = {
@@ -32,50 +36,50 @@ export default async function ContentLabPage() {
 
   return (
     <div className="space-y-10">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Content Lab</h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            Analyse tes formats, optimise ta stratégie éditoriale
-          </p>
-        </div>
-        <Link
-          href="/content-lab/themes"
-          className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white"
-        >
-          Explorer les thèmes →
-        </Link>
-      </div>
+      <PageHeader
+        title="Content Lab"
+        description="Analyse tes formats, optimise ta stratégie éditoriale."
+        actions={
+          <Link
+            href="/content-lab/themes"
+            className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+          >
+            Explorer les thèmes →
+          </Link>
+        }
+      />
 
       <WhatToDoNext />
 
       <ContentThemePerformance />
 
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-white">Hypothèses récentes</h2>
+      <section className="space-y-3">
+        <SectionHeader
+          title="Hypothèses récentes"
+          description="Dernières recommandations générées à partir des posts indexés."
+        />
         {!recommendations || recommendations.length === 0 ? (
-          <p className="text-sm text-neutral-500">Aucune recommandation générée.</p>
+          <EmptyState
+            title="Aucune recommandation générée"
+            description="Les hypothèses apparaîtront ici dès qu'un post performant sera détecté."
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {recommendations.map((r) => {
               const type = r.type as ContentRecommendationType
+              const tone = TYPE_TONE[type] ?? 'neutral'
+              const label = TYPE_LABEL[type] ?? type
               return (
                 <Link
                   key={r.id}
                   href={`/content-lab/hypothesis/${r.id}`}
-                  className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 transition-colors hover:border-neutral-700"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent/50"
                 >
-                  <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${
-                      TYPE_BADGE[type] ?? 'bg-neutral-800 text-neutral-400'
-                    }`}
-                  >
-                    {TYPE_LABEL[type] ?? type}
-                  </span>
-                  <span className="flex-1 truncate text-sm text-neutral-300">
+                  <VerdictBadge tone={tone}>{label}</VerdictBadge>
+                  <span className="flex-1 truncate text-sm text-card-foreground">
                     {r.reason ?? '—'}
                   </span>
-                  <span className="text-xs text-neutral-600">
+                  <span className="text-xs text-muted-foreground">
                     {new Date(r.created_at).toLocaleDateString('fr-FR', {
                       day: '2-digit',
                       month: 'short',

@@ -41,10 +41,10 @@ export function ReplicablePostCard({
   const label = rankLabel(post.percentile, sampleSize)
 
   const multiplierColor =
-    post.savesMultiplier == null ? 'text-neutral-600' :
-    post.savesMultiplier >= 1.5   ? 'text-emerald-400' :
-    post.savesMultiplier >= 0.8   ? 'text-neutral-300' :
-                                    'text-red-400'
+    post.savesMultiplier == null ? 'text-muted-foreground' :
+    post.savesMultiplier >= 1.5   ? 'text-success'         :
+    post.savesMultiplier >= 0.8   ? 'text-foreground'      :
+                                    'text-danger'
 
   const rankTooltip = [
     post.percentile != null ? `Percentile ${post.percentile} (30 j)` : null,
@@ -53,9 +53,9 @@ export function ReplicablePostCard({
   ].filter(Boolean).join(' · ')
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex items-center justify-between gap-2">
-        <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-300">
+        <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
           {MEDIA_LABELS[post.mediaType] ?? post.mediaType}
         </span>
         {label ? (
@@ -67,7 +67,7 @@ export function ReplicablePostCard({
           </span>
         ) : (
           <span
-            className="rounded border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[11px] text-neutral-500"
+            className="rounded border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
             title={rankTooltip + ' — échantillon insuffisant pour un rang'}
           >
             Rang indisponible
@@ -82,7 +82,7 @@ export function ReplicablePostCard({
           src={post.previewUrl}
           alt=""
           loading="lazy"
-          className="aspect-square w-full rounded-md bg-neutral-950 object-cover"
+          className="aspect-square w-full rounded-md bg-muted object-cover"
           onError={(e) => {
             const el = e.currentTarget
             el.style.display = 'none'
@@ -90,32 +90,32 @@ export function ReplicablePostCard({
         />
       ) : (
         <div
-          className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-950 text-xs text-neutral-600"
+          className="flex aspect-square w-full items-center justify-center rounded-md bg-muted text-xs text-muted-foreground"
           title="Aucun aperçu disponible — voir sur Instagram."
         >
           {MEDIA_LABELS[post.mediaType] ?? post.mediaType}
         </div>
       )}
 
-      <div className="flex items-baseline gap-2 text-xs text-neutral-500">
+      <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
         <span>Saves</span>
         <span className={`text-base font-semibold tabular-nums ${multiplierColor}`}>
           {post.savesMultiplier == null ? '—' : `×${post.savesMultiplier.toFixed(1)}`}
         </span>
-        <span className="text-neutral-600">vs baseline format</span>
+        <span className="text-muted-foreground">vs baseline format</span>
       </div>
 
-      <p className="line-clamp-3 min-h-[3.75rem] text-sm text-neutral-300">
-        {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
+      <p className="line-clamp-3 min-h-[3.75rem] text-sm text-card-foreground">
+        {post.caption ?? <span className="italic text-muted-foreground">Sans légende IG</span>}
       </p>
 
       {contentSignal && <ContentSignalLine signal={contentSignal} />}
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-600">
-        <div>Saves <span className="text-neutral-400">{post.metrics.saves}</span></div>
-        <div>Shares <span className="text-neutral-400">{post.metrics.shares}</span></div>
-        <div>Comments <span className="text-neutral-400">{post.metrics.comments}</span></div>
-        <div>Reach <span className="text-neutral-400">{post.metrics.reach}</span></div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div>Saves <span className="text-foreground">{post.metrics.saves}</span></div>
+        <div>Shares <span className="text-foreground">{post.metrics.shares}</span></div>
+        <div>Comments <span className="text-foreground">{post.metrics.comments}</span></div>
+        <div>Reach <span className="text-foreground">{post.metrics.reach}</span></div>
       </dl>
 
       <TagManager postId={post.id} initialTags={post.tags} />
@@ -125,7 +125,7 @@ export function ReplicablePostCard({
           href={post.permalink}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           Voir sur Instagram →
         </a>
@@ -151,7 +151,7 @@ function ContentSignalLine({ signal }: { signal: TPostCardContentSignal }) {
   if (parts.length === 0) return null
   return (
     <p
-      className="text-[11px] text-neutral-500"
+      className="text-[11px] text-muted-foreground"
       title="Signal éditorial issu de l'analyse de contenu"
     >
       {parts.join(' · ')}

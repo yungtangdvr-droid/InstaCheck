@@ -1,4 +1,5 @@
 import type { TDataHealth } from '@/features/analytics/get-data-health'
+import { VerdictBadge } from '@/components/ui/verdict-badge'
 import { SyncNowButton } from './SyncNowButton'
 import { AnalyzeNewButton } from './AnalyzeNewButton'
 
@@ -35,18 +36,14 @@ function formatDateTime(iso: string | null): string {
 
 function StatusBadge({ status }: { status: string | null }) {
   if (!status) {
-    return <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-400">Aucun</span>
+    return <VerdictBadge tone="neutral">Aucun</VerdictBadge>
   }
-  const cls =
-    status === 'success' ? 'bg-emerald-500/15 text-emerald-400' :
-    status === 'failed'  ? 'bg-red-500/15     text-red-400'     :
-    status === 'skipped' ? 'bg-amber-500/15   text-amber-400'   :
-                           'bg-neutral-800    text-neutral-300'
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${cls}`}>
-      {status}
-    </span>
-  )
+  const tone: 'success' | 'danger' | 'warning' | 'neutral' =
+    status === 'success' ? 'success' :
+    status === 'failed'  ? 'danger'  :
+    status === 'skipped' ? 'warning' :
+                           'neutral'
+  return <VerdictBadge tone={tone}>{status}</VerdictBadge>
 }
 
 export function DataHealthPanel({ health, period }: { health: TDataHealth; period: number }) {
@@ -61,14 +58,14 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
-            className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+            className="inline-block h-2 w-2 rounded-full bg-success"
             aria-hidden
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white" title={account?.instagramId ?? undefined}>
+            <p className="truncate text-sm font-medium text-foreground" title={account?.instagramId ?? undefined}>
               {displayName}
             </p>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-muted-foreground">
               Compte Instagram connecté
             </p>
           </div>
@@ -76,9 +73,9 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="text-right">
-            <p className="text-[11px] uppercase tracking-wide text-neutral-500">Dernier sync</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Dernier sync</p>
             <p
-              className="text-xs text-neutral-300"
+              className="text-xs text-foreground"
               title={formatDateTime(lastSync.at)}
             >
               {formatRelative(lastSync.at)}
@@ -136,13 +133,13 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
       </dl>
 
       {lastSync.errorMessage && (
-        <p className="border-t border-red-500/20 bg-red-500/5 px-5 py-2 text-[11px] text-red-400">
+        <p className="border-t border-danger/20 bg-danger-soft px-5 py-2 text-[11px] text-danger">
           Dernière erreur sync :{' '}
-          <span className="text-red-300">{lastSync.errorMessage.slice(0, 240)}</span>
+          <span className="text-danger">{lastSync.errorMessage.slice(0, 240)}</span>
         </p>
       )}
       {lastSync.summary?.errors && lastSync.summary.errors.length > 0 && (
-        <p className="border-t border-amber-500/20 bg-amber-500/5 px-5 py-2 text-[11px] text-amber-400">
+        <p className="border-t border-warning/20 bg-warning-soft px-5 py-2 text-[11px] text-warning">
           {lastSync.summary.errors.length} erreur
           {lastSync.summary.errors.length > 1 ? 's' : ''} partielle
           {lastSync.summary.errors.length > 1 ? 's' : ''} au dernier sync
@@ -167,17 +164,17 @@ function HealthStat({
   tone?: 'ok' | 'warn'
 }) {
   const valueCls =
-    tone === 'warn' ? 'text-amber-400' : 'text-neutral-200'
+    tone === 'warn' ? 'text-warning' : 'text-foreground'
   return (
     <div className="min-w-0">
-      <dt className="truncate text-[11px] uppercase tracking-wide text-neutral-500">
+      <dt className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
       <dd className={`mt-0.5 text-sm font-semibold tabular-nums ${valueCls}`}>
         {value}
       </dd>
       {hint && (
-        <p className="mt-0.5 truncate text-[10px] text-neutral-600">{hint}</p>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{hint}</p>
       )}
     </div>
   )

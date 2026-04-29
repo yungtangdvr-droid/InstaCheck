@@ -17,15 +17,15 @@ export default async function ThemesIndexPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="mb-2 flex items-center gap-1.5 text-xs text-neutral-500">
-            <Link href="/content-lab" className="hover:text-neutral-300">
+          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Link href="/content-lab" className="hover:text-foreground">
               Content Lab
             </Link>
             <span>/</span>
             <span>Thèmes</span>
           </div>
-          <h1 className="text-2xl font-semibold text-white">Thèmes éditoriaux</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Thèmes éditoriaux</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Vue d&apos;ensemble visuelle de tes posts, classée par thème détecté
             (vocabulaire v2 du content analysis).
           </p>
@@ -33,9 +33,9 @@ export default async function ThemesIndexPage() {
       </div>
 
       {themes.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-800 bg-neutral-900/40 p-8 text-center text-sm text-neutral-500">
+        <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
           Aucune analyse de contenu disponible. Lance d&apos;abord le batch{' '}
-          <code className="rounded bg-neutral-900 px-1 py-0.5 text-[11px] text-neutral-400">
+          <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-foreground">
             pnpm content:analyze
           </code>
           .
@@ -48,22 +48,22 @@ export default async function ThemesIndexPage() {
               <li key={t.primaryTheme}>
                 <Link
                   href={`/content-lab/themes/${encodeURIComponent(t.primaryTheme)}`}
-                  className="block rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 transition-colors hover:border-neutral-700 hover:bg-neutral-900/80"
+                  className="block rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-accent/50"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-neutral-200">
+                    <p className="text-sm font-medium text-foreground">
                       {primaryThemeLabel(t.primaryTheme)}
                     </p>
                     {lowSample && (
                       <span
-                        className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                        className="rounded border border-warning/30 bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning"
                         title={`Moins de ${THEME_MIN_SAMPLE_SIZE} posts dans ce thème : le score est pondéré vers la moyenne globale.`}
                       >
                         Signal à confirmer
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-neutral-500 tabular-nums">
+                  <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
                     {t.postCount} post{t.postCount > 1 ? 's' : ''} analysé
                     {t.postCount > 1 ? 's' : ''}
                     {t.lastPostedAt && (

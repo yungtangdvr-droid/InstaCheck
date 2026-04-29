@@ -5,6 +5,7 @@ import { AnalyzeNewButton } from '@/components/analytics/AnalyzeNewButton'
 import { ChronologicalPostsTable } from '@/components/analytics/ChronologicalPostsTable'
 import { getChronologicalPosts } from '@/features/analytics/get-chronological-posts'
 import { parsePeriod } from '@/features/analytics/utils'
+import { PageHeader } from '@/components/ui/page-header'
 
 export default async function ChronologicalPostsPage({
   searchParams,
@@ -18,26 +19,29 @@ export default async function ChronologicalPostsPage({
   const posts = await getChronologicalPosts(supabase, period)
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="mb-1 flex items-center gap-1.5 text-xs text-neutral-500">
-            <Link href={`/analytics?period=${period}`} className="hover:text-neutral-300">
+    <div className="space-y-10">
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Link
+              href={`/analytics?period=${period}`}
+              className="transition-colors hover:text-foreground"
+            >
               Analytics
             </Link>
-            <span>/</span>
+            <span aria-hidden>/</span>
             <span>Posts chronologiques</span>
+          </span>
+        }
+        title="Posts chronologiques"
+        description="Tous les posts de la période ordonnés par date de publication."
+        actions={
+          <div className="flex items-start gap-2">
+            <AnalyzeNewButton variant="compact" />
+            <PeriodFilter current={period} />
           </div>
-          <h1 className="text-2xl font-semibold text-white">Posts chronologiques</h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            Tous les posts de la période ordonnés par date de publication
-          </p>
-        </div>
-        <div className="flex items-start gap-3">
-          <AnalyzeNewButton variant="compact" />
-          <PeriodFilter current={period} />
-        </div>
-      </div>
+        }
+      />
 
       <ChronologicalPostsTable posts={posts} />
     </div>

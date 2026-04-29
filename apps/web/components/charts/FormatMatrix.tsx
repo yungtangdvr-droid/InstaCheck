@@ -21,7 +21,7 @@ type Props = { data: TFormatSummary[] }
 export function FormatMatrix({ data }: Props) {
   if (data.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-neutral-500">
+      <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
         Pas encore de données par format
       </div>
     )
@@ -37,7 +37,7 @@ export function FormatMatrix({ data }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div>
-        <h3 className="mb-2 text-xs font-medium text-neutral-400">Reach</h3>
+        <h3 className="mb-2 text-xs font-medium text-muted-foreground">Reach</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
@@ -66,7 +66,7 @@ export function FormatMatrix({ data }: Props) {
       </div>
 
       <div>
-        <h3 className="mb-2 text-xs font-medium text-neutral-400">Saves · Shares</h3>
+        <h3 className="mb-2 text-xs font-medium text-muted-foreground">Saves · Shares</h3>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />

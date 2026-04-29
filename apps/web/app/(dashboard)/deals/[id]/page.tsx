@@ -51,23 +51,23 @@ export default async function DealDetailPage({
         <div>
           <Link
             href="/deals"
-            className="text-sm text-neutral-500 transition-colors hover:text-white"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Deals
           </Link>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold text-white">{opportunity.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{opportunity.name}</h1>
             <span
               className={`rounded px-2 py-0.5 text-xs font-medium ${DEAL_STAGE_BADGE[opportunity.stage]}`}
             >
               {DEAL_STAGE_LABEL[opportunity.stage]}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {brandName && opportunity.brandId && (
               <Link
                 href={`/crm/brands/${opportunity.brandId}`}
-                className="hover:text-neutral-300"
+                className="hover:text-foreground"
               >
                 {brandName}
               </Link>
@@ -75,7 +75,7 @@ export default async function DealDetailPage({
             {contactName && opportunity.contactId && (
               <Link
                 href={`/crm/contacts/${opportunity.contactId}`}
-                className="hover:text-neutral-300"
+                className="hover:text-foreground"
               >
                 {contactName}
               </Link>
@@ -90,7 +90,7 @@ export default async function DealDetailPage({
                 href={opportunity.bookingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-neutral-300"
+                className="hover:text-foreground"
               >
                 Book a call ↗
               </a>
@@ -112,18 +112,18 @@ export default async function DealDetailPage({
         assetOptions={assetOptions}
       />
       {opportunity.deckId && deckName && (
-        <p className="-mt-4 text-xs text-neutral-500">
-          Actuellement : <span className="text-neutral-300">{deckName}</span>
+        <p className="-mt-4 text-xs text-muted-foreground">
+          Actuellement : <span className="text-foreground">{deckName}</span>
         </p>
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-300">Historique des stages</h2>
+        <h2 className="text-sm font-medium text-foreground">Historique des stages</h2>
         <DealTimeline events={history} />
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-300">Tâches</h2>
+        <h2 className="text-sm font-medium text-foreground">Tâches</h2>
         <DealTaskInline
           tasks={tasks}
           linkedOpportunityId={opportunity.id}

@@ -37,12 +37,12 @@ type Props = {
 
 function MultiplierChip({ multiplier }: { multiplier: number | null }) {
   if (multiplier == null) {
-    return <span className="text-xs text-neutral-600">—</span>
+    return <span className="text-xs text-muted-foreground">—</span>
   }
   const cls =
-    multiplier >= 1.5 ? 'text-emerald-400' :
-    multiplier >= 0.8 ? 'text-neutral-300' :
-                        'text-red-400'
+    multiplier >= 1.5 ? 'text-success'         :
+    multiplier >= 0.8 ? 'text-foreground'      :
+                        'text-danger'
   return (
     <span
       className={`text-xs font-medium tabular-nums ${cls}`}
@@ -77,7 +77,7 @@ function RankBadge({
     return (
       <span
         title={tooltip + ' — échantillon insuffisant pour un rang'}
-        className="inline-flex h-6 items-center rounded border border-neutral-800 bg-neutral-900 px-1.5 text-[11px] text-neutral-500"
+        className="inline-flex h-6 items-center rounded border border-border bg-muted px-1.5 text-[11px] text-muted-foreground"
       >
         —
       </span>
@@ -135,7 +135,7 @@ function PreviewThumb({
   if (!previewUrl) {
     return (
       <div
-        className="flex h-10 w-10 items-center justify-center rounded bg-neutral-800 text-[10px] text-neutral-500"
+        className="flex h-10 w-10 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground"
         title="Aucun aperçu disponible"
       >
         {FORMAT_LABEL[mediaType]?.slice(0, 3).toUpperCase() ?? '—'}
@@ -163,7 +163,7 @@ function PreviewThumb({
 export function PostExplorer({ posts, themesByPostId }: Props) {
   if (posts.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-sm text-neutral-500">
+      <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-card text-sm text-muted-foreground">
         Aucun post dans cette période
       </div>
     )
@@ -172,65 +172,65 @@ export function PostExplorer({ posts, themesByPostId }: Props) {
   const sampleSize = posts.filter(p => p.rankScore != null).length
 
   return (
-    <div className="overflow-auto rounded-lg border border-neutral-800">
+    <div className="overflow-auto rounded-xl border border-border bg-card">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-neutral-800 bg-neutral-900">
-            <th className="px-3 py-3 text-left  text-xs font-medium text-neutral-500"></th>
-            <th className="px-3 py-3 text-left  text-xs font-medium text-neutral-500">Format</th>
+          <tr className="border-b border-border bg-muted/40">
+            <th className="px-3 py-3 text-left  text-[11px] font-medium uppercase tracking-wide text-muted-foreground"></th>
+            <th className="px-3 py-3 text-left  text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Format</th>
             <th
-              className="px-4 py-3 text-left  text-xs font-medium text-neutral-500"
+              className="px-4 py-3 text-left  text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
               title="Texte de la légende Instagram. Souvent vide pour les memes — le contenu éditorial est dans le visuel."
             >
               Légende IG
             </th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Reach</th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Saves</th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">Shares</th>
-            <th className="px-4 py-3 text-right text-xs font-medium text-neutral-500">×saves</th>
+            <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Reach</th>
+            <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Saves</th>
+            <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Shares</th>
+            <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">×saves</th>
             <th
-              className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
+              className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
               title="Score circulation 0–100, self-relative — taux shares/reach (50 %), saves/reach (25 %), comments/reach (10 %), likes/reach (10 %), profile_visits/reach (5 %), normalisés log vs ta baseline 30j du même format. Pas de comparaison externe."
             >
-              Score circulation
-              <span className="ml-1 text-[10px] font-normal opacity-70">(vs ta baseline 30j)</span>
+              Score
+              <span className="ml-1 text-[10px] font-normal normal-case opacity-70">(vs baseline 30j)</span>
             </th>
             <th
-              className="px-4 py-3 text-right text-xs font-medium text-neutral-500"
+              className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
               title="Rang percentile du post dans la période, basé sur les ratios vs baseline 30 j (saves / shares / comments / likes / profile visits)."
             >
               Rang
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-800 bg-neutral-950">
+        <tbody className="divide-y divide-border">
           {posts.map((post) => {
             const label = rankLabel(post.percentile, sampleSize)
             return (
-              <tr key={post.id} className="transition-colors hover:bg-neutral-900/60">
+              <tr key={post.id} className="transition-colors hover:bg-muted/30">
                 <td className="py-2 pl-3 pr-1">
                   <Link href={`/analytics/post/${post.id}`} className="inline-block">
                     <PreviewThumb previewUrl={post.previewUrl} mediaType={post.mediaType} />
                   </Link>
                 </td>
                 <td className="px-3 py-3">
-                  <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-300">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
                     {FORMAT_LABEL[post.mediaType] ?? post.mediaType}
                   </span>
                 </td>
                 <td className="max-w-xs px-4 py-3">
                   <Link
                     href={`/analytics/post/${post.id}`}
-                    className="block truncate text-neutral-300 hover:text-white"
+                    className="block truncate text-foreground hover:text-foreground/80"
                   >
-                    {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
+                    {post.caption ?? <span className="italic text-muted-foreground">Sans légende IG</span>}
                   </Link>
                   {(() => {
                     const theme = themesByPostId?.[post.id]
                     if (!theme || theme === 'unknown') return null
                     return (
                       <span
-                        className="mt-1 inline-flex items-center rounded border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-400"
+                        className="mt-1 inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
                         title="Thème principal détecté par l'analyse de contenu"
                       >
                         {primaryThemeLabel(theme)}
@@ -238,13 +238,13 @@ export function PostExplorer({ posts, themesByPostId }: Props) {
                     )
                   })()}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
+                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                   {post.reach.toLocaleString('fr-FR')}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
+                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                   {post.saves.toLocaleString('fr-FR')}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums text-neutral-400">
+                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                   {post.shares.toLocaleString('fr-FR')}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -271,7 +271,7 @@ export function PostExplorer({ posts, themesByPostId }: Props) {
           })}
         </tbody>
       </table>
-      <p className="border-t border-neutral-800 bg-neutral-900/50 px-4 py-2 text-xs text-neutral-600">
+      <p className="border-t border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
         Rang = percentile du score UI (ratio pondéré vs baseline 30 j du même format).
         ×saves = multiplicateur des saves par rapport à cette baseline.
       </p>
