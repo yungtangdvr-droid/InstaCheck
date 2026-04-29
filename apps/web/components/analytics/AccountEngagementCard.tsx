@@ -1,10 +1,18 @@
 import {
-  DISTRIBUTION_LABEL_CLASS,
   DISTRIBUTION_LABEL_FR,
   DISTRIBUTION_SIGNAL_FR,
   type TDistributionLabel,
 } from '@/features/analytics/engagement-score'
 import type { TAccountEngagementHealth } from '@/features/analytics/get-engagement-health'
+import { VerdictBadge } from '@/components/ui/verdict-badge'
+
+const VERDICT_TONE: Record<TDistributionLabel, 'danger' | 'warning' | 'success'> = {
+  'faible':       'danger',
+  'moyen':        'warning',
+  'bon':          'success',
+  'tres-fort':    'success',
+  'exceptionnel': 'success',
+}
 
 // Minimum number of posts in the active period before we trust a comparative
 // verdict. Below this we stop rendering the red/amber label and only show the
@@ -50,8 +58,8 @@ export function AccountEngagementCard({
     baseline != null && baselinePeriod != null && postCount >= MIN_POSTS_FOR_VERDICT
 
   const displayedLabel = hasVerdict ? softenLabel(current.label) : null
-  const labelCls       = displayedLabel ? DISTRIBUTION_LABEL_CLASS[displayedLabel] : null
-  const labelFr        = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel]    : null
+  const labelTone      = displayedLabel ? VERDICT_TONE[displayedLabel]           : null
+  const labelFr        = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel]  : null
 
   const dominantFr = current.dominantSignal
     ? DISTRIBUTION_SIGNAL_FR[current.dominantSignal]
@@ -68,8 +76,8 @@ export function AccountEngagementCard({
   const deltaSign = scoreDelta != null && scoreDelta > 0 ? '+' : ''
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/60">
-      <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-neutral-800 px-5 py-3">
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-border px-5 py-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-neutral-500">
             Signaux de circulation — {period} j
@@ -99,14 +107,14 @@ export function AccountEngagementCard({
       </div>
 
       {dominantFr && current.hasReach && (
-        <p className="border-t border-neutral-800 px-5 py-2 text-[11px] text-neutral-500">
+        <p className="border-t border-border px-5 py-2 text-[11px] text-neutral-500">
           Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
         </p>
       )}
 
       {/* Comparative section — demoted to a small footer band. Either shows a
           score + verdict (when the baseline is sound) or an honest disclaimer. */}
-      <div className="border-t border-neutral-800 bg-neutral-950/40 px-5 py-3">
+      <div className="border-t border-border bg-neutral-950/40 px-5 py-3">
         {hasVerdict ? (
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div className="min-w-0">
@@ -152,12 +160,10 @@ export function AccountEngagementCard({
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              {labelFr && labelCls && (
-                <span
-                  className={`inline-flex h-6 items-center rounded border px-2 text-[11px] font-medium ${labelCls}`}
-                >
+              {labelFr && labelTone && (
+                <VerdictBadge tone={labelTone} size="md">
                   {labelFr}
-                </span>
+                </VerdictBadge>
               )}
               <span
                 className="text-[10px] text-neutral-500"
