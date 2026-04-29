@@ -134,12 +134,12 @@ export const RANK_LABEL_FR: Record<TRankLabel, string> = {
 // neutral / red scale used elsewhere in the analytics views (PostExplorer,
 // DeltaBadge, MultiplierTile).
 export const RANK_LABEL_CLASS: Record<TRankLabel, string> = {
-  'top-5':     'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  'top-10':    'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-  'top-25':    'bg-emerald-500/10 text-emerald-400 border-emerald-500/15',
-  'above-avg': 'bg-neutral-800    text-neutral-200 border-neutral-700',
-  'avg':       'bg-neutral-800/60 text-neutral-400 border-neutral-800',
-  'under':     'bg-red-500/15     text-red-400     border-red-500/20',
+  'top-5':     'bg-success-soft text-success         border-success/40',
+  'top-10':    'bg-success-soft text-success         border-success/30',
+  'top-25':    'bg-success-soft text-success         border-success/20',
+  'above-avg': 'bg-muted        text-foreground      border-border',
+  'avg':       'bg-muted/60     text-muted-foreground border-border',
+  'under':     'bg-danger-soft  text-danger          border-danger/30',
 }
 
 export const RANK_MIN_SAMPLE_FOR_LABEL = RANK_MIN_SAMPLE

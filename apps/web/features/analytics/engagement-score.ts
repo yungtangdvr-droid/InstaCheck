@@ -89,11 +89,11 @@ export const DISTRIBUTION_LABEL_COPY: Record<TDistributionLabel, string> = {
 }
 
 export const DISTRIBUTION_LABEL_CLASS: Record<TDistributionLabel, string> = {
-  'faible':       'bg-red-500/10      text-red-400      border-red-500/20',
-  'moyen':        'bg-amber-500/10    text-amber-400    border-amber-500/20',
-  'bon':          'bg-emerald-500/10  text-emerald-400  border-emerald-500/20',
-  'tres-fort':    'bg-emerald-500/15  text-emerald-300  border-emerald-500/30',
-  'exceptionnel': 'bg-gradient-to-r from-emerald-500/25 to-teal-400/25 text-emerald-200 border-emerald-400/40',
+  'faible':       'bg-danger-soft  text-danger  border-danger/30',
+  'moyen':        'bg-warning-soft text-warning border-warning/30',
+  'bon':          'bg-success-soft text-success border-success/30',
+  'tres-fort':    'bg-success-soft text-success border-success/40',
+  'exceptionnel': 'bg-success-soft text-success border-success/50',
 }
 
 export const DISTRIBUTION_SIGNAL_FR: Record<TDistributionSignal, string> = {
