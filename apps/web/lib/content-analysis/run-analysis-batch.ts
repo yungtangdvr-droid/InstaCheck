@@ -34,9 +34,13 @@ export const ALL_REANALYZE_STATUSES: ReanalyzeStatus[] = ['completed', 'failed',
 //   has a row with BOTH status='completed' AND prompt_version=current. So
 //   missing rows, failed/skipped rows, and completed rows on an older
 //   prompt version are all picked up. Ordered by posted_at desc so the
-//   freshest content wins under the UI hard cap.
+//   freshest content wins under the UI hard cap. Always restricted to
+//   `in_last_90d = true`.
 // - `cli` is the legacy `pnpm content:analyze` path, supporting --reanalyze
 //   and --outdated-only flags for explicit re-runs and prompt migrations.
+//   `allTime` lifts the `in_last_90d` filter so the operator can backfill
+//   the full owner archive; the underlying view is still owner-only, so
+//   benchmark/peer media remains excluded.
 export type SelectionMode =
   | { kind: 'new-only' }
   | {
@@ -44,6 +48,7 @@ export type SelectionMode =
       reanalyze:       boolean
       reanalyzeStatus: ReanalyzeStatus[]
       outdatedOnly:    boolean
+      allTime:         boolean
     }
 
 export type AnalysisCtx = {
@@ -89,14 +94,18 @@ type Candidate = {
   caption:    string | null
 }
 
-async function pickCandidates(
-  supabase:  Supabase,
-  limit:     number,
-  selection: SelectionMode,
-): Promise<Candidate[]> {
-  // Overfetch 4× so we have spares after excluding already-analyzed posts.
-  const overfetch = Math.max(limit * 4, 20)
+type ExistingRow = { post_id: string; status: string | null; prompt_version: string | null }
 
+// Hard ceiling for the read-only `--count-only` path. Larger than any
+// realistic single-tenant owner archive but still bounded so a runaway
+// scan can't drag Supabase down. Not exported.
+const COUNT_FETCH_CEILING = 10_000
+
+async function fetchUsableFromMart(
+  supabase:    Supabase,
+  selection:   SelectionMode,
+  fetchLimit:  number,
+): Promise<Candidate[]> {
   // Order strategy depends on mode. The UI flow wants the most recent posts
   // first (operator just synced new content). The CLI flow keeps the
   // historical performance ordering so cohort scans stay deterministic.
@@ -105,38 +114,56 @@ async function pickCandidates(
       ? { column: 'posted_at',         ascending: false }
       : { column: 'performance_score', ascending: false }
 
-  const { data: rows, error } = await supabase
+  // The UI route always stays inside the 90-day window; the CLI may opt out
+  // via --all-time to drain the full owner archive.
+  const restrictTo90d =
+    selection.kind === 'new-only' || !selection.allTime
+
+  let query = supabase
     .from('v_mart_post_performance')
     .select('post_id, media_id, media_type, caption')
-    .eq('in_last_90d', true)
+  if (restrictTo90d) query = query.eq('in_last_90d', true)
+  query = query
     .order(orderBy.column, { ascending: orderBy.ascending, nullsFirst: false })
-    .limit(overfetch)
+    .limit(fetchLimit)
+
+  const { data: rows, error } = await query
   if (error) throw new Error(`mart_query: ${error.message}`)
   if (!rows || rows.length === 0) return []
 
-  const usable: Candidate[] = rows.filter(
+  return rows.filter(
     (r): r is Candidate =>
       typeof r.post_id    === 'string' &&
       typeof r.media_id   === 'string' &&
       typeof r.media_type === 'string',
   )
+}
 
+async function fetchExistingByPost(
+  supabase: Supabase,
+  postIds:  string[],
+): Promise<Map<string, ExistingRow>> {
+  if (postIds.length === 0) return new Map()
   const { data: existing, error: exErr } = await supabase
     .from('post_content_analysis')
     .select('post_id, status, prompt_version')
-    .in('post_id', usable.map((r) => r.post_id))
+    .in('post_id', postIds)
   if (exErr) throw new Error(`existing_query: ${exErr.message}`)
-
-  type ExistingRow = { post_id: string; status: string | null; prompt_version: string | null }
-  const byPost = new Map<string, ExistingRow>(
+  return new Map<string, ExistingRow>(
     (existing ?? []).map((r) => [r.post_id, r as ExistingRow]),
   )
+}
 
+function applyEligibility(
+  usable:    Candidate[],
+  byPost:    Map<string, ExistingRow>,
+  selection: SelectionMode,
+): Candidate[] {
   if (selection.kind === 'new-only') {
     // Eligible = no row OR row that isn't (completed AND current PROMPT_VERSION).
     // The UI hard cap in /api/content/analyze-new still bounds the total work,
     // so retrying failed/skipped rows and migrating old-PV rows is safe.
-    return usable.filter((r) => isPendingForCurrentVersion(byPost.get(r.post_id))).slice(0, limit)
+    return usable.filter((r) => isPendingForCurrentVersion(byPost.get(r.post_id)))
   }
 
   const { reanalyze, reanalyzeStatus, outdatedOnly } = selection
@@ -147,25 +174,58 @@ async function pickCandidates(
       // rows would be skipped anyway since reanalyze is off.
       return []
     }
-    return usable.filter((r) => !byPost.has(r.post_id)).slice(0, limit)
+    return usable.filter((r) => !byPost.has(r.post_id))
   }
 
   const allowed = new Set(reanalyzeStatus)
-  return usable
-    .filter((r) => {
-      const row = byPost.get(r.post_id)
-      if (row === undefined) {
-        return !outdatedOnly
-      }
-      if (row.status === null || !allowed.has(row.status as ReanalyzeStatus)) {
-        return false
-      }
-      if (outdatedOnly && row.prompt_version === PROMPT_VERSION) {
-        return false
-      }
-      return true
-    })
-    .slice(0, limit)
+  return usable.filter((r) => {
+    const row = byPost.get(r.post_id)
+    if (row === undefined) {
+      return !outdatedOnly
+    }
+    if (row.status === null || !allowed.has(row.status as ReanalyzeStatus)) {
+      return false
+    }
+    if (outdatedOnly && row.prompt_version === PROMPT_VERSION) {
+      return false
+    }
+    return true
+  })
+}
+
+async function pickCandidates(
+  supabase:  Supabase,
+  limit:     number,
+  selection: SelectionMode,
+): Promise<Candidate[]> {
+  // Overfetch 4× so we have spares after excluding already-analyzed posts.
+  const overfetch = Math.max(limit * 4, 20)
+  const usable    = await fetchUsableFromMart(supabase, selection, overfetch)
+  if (usable.length === 0) return []
+  const byPost    = await fetchExistingByPost(supabase, usable.map((r) => r.post_id))
+  return applyEligibility(usable, byPost, selection).slice(0, limit)
+}
+
+/**
+ * Read-only candidate count. Used by `pnpm content:analyze -- --count-only`
+ * to size the backlog before spending Gemini quota. Performs only SELECT
+ * queries: no media download, no Gemini call, no upsert. The fetch ceiling
+ * is intentionally larger than the analyze path's overfetch so the operator
+ * can see beyond a single batch's worth of work.
+ */
+export async function countCandidates(
+  supabase:  Supabase,
+  selection: SelectionMode,
+): Promise<{ count: number; sampleIds: string[]; allTime: boolean }> {
+  const usable  = await fetchUsableFromMart(supabase, selection, COUNT_FETCH_CEILING)
+  const byPost  = await fetchExistingByPost(supabase, usable.map((r) => r.post_id))
+  const matches = applyEligibility(usable, byPost, selection)
+  const allTime = selection.kind === 'cli' && selection.allTime
+  return {
+    count:     matches.length,
+    sampleIds: matches.slice(0, 5).map((c) => c.post_id),
+    allTime,
+  }
 }
 
 async function processPost(
