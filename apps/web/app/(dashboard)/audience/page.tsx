@@ -5,7 +5,6 @@ import { getAudienceData } from '@/features/audience/get-audience'
 import { parsePeriod, FORMAT_LABEL } from '@/features/analytics/utils'
 import { baselineQualifierFor } from '@/features/analytics/get-engagement-health'
 import {
-  DISTRIBUTION_LABEL_CLASS,
   DISTRIBUTION_LABEL_FR,
   DISTRIBUTION_SIGNAL_FR,
   type TDistributionLabel,
@@ -18,8 +17,27 @@ import type {
   TAudienceBreakdownState,
   TAudienceDemographicBreakdown,
 } from '@creator-hub/types'
+import { PageHeader } from '@/components/ui/page-header'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { KpiTile } from '@/components/ui/kpi-tile'
+import { VerdictBadge, type VerdictBadgeProps } from '@/components/ui/verdict-badge'
+import { EmptyState } from '@/components/ui/empty-state'
 
 const DAY_NAMES_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+
+const VERDICT_TONE: Record<TDistributionLabel, NonNullable<VerdictBadgeProps['tone']>> = {
+  'faible':       'danger',
+  'moyen':        'warning',
+  'bon':          'success',
+  'tres-fort':    'success',
+  'exceptionnel': 'success',
+}
 
 export default async function AudiencePage({
   searchParams,
@@ -54,8 +72,8 @@ export default async function AudiencePage({
   const displayedLabel: TDistributionLabel | null = !hasVerdict
     ? null
     : circulationLabel === 'faible' ? 'moyen' : circulationLabel
-  const labelCls = displayedLabel ? DISTRIBUTION_LABEL_CLASS[displayedLabel] : null
-  const labelFr  = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel]    : null
+  const labelFr   = displayedLabel ? DISTRIBUTION_LABEL_FR[displayedLabel] : null
+  const labelTone = displayedLabel ? VERDICT_TONE[displayedLabel]          : null
   const dominantFr = audience.dominantSignal
     ? DISTRIBUTION_SIGNAL_FR[audience.dominantSignal]
     : null
@@ -72,118 +90,124 @@ export default async function AudiencePage({
   const handle = audience.account?.username ? `@${audience.account.username}` : '—'
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Audience</h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            Comportement de ton audience sur la base des données Meta officielles.
-          </p>
-        </div>
-        <PeriodFilter current={period} />
-      </div>
+    <div className="space-y-10">
+      <PageHeader
+        eyebrow={handle}
+        title="Audience"
+        description="Comportement de ton audience sur la base des données Meta officielles."
+        actions={<PeriodFilter current={period} />}
+      />
 
       {/* Audience overview */}
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-        <h2 className="text-sm font-medium text-neutral-300">Vue d&apos;ensemble</h2>
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Compte" value={handle} />
-          <Stat
-            label="Followers"
-            value={audience.followersCount != null ? audience.followersCount.toLocaleString('fr-FR') : '—'}
-            hint={
-              audience.followersAt
-                ? `Snapshot ${new Date(audience.followersAt).toLocaleDateString('fr-FR')}`
-                : undefined
-            }
-          />
-          <Stat
-            label={`Posts analysés (${period} j)`}
-            value={audience.postsAnalyzed.toLocaleString('fr-FR')}
-          />
-          <div>
-            <p className="text-xs text-neutral-500">Signaux de circulation</p>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-xl font-semibold tabular-nums text-neutral-200">
-                {audience.engagementScore}
-              </span>
-              <span className="text-xs text-neutral-500">/ 100</span>
+      <section className="space-y-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Vue d&apos;ensemble</CardTitle>
+            <CardDescription>{interpretation}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <KpiTile label="Compte" value={handle} />
+              <KpiTile
+                label="Followers"
+                value={audience.followersCount != null ? audience.followersCount.toLocaleString('fr-FR') : '—'}
+                hint={
+                  audience.followersAt
+                    ? `Snapshot ${new Date(audience.followersAt).toLocaleDateString('fr-FR')}`
+                    : undefined
+                }
+              />
+              <KpiTile
+                label={`Posts analysés (${period} j)`}
+                value={audience.postsAnalyzed.toLocaleString('fr-FR')}
+              />
+              <KpiTile
+                label="Score circulation"
+                value={audience.engagementScore}
+                unit="/ 100"
+                hint={
+                  hasVerdict
+                    ? baselineQualifier
+                    : 'Comparaison indisponible — historique insuffisant.'
+                }
+              />
             </div>
-            {hasVerdict && labelFr && labelCls ? (
-              <>
-                <span
-                  className={`mt-1 inline-flex h-5 items-center rounded border px-1.5 text-[10px] font-medium ${labelCls}`}
-                >
-                  {labelFr}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {hasVerdict && labelFr && labelTone && (
+                <VerdictBadge tone={labelTone}>{labelFr}</VerdictBadge>
+              )}
+              {dominantFr && (
+                <span>
+                  Signal dominant : <span className="text-foreground">{dominantFr}</span>
                 </span>
-                <p
-                  className="mt-1 text-[10px] text-neutral-500"
-                  title="Le score est self-relative : il compare le compte à son propre historique, pas à un benchmark externe."
-                >
-                  {baselineQualifier}
-                </p>
-              </>
-            ) : (
-              <p
-                className="mt-1 text-[10px] text-neutral-500"
-                title="Aucune fenêtre baseline non recouvrante n'a pu être construite."
-              >
-                Comparaison indisponible : historique insuffisant.
-              </p>
-            )}
-            {dominantFr && (
-              <p className="mt-1 text-[11px] text-neutral-500">
-                Signal dominant : <span className="text-neutral-300">{dominantFr}</span>
-              </p>
-            )}
-          </div>
-        </div>
-        <p className="mt-3 text-sm text-neutral-300">{interpretation}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       {/* Habits summary */}
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-        <h2 className="text-sm font-medium text-neutral-300">Habitudes — résumé</h2>
-        <p className="mt-2 text-sm text-neutral-300">{audience.habitsSummary}</p>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Habitudes — résumé</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-card-foreground">{audience.habitsSummary}</p>
+        </CardContent>
+      </Card>
 
       {/* Audience behavior */}
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-          <h3 className="text-sm font-medium text-neutral-300">Meilleur créneau</h3>
-          {audience.bestWindow ? (
-            <div className="mt-3">
-              <p className="text-2xl font-semibold text-white">
-                {DAY_NAMES_FR[audience.bestWindow.dayOfWeek]}
-                {' '}
-                {String(audience.bestWindow.hour).padStart(2, '0')}h
-              </p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Saves moyens / post : {audience.bestWindow.savesAvg.toLocaleString('fr-FR')}
-                {' · '}
-                {audience.bestWindow.postCount} post{audience.bestWindow.postCount > 1 ? 's' : ''}
-              </p>
-              <p className="mt-1 text-[11px] text-neutral-600">
-                Source : v_mart_best_posting_windows ({period} j, tous formats)
-              </p>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-neutral-500">Pas encore assez de posts publiés sur la période.</p>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Meilleur créneau</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {audience.bestWindow ? (
+              <div>
+                <p className="text-2xl font-semibold tabular-nums text-foreground">
+                  {DAY_NAMES_FR[audience.bestWindow.dayOfWeek]}
+                  {' '}
+                  {String(audience.bestWindow.hour).padStart(2, '0')}h
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Saves moyens / post : {audience.bestWindow.savesAvg.toLocaleString('fr-FR')}
+                  {' · '}
+                  {audience.bestWindow.postCount} post{audience.bestWindow.postCount > 1 ? 's' : ''}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Source : v_mart_best_posting_windows ({period} j, tous formats)
+                </p>
+              </div>
+            ) : (
+              <EmptyState
+                title="Pas encore assez de posts publiés sur la période"
+                description="Le créneau optimal se calcule sur l'historique de saves moyens par heure × jour."
+              />
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-          <h3 className="text-sm font-medium text-neutral-300">Posts qui circulent le plus</h3>
-          {audience.topPosts.length === 0 ? (
-            <p className="mt-3 text-sm text-neutral-500">Aucun post avec circulation mesurable.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {audience.topPosts.map((p) => (
-                <TopPostRow key={p.postId} post={p} />
-              ))}
-            </ul>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Posts qui circulent le plus</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {audience.topPosts.length === 0 ? (
+              <EmptyState
+                title="Aucun post avec circulation mesurable"
+                description="Les posts sans reach mesurable sont exclus de ce classement."
+              />
+            ) : (
+              <ul className="space-y-2">
+                {audience.topPosts.map((p) => (
+                  <TopPostRow key={p.postId} post={p} />
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -202,30 +226,31 @@ export default async function AudiencePage({
       </section>
 
       {/* Audience characteristics — demographics from follower_demographics */}
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium text-neutral-300">
-            Démographie audience — 30 derniers jours
-          </h2>
-          {audience.demographics.syncedAt && (
-            <span className="text-[11px] text-neutral-600">
-              Snapshot du {new Date(audience.demographics.syncedAt).toLocaleDateString('fr-FR')}
-            </span>
-          )}
-        </div>
-        <p className="mt-1 text-[11px] text-neutral-600">
-          Source : insight officiel{' '}
-          <code className="text-neutral-500">follower_demographics</code>{' '}
-          (timeframe <code className="text-neutral-500">last_30_days</code>).
-        </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <DemographicsBlock title="Pays"   state={audience.demographics.country} breakdown="country" topN={5} />
-          <DemographicsBlock title="Villes" state={audience.demographics.city}    breakdown="city"    topN={5} />
-          <DemographicsBlock title="Âge"    state={audience.demographics.age}     breakdown="age"     topN={5} />
-          <DemographicsBlock title="Genre"  state={audience.demographics.gender}  breakdown="gender"  topN={null} />
-        </div>
-      </section>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <CardTitle>Démographie audience — 30 derniers jours</CardTitle>
+            {audience.demographics.syncedAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Snapshot du {new Date(audience.demographics.syncedAt).toLocaleDateString('fr-FR')}
+              </span>
+            )}
+          </div>
+          <CardDescription>
+            Source : insight officiel{' '}
+            <code className="text-muted-foreground">follower_demographics</code>{' '}
+            (timeframe <code className="text-muted-foreground">last_30_days</code>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DemographicsBlock title="Pays"   state={audience.demographics.country} breakdown="country" topN={5} />
+            <DemographicsBlock title="Villes" state={audience.demographics.city}    breakdown="city"    topN={5} />
+            <DemographicsBlock title="Âge"    state={audience.demographics.age}     breakdown="age"     topN={5} />
+            <DemographicsBlock title="Genre"  state={audience.demographics.gender}  breakdown="gender"  topN={null} />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -254,8 +279,8 @@ function DemographicsBlock({
   topN:      number | null
 }) {
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-4">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+    <div className="rounded-md border border-border bg-muted/30 p-4">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
       <DemographicsBody state={state} breakdown={breakdown} topN={topN} />
@@ -274,7 +299,7 @@ function DemographicsBody({
 }) {
   if (state.state === 'not_synced') {
     return (
-      <p className="mt-3 text-sm text-neutral-500">
+      <p className="mt-3 text-sm text-muted-foreground">
         Données démographiques non encore synchronisées.
       </p>
     )
@@ -282,17 +307,17 @@ function DemographicsBody({
 
   if (state.state === 'available_below_threshold') {
     return (
-      <p className="mt-3 text-sm text-neutral-500">
+      <p className="mt-3 text-sm text-muted-foreground">
         Sous le seuil Meta (~100 followers) — pas de répartition publiée pour cet axe.
-        {state.reason ? <span className="ml-1 text-neutral-600">{state.reason}</span> : null}
+        {state.reason ? <span className="ml-1 text-muted-foreground">{state.reason}</span> : null}
       </p>
     )
   }
 
   if (state.state === 'unavailable') {
     return (
-      <p className="mt-3 text-sm text-neutral-500">
-        Indisponible : <span className="text-neutral-400">{state.reason}</span>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Indisponible : <span className="text-foreground">{state.reason}</span>
       </p>
     )
   }
@@ -302,18 +327,18 @@ function DemographicsBody({
     <ul className="mt-3 space-y-1.5">
       {rows.map(r => (
         <li key={r.key} className="flex items-center gap-2 text-sm">
-          <span className="flex-1 truncate text-neutral-300" title={`${r.value.toLocaleString('fr-FR')} followers`}>
+          <span className="flex-1 truncate text-foreground" title={`${r.value.toLocaleString('fr-FR')} followers`}>
             {formatBreakdownKey(breakdown, r.key, r.label)}
           </span>
           <span className="w-24 shrink-0">
-            <span className="block h-1.5 rounded bg-neutral-800">
+            <span className="block h-1.5 rounded bg-muted">
               <span
-                className="block h-full rounded bg-emerald-500/70"
+                className="block h-full rounded bg-success"
                 style={{ width: `${Math.min(100, Math.max(2, r.share * 100))}%` }}
               />
             </span>
           </span>
-          <span className="w-12 shrink-0 text-right text-xs tabular-nums text-neutral-400">
+          <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
             {(r.share * 100).toFixed(1)}%
           </span>
         </li>
@@ -322,29 +347,19 @@ function DemographicsBody({
   )
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div>
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-neutral-600">{hint}</p>}
-    </div>
-  )
-}
-
 function TopPostRow({ post }: { post: TAudienceTopPost }) {
   return (
-    <li className="flex items-center gap-3 rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2">
-      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-300">
+    <li className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
+      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-foreground">
         {FORMAT_LABEL[post.mediaType] ?? post.mediaType}
       </span>
       <Link
         href={`/analytics/post/${post.postId}`}
-        className="flex-1 truncate text-sm text-neutral-300 hover:text-white"
+        className="flex-1 truncate text-sm text-foreground hover:text-foreground/80"
       >
-        {post.caption ?? <span className="italic text-neutral-600">Sans légende IG</span>}
+        {post.caption ?? <span className="italic text-muted-foreground">Sans légende IG</span>}
       </Link>
-      <span className="text-xs tabular-nums text-emerald-400" title="Score circulation">
+      <span className="text-xs tabular-nums text-success" title="Score circulation">
         {post.engagementScore}
       </span>
     </li>
@@ -364,40 +379,51 @@ function FormatRatePanel({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-        <h3 className="text-sm font-medium text-neutral-300">{title}</h3>
-        <p className="mt-2 text-sm text-neutral-500">Pas encore de reach mesurable par format.</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmptyState
+            title="Pas encore de reach mesurable par format"
+            description={subtitle}
+          />
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
-      <h3 className="text-sm font-medium text-neutral-300">{title}</h3>
-      <p className="mt-1 text-[11px] text-neutral-500">{subtitle}</p>
-      <ul className="mt-3 space-y-1.5">
-        {rows.map((r) => {
-          const rate = dimension === 'saves' ? r.savesRate : r.sharesRate
-          return (
-            <li
-              key={r.mediaType}
-              className="flex items-center justify-between rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-sm"
-            >
-              <span className="text-neutral-300">
-                {FORMAT_LABEL[r.mediaType] ?? r.mediaType}
-              </span>
-              <span className="flex items-center gap-3 text-xs tabular-nums text-neutral-400">
-                <span title="Posts dans cette tranche">
-                  {r.postCount} post{r.postCount > 1 ? 's' : ''}
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{subtitle}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-1.5">
+          {rows.map((r) => {
+            const rate = dimension === 'saves' ? r.savesRate : r.sharesRate
+            return (
+              <li
+                key={r.mediaType}
+                className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm"
+              >
+                <span className="text-foreground">
+                  {FORMAT_LABEL[r.mediaType] ?? r.mediaType}
                 </span>
-                <span className="font-semibold text-emerald-400">
-                  {(rate * 100).toFixed(2)}%
+                <span className="flex items-center gap-3 text-xs tabular-nums text-muted-foreground">
+                  <span title="Posts dans cette tranche">
+                    {r.postCount} post{r.postCount > 1 ? 's' : ''}
+                  </span>
+                  <span className="font-semibold text-success">
+                    {(rate * 100).toFixed(2)}%
+                  </span>
                 </span>
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
+              </li>
+            )
+          })}
+        </ul>
+      </CardContent>
+    </Card>
   )
 }
