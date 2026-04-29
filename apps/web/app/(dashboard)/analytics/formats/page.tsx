@@ -1,10 +1,18 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { PeriodFilter } from '@/components/analytics/PeriodFilter'
 import { FormatMatrix } from '@/components/charts/FormatMatrix'
 import { BestWindowHeatmap } from '@/components/charts/BestWindowHeatmap'
 import { getFormatBreakdown, getPostingWindows } from '@/features/analytics/get-analytics-data'
 import { parsePeriod } from '@/features/analytics/utils'
-import Link from 'next/link'
+import { PageHeader } from '@/components/ui/page-header'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 
 export default async function FormatsPage({
   searchParams,
@@ -25,39 +33,46 @@ export default async function FormatsPage({
   const windowData = windowResult.data ?? []
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="mb-1 flex items-center gap-1.5 text-xs text-neutral-500">
-            <Link href="/analytics" className="hover:text-neutral-300">
+    <div className="space-y-10">
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Link href="/analytics" className="transition-colors hover:text-foreground">
               Analytics
             </Link>
-            <span>/</span>
+            <span aria-hidden>/</span>
             <span>Formats</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-white">
-            Performances par format
-          </h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            Reach · Saves · Shares agrégés par type de contenu
-          </p>
-        </div>
-        <PeriodFilter current={period} />
-      </div>
+          </span>
+        }
+        title="Performances par format"
+        description="Reach · Saves · Shares agrégés par type de contenu."
+        actions={<PeriodFilter current={period} />}
+      />
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-4 text-sm font-medium text-neutral-300">
-          Reach · Saves · Shares par format
-        </h2>
-        <FormatMatrix data={formatData} />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Reach · Saves · Shares par format</CardTitle>
+          <CardDescription>
+            Volume agrégé sur la période sélectionnée. Reach et engagements
+            sont graphés séparément pour rester lisibles à la même échelle.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FormatMatrix data={formatData} />
+        </CardContent>
+      </Card>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-4 text-sm font-medium text-neutral-300">
-          Meilleurs créneaux de publication
-        </h2>
-        <BestWindowHeatmap data={windowData} />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Meilleurs créneaux de publication</CardTitle>
+          <CardDescription>
+            Saves moyens par créneau heure × jour, tous formats confondus.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BestWindowHeatmap data={windowData} />
+        </CardContent>
+      </Card>
     </div>
   )
 }
