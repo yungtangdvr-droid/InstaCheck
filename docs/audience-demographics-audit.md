@@ -212,3 +212,8 @@ choices:
   reauth. When the token is missing
   `instagram_manage_insights`, the unavailable copy explicitly
   hints at the missing scope so the operator can act.
+
+---
+
+_Superseded by `supabase/migrations/0009_audience_demographics.sql` (PR #48); the missing demographic sync described above has shipped._
+

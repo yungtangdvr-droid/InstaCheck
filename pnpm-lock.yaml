@@ -90,12 +90,6 @@ importers:
 
   packages/db: {}
 
-  packages/integrations/meta:
-    dependencies:
-      '@supabase/supabase-js':
-        specifier: ^2.0.0
-        version: 2.104.0
-
   packages/scoring: {}
 
   packages/types: {}
