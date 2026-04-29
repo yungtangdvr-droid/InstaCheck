@@ -22,14 +22,14 @@ export default async function CrmPage({
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Brand CRM</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Brand CRM</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Brands, contacts, touchpoints et tâches de relance
           </p>
         </div>
         <Link
           href="/crm/contacts"
-          className="text-sm text-neutral-400 transition-colors hover:text-white"
+          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           Contacts →
         </Link>
@@ -41,7 +41,7 @@ export default async function CrmPage({
       </div>
 
       {brands.length === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-neutral-800 text-sm text-neutral-500">
+        <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
           {status
             ? `Aucune brand avec le statut « ${status} ».`
             : 'Aucune brand enregistrée. Ajoute-en une pour commencer.'}

@@ -30,8 +30,8 @@ export default async function AttributionOverviewPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Attribution</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Attribution</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {overview.totalClicks} clics sur {period}j · {overview.attributedClicks} attribués ({attributedPct}%)
           </p>
         </div>
@@ -42,8 +42,8 @@ export default async function AttributionOverviewPage({
               href={`/attribution?period=${p}`}
               className={`rounded px-3 py-1.5 font-medium transition-colors ${
                 p === period
-                  ? 'bg-white text-black'
-                  : 'border border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               {p}j
@@ -51,7 +51,7 @@ export default async function AttributionOverviewPage({
           ))}
           <Link
             href="/attribution/rules"
-            className="ml-2 rounded border border-neutral-800 px-3 py-1.5 font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:text-white"
+            className="ml-2 rounded border border-border px-3 py-1.5 font-medium text-foreground transition-colors hover:bg-accent"
           >
             Règles
           </Link>
@@ -73,9 +73,9 @@ export default async function AttributionOverviewPage({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3">
-      <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-white tabular-nums">{value}</p>
+    <div className="rounded-lg border border-border bg-card px-4 py-3">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground tabular-nums">{value}</p>
     </div>
   )
 }

@@ -42,12 +42,12 @@ export default async function BrandDetailPage({
         <div>
           <Link
             href="/crm"
-            className="text-sm text-neutral-500 transition-colors hover:text-white"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← CRM
           </Link>
           <div className="mt-2 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-white">{brand.name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{brand.name}</h1>
             <span
               className={`rounded px-2 py-0.5 text-xs font-medium ${BRAND_STATUS_BADGE[brand.status]}`}
             >
@@ -59,7 +59,7 @@ export default async function BrandDetailPage({
               href={brand.website}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-block text-xs text-neutral-500 hover:text-neutral-300"
+              className="mt-1 inline-block text-xs text-muted-foreground hover:text-foreground"
             >
               {brand.website}
             </a>
@@ -71,7 +71,7 @@ export default async function BrandDetailPage({
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-neutral-300">Contacts liés</h2>
+          <h2 className="text-sm font-medium text-foreground">Contacts liés</h2>
           <NewContactInline
             linkToBrandId={brand.id}
             label="+ Nouveau contact lié"
@@ -86,13 +86,13 @@ export default async function BrandDetailPage({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-300">Touchpoints</h2>
+        <h2 className="text-sm font-medium text-foreground">Touchpoints</h2>
         <TouchpointComposer brandId={brand.id} />
         <ContactTimeline touchpoints={touchpoints} />
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-300">Tâches</h2>
+        <h2 className="text-sm font-medium text-foreground">Tâches</h2>
         <TaskInline tasks={tasks} linkedBrandId={brand.id} />
       </section>
 

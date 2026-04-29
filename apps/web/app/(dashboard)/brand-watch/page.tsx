@@ -33,8 +33,8 @@ export default async function BrandWatchPage({
     <div className="space-y-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Brand Watch</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Brand Watch</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Veille changedetection.io · {summary.totalEvents} événement
             {summary.totalEvents === 1 ? '' : 's'} sur {windowDays}j ·{' '}
             {summary.matchedEvents} matched · {summary.ambiguousEvents} ambigus ·{' '}
@@ -48,8 +48,8 @@ export default async function BrandWatchPage({
               href={`/brand-watch?window=${w}`}
               className={`rounded px-3 py-1.5 font-medium transition-colors ${
                 w === windowDays
-                  ? 'bg-white text-black'
-                  : 'border border-neutral-800 text-neutral-400 hover:border-neutral-700 hover:text-white'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               {w}j
@@ -70,17 +70,17 @@ export default async function BrandWatchPage({
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Watchlists
             </h2>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Liste complète des URLs surveillées, toutes brands confondues.
             </p>
           </div>
           <NewWatchlistInline brands={brands} />
         </div>
         {watchRows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-neutral-800 px-3 py-4 text-sm text-neutral-500">
+          <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
             Aucune URL surveillée. Ajoute une première watchlist pour démarrer la veille.
           </p>
         ) : (
@@ -100,12 +100,12 @@ function Stat({ label, value, highlight = false }: { label: string; value: numbe
     <div
       className={`rounded-lg border px-4 py-3 ${
         highlight
-          ? 'border-amber-500/30 bg-amber-500/5'
-          : 'border-neutral-800 bg-neutral-900'
+          ? 'border-warning/30 bg-warning-soft'
+          : 'border-border bg-card'
       }`}
     >
-      <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-white tabular-nums">{value}</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-foreground tabular-nums">{value}</p>
     </div>
   )
 }

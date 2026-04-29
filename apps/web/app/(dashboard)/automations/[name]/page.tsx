@@ -39,16 +39,16 @@ export default async function AutomationHistoryPage({
       <div>
         <Link
           href="/automations"
-          className="text-xs text-neutral-500 hover:text-neutral-300"
+          className="text-xs text-muted-foreground hover:text-foreground"
         >
           ← Automations
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{name}</h1>
-        <p className="mt-1 text-sm text-neutral-400">
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{name}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           last run · {formatRelative(lastRunAt)} · 7d · {runs7d.success}✓ {runs7d.failed}✗ {runs7d.skipped}⏭
         </p>
         {summary && !summary.canonical && (
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-1 text-xs text-muted-foreground">
             Observed extra · not in the canonical Sprint 8 automation set.
           </p>
         )}
@@ -56,7 +56,7 @@ export default async function AutomationHistoryPage({
 
       {showWeeklySummaries && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Recent weekly summaries
           </h2>
           <WeeklySummaryCard summaries={weekly} />
@@ -64,7 +64,7 @@ export default async function AutomationHistoryPage({
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Run history · last 50
         </h2>
         <RunHistory runs={runs} expandedCount={5} />

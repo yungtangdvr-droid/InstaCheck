@@ -29,12 +29,12 @@ export default async function AttributionRulesPage() {
         <div>
           <Link
             href="/attribution"
-            className="text-sm text-neutral-500 transition-colors hover:text-white"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             ← Attribution
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-white">Règles d&apos;attribution</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">Règles d&apos;attribution</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Les règles explicites gagnent toujours sur le match implicite via URL d&apos;asset.
           </p>
         </div>
@@ -46,7 +46,7 @@ export default async function AttributionRulesPage() {
       </div>
 
       {rules.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-neutral-800 px-4 py-10 text-center text-sm text-neutral-500">
+        <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
           Aucune règle. Le hub n&apos;attribue que les clics vers des URLs d&apos;assets connus.
         </p>
       ) : (
