@@ -57,8 +57,8 @@ export function DataHealthPanel({ health, period }: { health: TDataHealth; perio
     health.martRowCount > 0 ? 'ok' : 'empty'
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/60">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-800 px-5 py-3">
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
             className="inline-block h-2 w-2 rounded-full bg-emerald-500"
