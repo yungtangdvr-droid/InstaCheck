@@ -1,0 +1,313 @@
+// Meme Radar — Supabase persistence helpers.
+//
+// Narrow typed boundary for the radar tables. The generated
+// `packages/types/supabase.ts` was not regenerated when migration 0011
+// added `radar_sources`, `raw_radar_items` and `radar_items`. Until the
+// repo workflow `pnpm db:types` can run cleanly (requires Supabase CLI +
+// local stack), we mirror the migration's row/insert shapes here and
+// cast the Supabase client to a locally-augmented Database type at this
+// single boundary. All consumers (CLI, ingest helpers) receive fully
+// typed return values.
+//
+// Scope of the cast:
+//   - radar_sources
+//   - raw_radar_items
+//   - radar_items
+// `automation_runs` and every other table stay on the generated types.
+//
+// TODO(types): remove `DatabaseWithRadar` and `asRadarClient` when
+// `packages/types/supabase.ts` is regenerated to include the radar
+// tables.
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import type { Database, Json } from '@creator-hub/types/supabase'
+import type { RadarItemDecision } from '@creator-hub/types'
+
+import { fingerprint } from './dedup'
+import type { ParsedRadarItem } from './fetch-rss'
+
+// ----- Local row / insert shapes (mirror 0011_meme_radar.sql) -----
+// `type` aliases (not `interface`) — supabase-js's `GenericTable` requires
+// each `Row`/`Insert`/`Update` to extend `Record<string, unknown>`, which
+// type aliases satisfy structurally and interfaces do not.
+
+export type RadarSourceRow = {
+  id:            string
+  url:           string
+  label:         string
+  language:      string | null
+  active:        boolean
+  last_fetch_at: string | null
+  last_error:    string | null
+  created_at:    string
+}
+
+type RadarSourceInsert = {
+  id?:            string
+  url:            string
+  label:          string
+  language?:      string | null
+  active?:        boolean
+  last_fetch_at?: string | null
+  last_error?:    string | null
+}
+
+type RawRadarItemRow = {
+  id:           string
+  source_id:    string
+  external_id:  string
+  title:        string
+  url:          string
+  summary:      string | null
+  published_at: string | null
+  raw_json:     Json | null
+  fetched_at:   string
+}
+
+type RawRadarItemInsert = {
+  id?:           string
+  source_id:     string
+  external_id:   string
+  title:         string
+  url:           string
+  summary?:      string | null
+  published_at?: string | null
+  raw_json?:     Json | null
+}
+
+type RadarItemRow = {
+  id:           string
+  raw_item_id:  string
+  source_id:    string
+  title:        string
+  url:          string
+  summary:      string | null
+  published_at: string | null
+  fingerprint:  string
+  decision:     RadarItemDecision
+  decision_at:  string | null
+  created_at:   string
+}
+
+type RadarItemInsert = {
+  id?:           string
+  raw_item_id:   string
+  source_id:     string
+  title:         string
+  url:           string
+  summary?:      string | null
+  published_at?: string | null
+  fingerprint:   string
+  decision?:     RadarItemDecision
+  decision_at?:  string | null
+}
+
+type RadarTables = {
+  radar_sources: {
+    Row:    RadarSourceRow
+    Insert: RadarSourceInsert
+    Update: Partial<RadarSourceInsert>
+    Relationships: []
+  }
+  raw_radar_items: {
+    Row:    RawRadarItemRow
+    Insert: RawRadarItemInsert
+    Update: Partial<RawRadarItemInsert>
+    Relationships: []
+  }
+  radar_items: {
+    Row:    RadarItemRow
+    Insert: RadarItemInsert
+    Update: Partial<RadarItemInsert>
+    Relationships: []
+  }
+}
+
+type DatabaseWithRadar = Omit<Database, 'public'> & {
+  public: Omit<Database['public'], 'Tables'> & {
+    Tables: Database['public']['Tables'] & RadarTables
+  }
+}
+
+// One narrow cast confined to this module. The shape of
+// `DatabaseWithRadar` is fully defined above and matches the migration.
+export function asRadarClient(
+  supabase: SupabaseClient<Database>,
+): SupabaseClient<DatabaseWithRadar> {
+  return supabase as unknown as SupabaseClient<DatabaseWithRadar>
+}
+
+// ----- Read helpers -----
+
+export async function listActiveSources(
+  supabase: SupabaseClient<Database>,
+  filterUrl?: string,
+): Promise<RadarSourceRow[]> {
+  const client = asRadarClient(supabase)
+  let query = client
+    .from('radar_sources')
+    .select('id,url,label,language,active,last_fetch_at,last_error,created_at')
+    .eq('active', true)
+    .order('created_at', { ascending: true })
+  if (filterUrl) query = query.eq('url', filterUrl)
+  const { data, error } = await query
+  if (error) throw new Error(`list_active_sources_failed: ${error.message}`)
+  return data ?? []
+}
+
+// ----- Seed helper -----
+
+export async function upsertSource(
+  supabase: SupabaseClient<Database>,
+  input: { url: string; label: string; language: string | null },
+): Promise<{ inserted: boolean }> {
+  const client = asRadarClient(supabase)
+  const { data: existing, error: selErr } = await client
+    .from('radar_sources')
+    .select('id')
+    .eq('url', input.url)
+    .maybeSingle()
+  if (selErr) throw new Error(`upsert_source_select_failed: ${selErr.message}`)
+
+  if (existing) {
+    const { error: updErr } = await client
+      .from('radar_sources')
+      .update({ label: input.label, language: input.language })
+      .eq('id', existing.id)
+    if (updErr) throw new Error(`upsert_source_update_failed: ${updErr.message}`)
+    return { inserted: false }
+  }
+
+  const { error: insErr } = await client
+    .from('radar_sources')
+    .insert({
+      url:      input.url,
+      label:    input.label,
+      language: input.language,
+      active:   true,
+    })
+  if (insErr) throw new Error(`upsert_source_insert_failed: ${insErr.message}`)
+  return { inserted: true }
+}
+
+// ----- Source status updates -----
+
+export async function markSourceFetched(
+  supabase: SupabaseClient<Database>,
+  sourceId: string,
+  ok: boolean,
+  errorMessage: string | null,
+): Promise<void> {
+  const client = asRadarClient(supabase)
+  const { error } = await client
+    .from('radar_sources')
+    .update({
+      last_fetch_at: new Date().toISOString(),
+      last_error:    ok ? null : (errorMessage ?? 'unknown_error'),
+    })
+    .eq('id', sourceId)
+  if (error) throw new Error(`mark_source_fetched_failed: ${error.message}`)
+}
+
+// ----- Per-item ingest -----
+
+export interface IngestItemResult {
+  rawInserted:  boolean
+  itemInserted: boolean
+}
+
+// Idempotent two-step write: raw row first (unique on source_id +
+// external_id), then a deduped radar_items row (unique on fingerprint).
+// When a duplicate already exists at either step, the corresponding
+// `*Inserted` flag is false and we keep going.
+export async function ingestItem(
+  supabase: SupabaseClient<Database>,
+  sourceId: string,
+  parsed:   ParsedRadarItem,
+): Promise<IngestItemResult> {
+  const client = asRadarClient(supabase)
+
+  // Step 1: raw_radar_items
+  const { data: rawIns, error: rawErr } = await client
+    .from('raw_radar_items')
+    .insert({
+      source_id:    sourceId,
+      external_id:  parsed.externalId,
+      title:        parsed.title,
+      url:          parsed.url,
+      summary:      parsed.summary,
+      published_at: parsed.publishedAt,
+      raw_json:     parsed.rawJson as Json,
+    })
+    .select('id')
+    .maybeSingle()
+
+  let rawId: string | null = rawIns?.id ?? null
+  let rawInserted = rawIns != null
+
+  if (rawErr) {
+    // Unique violation on (source_id, external_id) → already ingested.
+    // Look up the existing row id so we can still try the radar_items step.
+    if (rawErr.code === '23505') {
+      const { data: existing, error: lookupErr } = await client
+        .from('raw_radar_items')
+        .select('id')
+        .eq('source_id',   sourceId)
+        .eq('external_id', parsed.externalId)
+        .maybeSingle()
+      if (lookupErr) throw new Error(`raw_lookup_failed: ${lookupErr.message}`)
+      rawId = existing?.id ?? null
+      rawInserted = false
+    } else {
+      throw new Error(`raw_insert_failed: ${rawErr.message}`)
+    }
+  }
+
+  if (!rawId) {
+    return { rawInserted: false, itemInserted: false }
+  }
+
+  // Step 2: radar_items (deduped by fingerprint).
+  const fp = fingerprint(parsed.title, parsed.url)
+  const { error: itemErr } = await client
+    .from('radar_items')
+    .insert({
+      raw_item_id:  rawId,
+      source_id:    sourceId,
+      title:        parsed.title,
+      url:          parsed.url,
+      summary:      parsed.summary,
+      published_at: parsed.publishedAt,
+      fingerprint:  fp,
+      decision:     'new',
+    })
+
+  if (itemErr) {
+    if (itemErr.code === '23505') {
+      // Duplicate fingerprint — another raw item from the same outlet
+      // already produced this canonical radar_item.
+      return { rawInserted, itemInserted: false }
+    }
+    throw new Error(`item_insert_failed: ${itemErr.message}`)
+  }
+  return { rawInserted, itemInserted: true }
+}
+
+// ----- automation_runs -----
+
+export async function logAutomationRun(
+  supabase: SupabaseClient<Database>,
+  status:   'success' | 'failed' | 'skipped',
+  summary:  Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase.from('automation_runs').insert({
+    automation_name: 'meme-radar-rss-ingest',
+    status,
+    result_summary:  JSON.stringify(summary),
+  })
+  if (error) {
+    // Non-fatal; surface to caller via thrown error so the CLI can log.
+    throw new Error(`automation_run_insert_failed: ${error.message}`)
+  }
+}

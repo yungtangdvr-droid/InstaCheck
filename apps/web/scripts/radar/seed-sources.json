@@ -1,0 +1,32 @@
+[
+  {
+    "url": "https://www.theverge.com/rss/index.xml",
+    "label": "The Verge",
+    "language": "en"
+  },
+  {
+    "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "label": "BBC News — World",
+    "language": "en"
+  },
+  {
+    "url": "https://feeds.npr.org/1001/rss.xml",
+    "label": "NPR — Top Stories",
+    "language": "en"
+  },
+  {
+    "url": "https://www.lemonde.fr/rss/une.xml",
+    "label": "Le Monde — Une",
+    "language": "fr"
+  },
+  {
+    "url": "https://www.numerama.com/feed/",
+    "label": "Numerama",
+    "language": "fr"
+  },
+  {
+    "url": "https://korii.slate.fr/rss.xml",
+    "label": "Korii (Slate.fr)",
+    "language": "fr"
+  }
+]
