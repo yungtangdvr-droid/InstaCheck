@@ -23,6 +23,16 @@
 //     existing row, and rows already on the current version, are skipped.
 //     Pair with --reanalyze --status=completed to migrate v1 rows to v2
 //     without re-burning quota on rows already on the latest prompt.
+//   - --all-time: lifts the implicit `in_last_90d = true` filter so the
+//     full owner archive is eligible. The underlying view (and posts
+//     table) is owner-only, so benchmark / peer media stays excluded.
+//     Combine with --dry-run / --reanalyze / --status as usual.
+//   - --count-only: read-only preview. Reports how many posts would be
+//     selected under the current flags without calling Gemini, without
+//     downloading media, and without writing to post_content_analysis or
+//     automation_runs. Ignores --limit (the question is "how big is the
+//     backlog", not "how big is the next batch"). Honors --all-time,
+//     --reanalyze, --status, --outdated-only. Only requires Supabase env.
 //
 // MAX_BATCH_LIMIT (=100) is a hard cap on a single run regardless of
 // flags, to keep accidental large reruns bounded.
@@ -34,6 +44,7 @@ import { PROMPT_VERSION } from '../../lib/gemini/prompt'
 import {
   ALL_REANALYZE_STATUSES,
   DEFAULT_MODEL,
+  countCandidates,
   runAnalysisBatch,
   type ReanalyzeStatus,
   type SelectionMode,
@@ -49,6 +60,8 @@ type Cli = {
   reanalyze:       boolean
   reanalyzeStatus: ReanalyzeStatus[]
   outdatedOnly:    boolean
+  allTime:         boolean
+  countOnly:       boolean
 }
 
 function parseArgv(argv: string[]): Cli {
@@ -57,6 +70,8 @@ function parseArgv(argv: string[]): Cli {
   let reanalyze = false
   let reanalyzeStatus: ReanalyzeStatus[] = []
   let outdatedOnly = false
+  let allTime = false
+  let countOnly = false
   for (const arg of argv.slice(2)) {
     if (arg.startsWith('--limit=')) {
       const n = Number.parseInt(arg.slice('--limit='.length), 10)
@@ -67,6 +82,10 @@ function parseArgv(argv: string[]): Cli {
       reanalyze = true
     } else if (arg === '--outdated-only') {
       outdatedOnly = true
+    } else if (arg === '--all-time') {
+      allTime = true
+    } else if (arg === '--count-only') {
+      countOnly = true
     } else if (arg.startsWith('--status=')) {
       const raw = arg.slice('--status='.length).split(',').map((s) => s.trim())
       reanalyzeStatus = raw.filter(
@@ -77,7 +96,7 @@ function parseArgv(argv: string[]): Cli {
   if (reanalyze && reanalyzeStatus.length === 0) {
     reanalyzeStatus = [...ALL_REANALYZE_STATUSES]
   }
-  return { limit, dryRun, reanalyze, reanalyzeStatus, outdatedOnly }
+  return { limit, dryRun, reanalyze, reanalyzeStatus, outdatedOnly, allTime, countOnly }
 }
 
 function resolveLimit(cli: Cli): number {
@@ -120,6 +139,22 @@ function readEnvOrFail(): {
   }
 }
 
+// Slimmer env reader for --count-only. Only Supabase is needed because the
+// path issues SELECTs only — no Gemini call, no Meta media refresh, no DB
+// writes (including no automation_runs row).
+function readSupabaseEnvOrFail(): {
+  supabaseUrl: string
+  supabaseKey: string
+} | { error: string } {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const missing: string[] = []
+  if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
+  if (!supabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
+  if (missing.length) return { error: `missing_env:${missing.join(',')}` }
+  return { supabaseUrl: supabaseUrl!, supabaseKey: supabaseKey! }
+}
+
 async function logRun(
   supabase: ReturnType<typeof createClient<Database>>,
   summary:  Record<string, unknown>,
@@ -135,6 +170,47 @@ async function logRun(
 
 async function main() {
   const cli   = parseArgv(process.argv)
+
+  // --count-only short-circuits before Gemini/Meta env validation and the
+  // CONTENT_ANALYSIS_ENABLED kill-switch: it only issues SELECTs against
+  // Supabase. Zero writes (no post_content_analysis upsert, no
+  // automation_runs row), zero outbound Gemini/Meta calls.
+  if (cli.countOnly) {
+    const env = readSupabaseEnvOrFail()
+    if ('error' in env) {
+      console.error(`[content-analysis] cannot run: ${env.error}`)
+      process.exit(2)
+    }
+    const supabase = createClient<Database>(env.supabaseUrl, env.supabaseKey)
+    const selection: SelectionMode = {
+      kind:            'cli',
+      reanalyze:       cli.reanalyze,
+      reanalyzeStatus: cli.reanalyzeStatus,
+      outdatedOnly:    cli.outdatedOnly,
+      allTime:         cli.allTime,
+    }
+    try {
+      const { count, sampleIds } = await countCandidates(supabase, selection)
+      console.log(JSON.stringify({
+        ok:                   true,
+        countOnly:            true,
+        count,
+        sampleIds,
+        allTime:              cli.allTime,
+        reanalyze:            cli.reanalyze,
+        reanalyzeStatus:      cli.reanalyze ? cli.reanalyzeStatus : null,
+        outdatedOnly:         cli.outdatedOnly,
+        cliLimitIgnored:      cli.limit ?? null,
+        currentPromptVersion: PROMPT_VERSION,
+      }, null, 2))
+      return
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'count_candidates_failed'
+      console.error(`[content-analysis] ${msg}`)
+      process.exit(1)
+    }
+  }
+
   const env   = readEnvOrFail()
   const limit = resolveLimit(cli)
 
@@ -160,6 +236,7 @@ async function main() {
     reanalyze:       cli.reanalyze,
     reanalyzeStatus: cli.reanalyzeStatus,
     outdatedOnly:    cli.outdatedOnly,
+    allTime:         cli.allTime,
   }
 
   let result
@@ -188,6 +265,7 @@ async function main() {
       processed:            0,
       reason:               result.noOpReason,
       outdatedOnly:         cli.outdatedOnly,
+      allTime:              cli.allTime,
       currentPromptVersion: PROMPT_VERSION,
     }, null, 2))
     await logRun(supabase, {
@@ -195,6 +273,7 @@ async function main() {
       reason:               result.noOpReason,
       limit,
       outdatedOnly:         cli.outdatedOnly,
+      allTime:              cli.allTime,
       currentPromptVersion: PROMPT_VERSION,
     }, true)
     return
@@ -220,6 +299,7 @@ async function main() {
     reanalyze:            cli.reanalyze,
     reanalyzeStatus:      cli.reanalyze ? cli.reanalyzeStatus : null,
     outdatedOnly:         cli.outdatedOnly,
+    allTime:              cli.allTime,
     durationMs:           result.durationMs,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
