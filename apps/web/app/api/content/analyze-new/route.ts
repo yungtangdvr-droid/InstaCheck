@@ -110,9 +110,15 @@ export async function POST(_request: NextRequest) {
       selection: { kind: 'new-only' },
       limit,
       ctx: {
-        geminiKey:   geminiKey!,
+        geminiKey:             geminiKey!,
         geminiModel,
-        metaToken:   metaToken!,
+        metaToken:             metaToken!,
+        // OpenAI fallback intentionally disabled on the UI route in this
+        // PR — the manual UI path stays Gemini-only until we expose the
+        // fallback in the route's response/automation_runs summary.
+        openaiKey:             null,
+        openaiModel:           '',
+        openaiFallbackEnabled: false,
       },
     })
 

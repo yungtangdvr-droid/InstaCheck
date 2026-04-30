@@ -4,6 +4,7 @@ import { PROMPT_VERSION, SYSTEM_INSTRUCTION } from './prompt'
 
 export type AnalyzeOk = {
   ok: true
+  provider: 'gemini'
   data: ContentAnalysis
   raw: unknown
   inputTokens:  number | null
@@ -14,6 +15,7 @@ export type AnalyzeOk = {
 
 export type AnalyzeErr = {
   ok: false
+  provider: 'gemini'
   error: string
   raw: unknown
   model:         string
@@ -59,7 +61,7 @@ function buildUserParts(caption: string | null) {
 
 export async function analyzePostMedia(args: AnalyzeArgs): Promise<AnalyzeResult> {
   const { apiKey, model, mediaUrl, mediaType, caption } = args
-  const meta = { model, promptVersion: PROMPT_VERSION }
+  const meta = { provider: 'gemini' as const, model, promptVersion: PROMPT_VERSION }
 
   let bytes: Buffer
   let mimeType: string

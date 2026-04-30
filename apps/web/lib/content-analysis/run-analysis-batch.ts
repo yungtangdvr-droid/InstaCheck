@@ -14,14 +14,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
-import { analyzePostMedia } from '../gemini/analyze'
 import { PROMPT_VERSION } from '../gemini/prompt'
 import { refreshMediaUrl, pickAnalyzableUrl } from '../meta/refresh-media-url'
 import { isPendingForCurrentVersion } from './eligibility'
+import { analyzeWithFallback, type FallbackResult } from './analyze-with-fallback'
 
-export const PROVIDER          = 'gemini'
-export const DEFAULT_MODEL     = 'gemini-2.5-flash'
-export const POST_DELAY_MS     = 600 // gentle pacing between Gemini calls
+// Hard-coded provider for skipped (Meta/media) rows where no provider
+// was actually consulted. Completed/failed rows persist the *actual*
+// provider used (`'gemini' | 'openai'`) via the orchestrator's result.
+export const SKIPPED_PROVIDER       = 'gemini'
+export const DEFAULT_MODEL          = 'gemini-2.5-flash'
+export const DEFAULT_OPENAI_MODEL   = 'gpt-4o-mini'
+export const POST_DELAY_MS          = 600 // gentle pacing between provider calls
 
 type Supabase = SupabaseClient<Database>
 
@@ -52,9 +56,15 @@ export type SelectionMode =
     }
 
 export type AnalysisCtx = {
-  geminiKey:   string
-  geminiModel: string
-  metaToken:   string
+  geminiKey:               string
+  geminiModel:             string
+  metaToken:               string
+  // Fallback config. `openaiKey` may be null when the fallback is disabled
+  // or no key is configured — the orchestrator treats both as "do not call
+  // OpenAI" and returns the Gemini result as-is.
+  openaiKey:               string | null
+  openaiModel:             string
+  openaiFallbackEnabled:   boolean
 }
 
 export type RunAnalysisOptions = {
@@ -294,12 +304,17 @@ async function processPost(
     return { postId: post.post_id, status: 'skipped', reason: 'no_media_url' }
   }
 
-  const analysis = await analyzePostMedia({
+  const analysis = await analyzeWithFallback({
     apiKey:    ctx.geminiKey,
     model:     ctx.geminiModel,
     mediaUrl:  url,
     mediaType: refresh.data.mediaType,
     caption:   post.caption,
+    fallback: {
+      enabled:     ctx.openaiFallbackEnabled,
+      openaiKey:   ctx.openaiKey,
+      openaiModel: ctx.openaiModel,
+    },
   })
 
   if (!analysis.ok) {
@@ -308,19 +323,23 @@ async function processPost(
   }
 
   await upsertCompleted(supabase, post, analysis, url)
-  return { postId: post.post_id, status: 'completed' }
+  return {
+    postId: post.post_id,
+    status: 'completed',
+    reason: `provider=${analysis.provider}`,
+  }
 }
 
 async function upsertCompleted(
   supabase: Supabase,
   post:     { post_id: string },
-  a:        Extract<Awaited<ReturnType<typeof analyzePostMedia>>, { ok: true }>,
+  a:        Extract<FallbackResult, { ok: true }>,
   url:      string,
 ) {
   const { error } = await supabase.from('post_content_analysis').upsert(
     {
       post_id:               post.post_id,
-      provider:              PROVIDER,
+      provider:              a.provider,
       model:                 a.model,
       prompt_version:        a.promptVersion,
       status:                'completed',
@@ -350,13 +369,13 @@ async function upsertCompleted(
 async function upsertFailed(
   supabase: Supabase,
   post:     { post_id: string },
-  a:        Extract<Awaited<ReturnType<typeof analyzePostMedia>>, { ok: false }>,
+  a:        Extract<FallbackResult, { ok: false }>,
   url:      string,
 ) {
   const { error } = await supabase.from('post_content_analysis').upsert(
     {
       post_id:          post.post_id,
-      provider:         PROVIDER,
+      provider:         a.provider,
       model:            a.model,
       prompt_version:   a.promptVersion,
       status:           'failed',
@@ -380,7 +399,7 @@ async function upsertSkipped(
   const { error } = await supabase.from('post_content_analysis').upsert(
     {
       post_id:          post.post_id,
-      provider:         PROVIDER,
+      provider:         SKIPPED_PROVIDER,
       model,
       prompt_version:   PROMPT_VERSION,
       status:           'skipped',
