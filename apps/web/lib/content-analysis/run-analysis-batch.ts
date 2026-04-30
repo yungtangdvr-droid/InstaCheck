@@ -101,10 +101,21 @@ type ExistingRow = { post_id: string; status: string | null; prompt_version: str
 // scan can't drag Supabase down. Not exported.
 const COUNT_FETCH_CEILING = 10_000
 
+// Hard ceiling for the CLI paged picker. Same bound as the count path so
+// `--count-only` and an actual run agree on what's reachable.
+const PICK_SCAN_CEILING = 10_000
+
+// Page size for the CLI paged picker. Big enough to find sparse eligible
+// rows (e.g. `--status=skipped` against an archive where skipped rows sit
+// in the long tail of `performance_score`) without pulling the whole
+// mart in one shot.
+const CLI_PAGE_SIZE = 500
+
 async function fetchUsableFromMart(
   supabase:    Supabase,
   selection:   SelectionMode,
   fetchLimit:  number,
+  offset:      number = 0,
 ): Promise<Candidate[]> {
   // Order strategy depends on mode. The UI flow wants the most recent posts
   // first (operator just synced new content). The CLI flow keeps the
@@ -123,9 +134,13 @@ async function fetchUsableFromMart(
     .from('v_mart_post_performance')
     .select('post_id, media_id, media_type, caption')
   if (restrictTo90d) query = query.eq('in_last_90d', true)
+  // `post_id` is a deterministic tiebreaker so range-based paging in the
+  // CLI picker is stable across page boundaries (the primary key may have
+  // ties or nulls — performance_score and posted_at both can).
   query = query
     .order(orderBy.column, { ascending: orderBy.ascending, nullsFirst: false })
-    .limit(fetchLimit)
+    .order('post_id', { ascending: true })
+    .range(offset, offset + fetchLimit - 1)
 
   const { data: rows, error } = await query
   if (error) throw new Error(`mart_query: ${error.message}`)
@@ -198,12 +213,46 @@ async function pickCandidates(
   limit:     number,
   selection: SelectionMode,
 ): Promise<Candidate[]> {
-  // Overfetch 4× so we have spares after excluding already-analyzed posts.
-  const overfetch = Math.max(limit * 4, 20)
-  const usable    = await fetchUsableFromMart(supabase, selection, overfetch)
-  if (usable.length === 0) return []
-  const byPost    = await fetchExistingByPost(supabase, usable.map((r) => r.post_id))
-  return applyEligibility(usable, byPost, selection).slice(0, limit)
+  if (selection.kind === 'new-only') {
+    // UI flow: single-shot 4× overfetch. The newest posts almost always
+    // need analysis (operator just synced), and the route's own hard cap
+    // bounds total work, so paging isn't needed here. Behavior preserved.
+    const overfetch = Math.max(limit * 4, 20)
+    const usable    = await fetchUsableFromMart(supabase, selection, overfetch)
+    if (usable.length === 0) return []
+    const byPost    = await fetchExistingByPost(supabase, usable.map((r) => r.post_id))
+    return applyEligibility(usable, byPost, selection).slice(0, limit)
+  }
+
+  // CLI flow: page through the mart until enough eligible rows are found,
+  // the mart is exhausted, or the scan ceiling is reached. Required because
+  // CLI predicates (e.g. --status=skipped, or default missing-only after a
+  // first pass has already analyzed the top performers) can be sparse and
+  // sit far below row 20 of the performance ordering. Without paging, a
+  // small overfetch would yield zero matches even with hundreds of eligible
+  // rows in the archive, returning a misleading `no_unanalyzed_posts`.
+  const eligible: Candidate[] = []
+  let scanned = 0
+
+  while (eligible.length < limit && scanned < PICK_SCAN_CEILING) {
+    const remaining = PICK_SCAN_CEILING - scanned
+    const fetchSize = Math.min(CLI_PAGE_SIZE, remaining)
+    const page      = await fetchUsableFromMart(supabase, selection, fetchSize, scanned)
+    if (page.length === 0) break
+
+    const byPost  = await fetchExistingByPost(supabase, page.map((r) => r.post_id))
+    const matches = applyEligibility(page, byPost, selection)
+    for (const m of matches) {
+      eligible.push(m)
+      if (eligible.length >= limit) break
+    }
+
+    scanned += page.length
+    // Mart exhausted — fewer rows came back than we asked for.
+    if (page.length < fetchSize) break
+  }
+
+  return eligible.slice(0, limit)
 }
 
 /**
