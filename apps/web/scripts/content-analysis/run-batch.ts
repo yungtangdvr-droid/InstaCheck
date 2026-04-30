@@ -44,6 +44,7 @@ import { PROMPT_VERSION } from '../../lib/gemini/prompt'
 import {
   ALL_REANALYZE_STATUSES,
   DEFAULT_MODEL,
+  DEFAULT_OPENAI_MODEL,
   countCandidates,
   runAnalysisBatch,
   type ReanalyzeStatus,
@@ -108,12 +109,15 @@ function resolveLimit(cli: Cli): number {
 }
 
 function readEnvOrFail(): {
-  supabaseUrl:  string
-  supabaseKey:  string
-  geminiKey:    string
-  geminiModel:  string
-  metaToken:    string
-  enabled:      boolean
+  supabaseUrl:             string
+  supabaseKey:             string
+  geminiKey:               string
+  geminiModel:             string
+  metaToken:               string
+  enabled:                 boolean
+  openaiFallbackEnabled:   boolean
+  openaiKey:               string | null
+  openaiModel:             string
 } | { error: string } {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -122,11 +126,20 @@ function readEnvOrFail(): {
   const metaToken   = process.env.META_ACCESS_TOKEN
   const enabled     = process.env.CONTENT_ANALYSIS_ENABLED === 'true'
 
+  // OpenAI fallback is opt-in. When disabled (default), OPENAI_API_KEY is
+  // not required and the run path stays Gemini-only — behavior identical
+  // to before this change.
+  const openaiFallbackEnabled =
+    process.env.CONTENT_ANALYSIS_OPENAI_FALLBACK_ENABLED === 'true'
+  const openaiKeyRaw = process.env.OPENAI_API_KEY
+  const openaiModel  = process.env.OPENAI_CONTENT_ANALYSIS_MODEL ?? DEFAULT_OPENAI_MODEL
+
   const missing: string[] = []
   if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
   if (!supabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
   if (!geminiKey)   missing.push('GEMINI_API_KEY')
   if (!metaToken)   missing.push('META_ACCESS_TOKEN')
+  if (openaiFallbackEnabled && !openaiKeyRaw) missing.push('OPENAI_API_KEY')
   if (missing.length) return { error: `missing_env:${missing.join(',')}` }
 
   return {
@@ -136,6 +149,9 @@ function readEnvOrFail(): {
     geminiModel,
     metaToken:   metaToken!,
     enabled,
+    openaiFallbackEnabled,
+    openaiKey:   openaiFallbackEnabled ? openaiKeyRaw! : null,
+    openaiModel,
   }
 }
 
@@ -247,9 +263,12 @@ async function main() {
       limit,
       dryRun: cli.dryRun,
       ctx: {
-        geminiKey:   env.geminiKey,
-        geminiModel: env.geminiModel,
-        metaToken:   env.metaToken,
+        geminiKey:             env.geminiKey,
+        geminiModel:           env.geminiModel,
+        metaToken:             env.metaToken,
+        openaiKey:             env.openaiKey,
+        openaiModel:           env.openaiModel,
+        openaiFallbackEnabled: env.openaiFallbackEnabled,
       },
     })
   } catch (err) {
@@ -287,6 +306,14 @@ async function main() {
     }
   }
 
+  // Count outcomes that used the OpenAI fallback. The orchestrator
+  // surfaces the actual provider via the `provider=...` reason string on
+  // completed outcomes; failed/skipped outcomes carry their own reasons
+  // and do not contribute to the fallback tally.
+  const fallbackUsed = result.outcomes.filter(
+    (o) => o.status === 'completed' && o.reason === 'provider=openai',
+  ).length
+
   const summary = {
     processed:            result.processed,
     completed:            result.completed,
@@ -301,6 +328,8 @@ async function main() {
     outdatedOnly:         cli.outdatedOnly,
     allTime:              cli.allTime,
     durationMs:           result.durationMs,
+    openaiFallbackEnabled: env.openaiFallbackEnabled,
+    openaiFallbackUsed:    fallbackUsed,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
 
