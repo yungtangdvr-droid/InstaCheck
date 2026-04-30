@@ -903,3 +903,7 @@ export type TPeerPercentilePayload = {
   metrics:        TPeerPercentilePoint[]
   generatedAt:    string
 }
+
+// --- Meme Radar (PR 1: schema + types) ---
+
+export * from './radar'
