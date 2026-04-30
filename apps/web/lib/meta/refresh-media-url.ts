@@ -40,7 +40,9 @@ export async function refreshMediaUrl(
   }
 
   if (!res.ok) {
-    return { ok: false, error: `meta_${res.status}` }
+    let body = ''
+    try { body = await res.text() } catch { /* leave body empty */ }
+    return { ok: false, error: formatMetaError(res.status, body) }
   }
 
   let body: unknown
@@ -64,6 +66,47 @@ export async function refreshMediaUrl(
       thumbnailUrl: typeof obj.thumbnail_url  === 'string' ? obj.thumbnail_url  : null,
     },
   }
+}
+
+// Cap the human-readable portion so the final `meta_<status>:<code>:<msg>`
+// string fits comfortably under the 500-char `post_content_analysis.error_message`
+// column (after `upsertSkipped` slices to 500). Status + code prefixes add ~20
+// chars at most, leaving generous headroom.
+const MAX_META_MESSAGE_LEN = 300
+
+function redactToken(s: string): string {
+  return s.replace(/access_token=[^&\s"']+/gi, 'access_token=REDACTED')
+}
+
+// Meta's documented 4xx/5xx body shape is `{ "error": { "message", "code",
+// "error_subcode", "fbtrace_id", ... } }`. We extract code+message; anything
+// off-spec falls back to a redacted body excerpt under `:unknown:`.
+function formatMetaError(status: number, body: string): string {
+  const trimmed = body.trim()
+  if (trimmed.length === 0) {
+    return `meta_${status}:unknown:`
+  }
+
+  let parsed: unknown = null
+  try { parsed = JSON.parse(trimmed) } catch { /* not JSON */ }
+
+  if (parsed !== null && typeof parsed === 'object') {
+    const err = (parsed as { error?: unknown }).error
+    if (err !== null && typeof err === 'object') {
+      const e = err as Record<string, unknown>
+      const codeRaw = e.code
+      const code =
+        typeof codeRaw === 'number' ? String(codeRaw) :
+        typeof codeRaw === 'string' && codeRaw.length > 0 ? codeRaw :
+        'unknown'
+      const messageRaw = typeof e.message === 'string' ? e.message : ''
+      const safeMessage = redactToken(messageRaw).slice(0, MAX_META_MESSAGE_LEN)
+      return `meta_${status}:${code}:${safeMessage}`
+    }
+  }
+
+  const excerpt = redactToken(trimmed).slice(0, MAX_META_MESSAGE_LEN)
+  return `meta_${status}:unknown:${excerpt}`
 }
 
 /**
