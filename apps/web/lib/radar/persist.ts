@@ -61,6 +61,7 @@ type RawRadarItemRow = {
   url:          string
   summary:      string | null
   published_at: string | null
+  image_url:    string | null
   raw_json:     Json | null
   fetched_at:   string
 }
@@ -73,6 +74,7 @@ type RawRadarItemInsert = {
   url:           string
   summary?:      string | null
   published_at?: string | null
+  image_url?:    string | null
   raw_json?:     Json | null
 }
 
@@ -84,6 +86,7 @@ type RadarItemRow = {
   url:          string
   summary:      string | null
   published_at: string | null
+  image_url:    string | null
   fingerprint:  string
   decision:     RadarItemDecision
   decision_at:  string | null
@@ -98,6 +101,7 @@ type RadarItemInsert = {
   url:           string
   summary?:      string | null
   published_at?: string | null
+  image_url?:    string | null
   fingerprint:   string
   decision?:     RadarItemDecision
   decision_at?:  string | null
@@ -312,6 +316,7 @@ export async function ingestItem(
       url:          parsed.url,
       summary:      parsed.summary,
       published_at: parsed.publishedAt,
+      image_url:    parsed.imageUrl,
       raw_json:     parsed.rawJson as Json,
     })
     .select('id')
@@ -353,6 +358,7 @@ export async function ingestItem(
       url:          parsed.url,
       summary:      parsed.summary,
       published_at: parsed.publishedAt,
+      image_url:    parsed.imageUrl,
       fingerprint:  fp,
       decision:     'new',
     })

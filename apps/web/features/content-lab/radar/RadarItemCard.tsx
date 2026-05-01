@@ -68,25 +68,51 @@ export function RadarItemCard({ item }: RadarItemCardProps) {
   return (
     <Card className={cn('transition-opacity', dimmed && 'opacity-60')}>
       <CardContent className="space-y-3 pt-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <span className="font-medium text-foreground/80">{item.sourceLabel}</span>
-              <span aria-hidden>·</span>
-              <span title={publishedAbsolute ?? undefined}>{formatAge(item.publishedAt)}</span>
-              {decisionBadge(item.decision)}
+        <div className="flex items-start gap-3">
+          {item.imageUrl ? (
+            // Plain <img> (no next/image) per PR 5: third-party RSS hosts vary
+            // and we explicitly avoid maintaining an allowlist or proxy.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.imageUrl}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="size-16 shrink-0 rounded-md border border-border bg-muted object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
+            />
+          ) : null}
+          <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <span className="font-medium text-foreground/80">{item.sourceLabel}</span>
+                <span aria-hidden>·</span>
+                <span title={publishedAbsolute ?? undefined}>{formatAge(item.publishedAt)}</span>
+                {decisionBadge(item.decision)}
+              </div>
+              <h3 className="text-base font-semibold leading-snug text-card-foreground">
+                {item.title}
+              </h3>
             </div>
-            <h3 className="text-base font-semibold leading-snug text-card-foreground">
-              {item.title}
-            </h3>
-          </div>
-          <div className="flex shrink-0 flex-col items-end">
-            <span className="text-2xl font-semibold leading-none tabular-nums text-card-foreground">
-              {formatScore(item.composite)}
-            </span>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              composite /100
-            </span>
+            <div className="flex shrink-0 flex-col items-end">
+              <span className="text-2xl font-semibold leading-none tabular-nums text-card-foreground">
+                {formatScore(item.composite)}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                composite /100
+              </span>
+              {item.feedbackBoost != null && item.feedbackBoost !== 0 ? (
+                <span
+                  className={cn(
+                    'mt-1 text-[10px] font-medium tabular-nums',
+                    item.feedbackBoost > 0 ? 'text-success' : 'text-muted-foreground',
+                  )}
+                  title="Ajustement par tes Save / Ignore récents"
+                >
+                  {item.feedbackBoost > 0 ? `+${item.feedbackBoost}` : item.feedbackBoost} feedback
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -176,6 +202,16 @@ function ExpandedDetails({ item }: { item: RadarFeedRow }) {
       {item.whyMemable ? (
         <Section title="Pourquoi mémable">
           <p className="text-sm text-card-foreground/90">{item.whyMemable}</p>
+        </Section>
+      ) : null}
+
+      {item.captionIdeas.length > 0 ? (
+        <Section title="Idées de caption">
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-card-foreground/90 marker:text-muted-foreground">
+            {item.captionIdeas.map((idea, idx) => (
+              <li key={idx}>{idea}</li>
+            ))}
+          </ol>
         </Section>
       ) : null}
 

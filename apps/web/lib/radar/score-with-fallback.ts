@@ -39,9 +39,10 @@ export async function analyzeRadarWithFallback(
   if (!isTransientGeminiError(primary.error)) return primary
 
   const openaiResult = await analyzeRadarItemOpenAI({
-    apiKey: fallback.openaiKey!,
-    model:  fallback.openaiModel,
-    item:   geminiArgs.item,
+    apiKey:            fallback.openaiKey!,
+    model:             fallback.openaiModel,
+    item:              geminiArgs.item,
+    tasteProfileBlock: geminiArgs.tasteProfileBlock ?? null,
   })
 
   if (openaiResult.ok) return openaiResult

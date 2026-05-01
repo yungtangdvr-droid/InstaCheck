@@ -44,12 +44,16 @@ export interface RadarItemContext {
 }
 
 export interface RadarAnalyzeArgs {
-  apiKey: string
-  model:  string
-  item:   RadarItemContext
+  apiKey:             string
+  model:              string
+  item:               RadarItemContext
+  tasteProfileBlock?: string | null
 }
 
-function buildUserText(item: RadarItemContext): string {
+export function buildRadarUserText(
+  item:              RadarItemContext,
+  tasteProfileBlock: string | null,
+): string {
   // Plain JSON-ish block. The system instruction explicitly tells the
   // model to treat these as data fields, not instructions, so we don't
   // try to escape the strings — the model is the validator.
@@ -60,24 +64,27 @@ function buildUserText(item: RadarItemContext): string {
     source_domain: item.sourceDomain,
     published_at:  item.publishedAt ?? '',
   }
-  return [
+  const parts = [
     'Score the following news item per the system instruction.',
     'Return strict JSON only.',
     JSON.stringify(payload, null, 2),
-  ].join('\n')
+  ]
+  if (tasteProfileBlock) parts.push(tasteProfileBlock)
+  return parts.join('\n')
 }
 
 export async function analyzeRadarItem(args: RadarAnalyzeArgs): Promise<RadarAnalyzeResult> {
-  const { apiKey, model, item } = args
+  const { apiKey, model, item, tasteProfileBlock = null } = args
   const meta = { provider: 'gemini' as const, model, promptVersion: RADAR_PROMPT_VERSION }
 
   const ai = new GoogleGenAI({ apiKey })
 
+  const userText = buildRadarUserText(item, tasteProfileBlock)
   const callOnce = async () =>
     ai.models.generateContent({
       model,
       contents: [
-        { role: 'user', parts: [{ text: buildUserText(item) }] },
+        { role: 'user', parts: [{ text: userText }] },
       ],
       config: {
         systemInstruction: RADAR_SYSTEM_INSTRUCTION,
