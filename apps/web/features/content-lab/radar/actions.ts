@@ -6,9 +6,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { asRadarClient } from '@/lib/radar/persist'
 import type { ActionResult } from '@creator-hub/types'
 
-type RadarUserDecision = 'saved' | 'ignored'
+type RadarUserDecision = 'saved' | 'ignored' | 'new'
 
-const ALLOWED: readonly RadarUserDecision[] = ['saved', 'ignored'] as const
+const ALLOWED: readonly RadarUserDecision[] = ['saved', 'ignored', 'new'] as const
 
 export async function setDecision(
   itemId:   string,
