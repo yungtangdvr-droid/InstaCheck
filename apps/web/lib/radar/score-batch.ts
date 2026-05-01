@@ -22,6 +22,11 @@ import {
   upsertRadarScore,
   type RadarScoreCandidateWithSource,
 } from './persist'
+import {
+  EMPTY_TASTE_PROFILE,
+  formatTasteProfileBlock,
+  getRadarTasteProfile,
+} from './taste-profile'
 
 type Supabase = SupabaseClient<Database>
 
@@ -196,9 +201,10 @@ function buildSkippedInsert(
 }
 
 async function processItem(
-  supabase:  Supabase,
-  candidate: RadarScoreCandidateWithSource,
-  ctx:       RadarScoreCtx,
+  supabase:          Supabase,
+  candidate:         RadarScoreCandidateWithSource,
+  ctx:               RadarScoreCtx,
+  tasteProfileBlock: string | null,
 ): Promise<RadarScoreOutcome> {
   if (!isUsable(candidate)) {
     await upsertRadarScore(supabase, buildSkippedInsert(candidate, ctx.geminiModel))
@@ -215,6 +221,7 @@ async function processItem(
       sourceDomain: safeDomain(candidate.source_url || candidate.url),
       publishedAt:  candidate.published_at,
     },
+    tasteProfileBlock,
     fallback: {
       enabled:     ctx.openaiFallbackEnabled,
       openaiKey:   ctx.openaiKey,
@@ -254,6 +261,18 @@ export async function runRadarScoreBatch(
 
   const candidates = await pickCandidates(supabase, since, limit, reanalyze)
 
+  // Compute the taste profile once per batch. Soft-fail: a fetch error
+  // must not block scoring — the prompt simply runs without the block.
+  let tasteProfileBlock: string | null = null
+  if (!dryRun && candidates.length > 0) {
+    try {
+      const profile = await getRadarTasteProfile(supabase)
+      tasteProfileBlock = formatTasteProfileBlock(profile)
+    } catch {
+      tasteProfileBlock = formatTasteProfileBlock(EMPTY_TASTE_PROFILE)
+    }
+  }
+
   if (candidates.length === 0) {
     return {
       outcomes:       [],
@@ -290,7 +309,7 @@ export async function runRadarScoreBatch(
 
   for (const candidate of candidates) {
     try {
-      const o = await processItem(supabase, candidate, ctx)
+      const o = await processItem(supabase, candidate, ctx, tasteProfileBlock)
       outcomes.push(o)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown_error'

@@ -49,6 +49,12 @@ const memeAngleSchema = z.preprocess(
   z.object({ angle: z.string().min(1).max(180) }),
 )
 
+// Caption ideas are kept lenient: the model occasionally returns 2 or
+// 4 entries on the first pass. We accept 0–5 in validation and the
+// scoring code slices to 3 before persistence so downstream consumers
+// see at most three.
+const captionIdeaSchema = z.string().min(1).max(140)
+
 export const RadarAnalysisSchema = z.object({
   meme_potential:      intScore,
   yugnat_fit:          intScore,
@@ -57,6 +63,7 @@ export const RadarAnalysisSchema = z.object({
   cultural_relevance:  intScore,
   why_memable:         z.string().max(240).default(''),
   meme_angles:         z.array(memeAngleSchema).min(3).max(3),
+  caption_ideas:       z.array(captionIdeaSchema).max(5).default([]),
   recommended_format:  enumWithUnknown(FORMAT_PATTERNS),
   cultural_references: z.array(z.string().min(1).max(120)).max(5).default([]),
   primary_theme:       enumWithUnknown(PRIMARY_THEMES),
@@ -91,6 +98,10 @@ export const GEMINI_RADAR_RESPONSE_SCHEMA = {
         required: ['angle'],
       },
     },
+    caption_ideas: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    },
     recommended_format:  { type: Type.STRING, enum: [...FORMAT_PATTERNS] },
     cultural_references: { type: Type.ARRAY, items: { type: Type.STRING } },
     primary_theme:       { type: Type.STRING, enum: [...PRIMARY_THEMES] },
@@ -111,6 +122,7 @@ export const GEMINI_RADAR_RESPONSE_SCHEMA = {
     'cultural_relevance',
     'why_memable',
     'meme_angles',
+    'caption_ideas',
     'recommended_format',
     'cultural_references',
     'primary_theme',
@@ -131,6 +143,7 @@ export const GEMINI_RADAR_RESPONSE_SCHEMA = {
     'cultural_relevance',
     'why_memable',
     'meme_angles',
+    'caption_ideas',
     'recommended_format',
     'cultural_references',
     'primary_theme',
@@ -166,6 +179,10 @@ export const OPENAI_RADAR_JSON_SCHEMA = {
         required: ['angle'],
       },
     },
+    caption_ideas: {
+      type: 'array',
+      items: { type: 'string' },
+    },
     recommended_format:  { type: 'string', enum: [...FORMAT_PATTERNS]    },
     cultural_references: { type: 'array',  items: { type: 'string' }     },
     primary_theme:       { type: 'string', enum: [...PRIMARY_THEMES]     },
@@ -186,6 +203,7 @@ export const OPENAI_RADAR_JSON_SCHEMA = {
     'cultural_relevance',
     'why_memable',
     'meme_angles',
+    'caption_ideas',
     'recommended_format',
     'cultural_references',
     'primary_theme',

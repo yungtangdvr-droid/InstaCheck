@@ -12,7 +12,7 @@ import {
   RadarAnalysisSchema,
   type RadarAnalysis,
 } from '../gemini/radar-schema'
-import type { RadarItemContext } from '../gemini/analyze-radar'
+import { buildRadarUserText, type RadarItemContext } from '../gemini/analyze-radar'
 
 export type RadarAnalyzeOpenAIOk = {
   ok:            true
@@ -37,33 +37,19 @@ export type RadarAnalyzeOpenAIErr = {
 export type RadarAnalyzeOpenAIResult = RadarAnalyzeOpenAIOk | RadarAnalyzeOpenAIErr
 
 export interface RadarAnalyzeOpenAIArgs {
-  apiKey: string
-  model:  string
-  item:   RadarItemContext
+  apiKey:             string
+  model:              string
+  item:               RadarItemContext
+  tasteProfileBlock?: string | null
 }
 
 const OPENAI_TIMEOUT_MS = 60_000
 const OPENAI_ENDPOINT   = 'https://api.openai.com/v1/chat/completions'
 
-function buildUserText(item: RadarItemContext): string {
-  const payload = {
-    title:         item.title,
-    summary:       item.summary ?? '',
-    source_label:  item.sourceLabel,
-    source_domain: item.sourceDomain,
-    published_at:  item.publishedAt ?? '',
-  }
-  return [
-    'Score the following news item per the system instruction.',
-    'Return strict JSON only.',
-    JSON.stringify(payload, null, 2),
-  ].join('\n')
-}
-
 export async function analyzeRadarItemOpenAI(
   args: RadarAnalyzeOpenAIArgs,
 ): Promise<RadarAnalyzeOpenAIResult> {
-  const { apiKey, model, item } = args
+  const { apiKey, model, item, tasteProfileBlock = null } = args
   const meta = { provider: 'openai' as const, model, promptVersion: RADAR_PROMPT_VERSION }
 
   const body = {
@@ -71,7 +57,7 @@ export async function analyzeRadarItemOpenAI(
     temperature: 0.3,
     messages: [
       { role: 'system', content: RADAR_SYSTEM_INSTRUCTION },
-      { role: 'user',   content: buildUserText(item) },
+      { role: 'user',   content: buildRadarUserText(item, tasteProfileBlock) },
     ],
     response_format: {
       type: 'json_schema',
