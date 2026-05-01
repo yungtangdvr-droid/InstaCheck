@@ -29,6 +29,12 @@ export interface FetchRssResult {
 // the default list, so they need to be requested via customFields with
 // keepArray:true. That preserves the xml2js shape (array of nodes,
 // attributes under `$`) and lets pickImageUrl read them directly.
+//
+// `description` and `content:encoded` are also requested explicitly so
+// the HTML-img fallback can read the raw markup. rss-parser otherwise
+// collapses both into `content`, which is fine for fresh ingests but
+// means `description` is missing from raw_json — and the backfill
+// script needs it to recover thumbnails from already-stored rows.
 const parser: Parser = new Parser({
   timeout: 15_000,
   headers: { 'User-Agent': 'CreatorHub-MemeRadar/0.1 (+rss-ingest)' },
@@ -38,6 +44,8 @@ const parser: Parser = new Parser({
       ['media:thumbnail', 'media:thumbnail', { keepArray: true }],
       ['itunes:image',    'itunes:image',    { keepArray: true }],
       ['image',           'image',           { keepArray: true }],
+      ['content:encoded', 'content:encoded'],
+      ['description',     'description'],
     ],
   },
 })
@@ -48,11 +56,22 @@ const parser: Parser = new Parser({
 //   3. media:thumbnail (idem)
 //   4. itunes:image (podcast — {$:{href}} or rss-parser's itunes.image string)
 //   5. image (channel-level fallback — string, {url}, or {href})
-// Keep this in lockstep with the SQL backfill in
-// supabase/migrations/0013_meme_radar_image_url_backfill.sql.
+//   6. HTML <img> inside content / content:encoded / description /
+//      summary / contentSnippet (covers feeds that only embed images
+//      in the article markup — Verge atom, Numerama, NPR, BBC bodies).
+//
+// Migration 0013 backfilled carriers 1–5 from raw_json with SQL.
+// Carrier 6 needs HTML parsing, so the backfill for it lives in
+// scripts/radar/backfill-images.ts (`pnpm radar:backfill-images`).
 function pickImageUrl(item: Parser.Item): string | null {
-  const raw = item as unknown as Record<string, unknown>
+  return pickImageUrlFromRawJson(item as unknown as Record<string, unknown>)
+}
 
+// Shared core used by both `pickImageUrl` (live rss-parser item) and
+// the backfill CLI (stored `raw_json` blob). Kept untyped at the
+// boundary because feeds vary and rss-parser's flattening only covers
+// a fixed subset of fields — see customFields above.
+export function pickImageUrlFromRawJson(raw: Record<string, unknown>): string | null {
   // 1. enclosure — rss-parser flattens to `{ url, type, length }`.
   const enclosure = raw.enclosure
   if (enclosure && typeof enclosure === 'object') {
@@ -139,6 +158,66 @@ function pickImageUrl(item: Parser.Item): string | null {
     }
   }
 
+  // 6. HTML <img> fallback — many feeds (Verge atom, Numerama, NPR,
+  // BBC story bodies) embed the hero image inside the article HTML.
+  // Scan the fields that may carry markup, in priority order.
+  const htmlFields: Array<unknown> = [
+    raw['content:encoded'],
+    raw.content,
+    raw.description,
+    raw.summary,
+    raw.contentSnippet,
+  ]
+  for (const field of htmlFields) {
+    if (typeof field !== 'string' || !field) continue
+    const found = extractFirstImageFromHtml(field)
+    if (found) return found
+  }
+
+  return null
+}
+
+// Decodes the small set of HTML entities that show up in RSS img URLs
+// (most commonly `&amp;` from query strings). Intentionally narrow —
+// numeric entities and named entities outside this set are left alone.
+function decodeBasicEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+}
+
+// Tracking-pixel heuristics: 1x1 transparent gifs and `/pixel.*` paths.
+// Best-effort; a miss just means we keep a useless thumbnail. False
+// positives matter more, so the patterns are intentionally narrow.
+function looksLikeTrackingPixel(url: string): boolean {
+  if (/[?&](?:width|height)=1(?:px)?(?:[&#]|$)/i.test(url)) return true
+  if (/\/(?:pixel|tracker|tracking|beacon)\.(?:gif|png)(?:[?#]|$)/i.test(url)) return true
+  if (/\/1x1\.(?:gif|png)(?:[?#]|$)/i.test(url)) return true
+  return false
+}
+
+// Extracts the first usable <img src=...> from an HTML fragment.
+// Supports double-quoted, single-quoted, and unquoted src values;
+// decodes basic entities; rejects data: URLs, non-http(s), and
+// obvious tracking pixels. Returns the normalized absolute URL.
+export function extractFirstImageFromHtml(html: string): string | null {
+  if (!html) return null
+  const re = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi
+  let match: RegExpExecArray | null
+  while ((match = re.exec(html)) !== null) {
+    const raw = (match[1] ?? match[2] ?? match[3] ?? '').trim()
+    if (!raw) continue
+    const decoded = decodeBasicEntities(raw)
+    if (!decoded || decoded.startsWith('data:')) continue
+    const ok = safeUrl(decoded)
+    if (!ok) continue
+    if (looksLikeTrackingPixel(ok)) continue
+    return ok
+  }
   return null
 }
 

@@ -11,7 +11,8 @@
     "probe:benchmark": "tsx scripts/benchmark/probe-benchmark.ts",
     "radar:seed-sources": "tsx scripts/radar/seed-sources.ts",
     "radar:ingest": "tsx scripts/radar/ingest.ts",
-    "radar:score": "tsx scripts/radar/score.ts"
+    "radar:score": "tsx scripts/radar/score.ts",
+    "radar:backfill-images": "tsx scripts/radar/backfill-images.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
