@@ -40,12 +40,20 @@ export default async function ContentLabPage() {
         title="Content Lab"
         description="Analyse tes formats, optimise ta stratégie éditoriale."
         actions={
-          <Link
-            href="/content-lab/themes"
-            className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
-          >
-            Explorer les thèmes →
-          </Link>
+          <>
+            <Link
+              href="/content-lab/radar"
+              className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+            >
+              Meme Radar →
+            </Link>
+            <Link
+              href="/content-lab/themes"
+              className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+            >
+              Explorer les thèmes →
+            </Link>
+          </>
         }
       />
 
