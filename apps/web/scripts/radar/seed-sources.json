@@ -1,7 +1,7 @@
 [
   {
     "url": "https://www.theverge.com/rss/index.xml",
-    "label": "The Verge",
+    "label": "The Verge — Tech/Culture",
     "language": "en"
   },
   {
@@ -21,12 +21,67 @@
   },
   {
     "url": "https://www.numerama.com/feed/",
-    "label": "Numerama",
+    "label": "Numerama — Tech FR",
     "language": "fr"
   },
   {
     "url": "https://korii.slate.fr/rss.xml",
-    "label": "Korii (Slate.fr)",
+    "label": "Korii — Weird Tech FR",
+    "language": "fr"
+  },
+  {
+    "url": "https://www.highsnobiety.com/feed/",
+    "label": "Highsnobiety — Streetwear",
+    "language": "en"
+  },
+  {
+    "url": "https://www.businessoffashion.com/arc/outboundfeeds/rss/",
+    "label": "Business of Fashion",
+    "language": "en"
+  },
+  {
+    "url": "https://www.dazeddigital.com/rss",
+    "label": "Dazed — Culture/Fashion",
+    "language": "en"
+  },
+  {
+    "url": "https://www.404media.co/rss/",
+    "label": "404 Media — Internet",
+    "language": "en"
+  },
+  {
+    "url": "https://www.polygon.com/rss/index.xml",
+    "label": "Polygon — Games/Pop",
+    "language": "en"
+  },
+  {
+    "url": "https://futurism.com/feed",
+    "label": "Futurism — Weird Tech",
+    "language": "en"
+  },
+  {
+    "url": "https://www.dezeen.com/feed/",
+    "label": "Dezeen — Design",
+    "language": "en"
+  },
+  {
+    "url": "https://www.creativereview.co.uk/feed/",
+    "label": "Creative Review — Design",
+    "language": "en"
+  },
+  {
+    "url": "https://www.konbini.com/feed/",
+    "label": "Konbini — Pop FR",
+    "language": "fr"
+  },
+  {
+    "url": "https://www.madmoizelle.com/feed",
+    "label": "Madmoizelle — Society FR",
+    "language": "fr"
+  },
+  {
+    "url": "https://www.journaldugeek.com/feed/",
+    "label": "Journal du Geek — Tech FR",
     "language": "fr"
   }
 ]
