@@ -9,11 +9,12 @@ import { VerdictBadge } from '@/components/ui/verdict-badge'
 import { cn } from '@/lib/utils'
 
 import { setDecision } from './actions'
-import { humanizeFormat, type RadarFeedRow } from './get-radar-feed'
+import { humanizeFormat, type RadarFeedRow, type TRadarView } from './get-radar-feed'
 import { SensitivityChips } from './SensitivityChips'
 
 type RadarItemCardProps = {
   item: RadarFeedRow
+  view: TRadarView
 }
 
 function formatScore(value: number | null): string {
@@ -43,12 +44,12 @@ function decisionBadge(decision: RadarFeedRow['decision']) {
   return null
 }
 
-export function RadarItemCard({ item }: RadarItemCardProps) {
+export function RadarItemCard({ item, view }: RadarItemCardProps) {
   const [open, setOpen]      = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError]    = useState<string | null>(null)
 
-  function handleDecision(decision: 'saved' | 'ignored') {
+  function handleDecision(decision: 'saved' | 'ignored' | 'new') {
     setError(null)
     startTransition(async () => {
       const result = await setDecision(item.id, decision)
@@ -56,7 +57,10 @@ export function RadarItemCard({ item }: RadarItemCardProps) {
     })
   }
 
-  const dimmed = item.decision === 'ignored'
+  // Saved view never dims — the operator is consciously reviewing the
+  // shortlist and dimming would obscure the entries they care about.
+  const dimmed = view !== 'saved' && item.decision === 'ignored'
+  const showReset = item.decision !== 'new'
   const recommendedFormat = humanizeFormat(item.recommendedFormat)
   const publishedAbsolute = item.publishedAt
     ? new Date(item.publishedAt).toLocaleString('fr-FR', {
@@ -148,6 +152,17 @@ export function RadarItemCard({ item }: RadarItemCardProps) {
           >
             {item.decision === 'ignored' ? 'Ignored' : 'Ignore'}
           </Button>
+          {showReset ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isPending}
+              onClick={() => handleDecision('new')}
+              title="Remettre l’item à l’état New"
+            >
+              Reset
+            </Button>
+          ) : null}
           <a
             href={item.url}
             target="_blank"

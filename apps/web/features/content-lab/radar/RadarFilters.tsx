@@ -15,12 +15,20 @@ const WINDOW_LABELS: Record<TRadarWindow, string> = {
 }
 
 type RadarFiltersProps = {
-  window:   TRadarWindow
-  sourceId: string // 'all' | <uuid>
-  sources:  SourceOption[]
+  window:         TRadarWindow
+  sourceId:       string // 'all' | <uuid>
+  sources:        SourceOption[]
+  windowDisabled?: boolean
+  windowDisabledHint?: string
 }
 
-export function RadarFilters({ window, sourceId, sources }: RadarFiltersProps) {
+export function RadarFilters({
+  window,
+  sourceId,
+  sources,
+  windowDisabled = false,
+  windowDisabledHint,
+}: RadarFiltersProps) {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
@@ -40,6 +48,8 @@ export function RadarFilters({ window, sourceId, sources }: RadarFiltersProps) {
         value={window}
         options={RADAR_WINDOWS.map((w) => ({ value: w, label: WINDOW_LABELS[w] }))}
         onChange={(v) => updateParam('window', v)}
+        disabled={windowDisabled}
+        disabledHint={windowDisabledHint}
       />
       <Select
         label="Source"
@@ -59,26 +69,34 @@ function Pills({
   value,
   options,
   onChange,
+  disabled = false,
+  disabledHint,
 }: {
   label:    string
   value:    string
   options:  { value: string; label: string }[]
   onChange: (next: string) => void
+  disabled?: boolean
+  disabledHint?: string
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className={`flex items-center gap-2 ${disabled ? 'opacity-50' : ''}`}
+      title={disabled ? disabledHint : undefined}
+    >
       <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
       <div className="flex gap-1 rounded-lg border border-border bg-card p-1">
         {options.map((o) => (
           <button
             key={o.value}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(o.value)}
             className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               value === o.value
                 ? 'bg-muted text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+            } ${disabled ? 'cursor-not-allowed' : ''}`}
           >
             {o.label}
           </button>

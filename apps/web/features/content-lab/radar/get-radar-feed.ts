@@ -33,6 +33,28 @@ export function radarWindowSince(window: TRadarWindow): string {
   return new Date(Date.now() - WINDOW_HOURS[window] * 3_600_000).toISOString()
 }
 
+// Segmented view exposed on the URL. `saved` is the shortlist; `all/new/
+// ignored` obey the active window filter, while `saved` ignores the window
+// and uses a fixed 30-day lookback on `decision_at`.
+export type TRadarView = 'all' | 'saved' | 'new' | 'ignored'
+
+export const RADAR_VIEWS: readonly TRadarView[] = ['all', 'saved', 'new', 'ignored'] as const
+
+export const DEFAULT_RADAR_VIEW: TRadarView = 'all'
+
+export function isRadarView(value: string | undefined | null): value is TRadarView {
+  return value != null && (RADAR_VIEWS as readonly string[]).includes(value)
+}
+
+// Saved view always uses a fixed lookback regardless of the URL window so
+// shortlisted ideas don't silently disappear at the 48h cliff. Mirrors the
+// feedback rerank window for consistency.
+export const RADAR_SAVED_LOOKBACK_DAYS = 30
+
+export function radarSavedSince(): string {
+  return new Date(Date.now() - RADAR_SAVED_LOOKBACK_DAYS * 24 * 3_600_000).toISOString()
+}
+
 // Hard cap on the number of cards rendered. Matches the brief.
 export const RADAR_DISPLAY_CAP = 100
 // Cushion above the display cap so post-join sorting in JS has room to pick
@@ -106,10 +128,18 @@ export type RadarFeedSourceOption = {
   label: string
 }
 
+export type RadarFeedCounts = {
+  all:     number
+  saved:   number
+  new:     number
+  ignored: number
+}
+
 export type RadarFeed = {
   items:   RadarFeedRow[]
   kpis:    RadarFeedKpis
   sources: RadarFeedSourceOption[]
+  counts:  RadarFeedCounts
 }
 
 // `meme_angles` is stored as jsonb. PR 3 writes an array of `{ angle: string }`
@@ -168,25 +198,52 @@ function compareIsoDesc(a: string | null, b: string | null): number {
 
 export async function getRadarFeed(
   supabase: SupabaseClient<Database>,
-  args:     { sinceIso: string; sourceId?: string },
+  args:     { sinceIso: string; sourceId?: string; view?: TRadarView },
 ): Promise<RadarFeed> {
+  const view    = args.view ?? DEFAULT_RADAR_VIEW
   const client  = asRadarClient(supabase)
   const sources = await listActiveSources(supabase)
   const sourceLabelById = new Map<string, string>(sources.map((s) => [s.id, s.label]))
 
+  const savedSinceIso = radarSavedSince()
+
+  // Saved view: fetch by `decision='saved'` over the 30-day decision_at
+  // window. Ignores the URL window so shortlisted items don't fall off.
+  // Other views: fetch by `published_at` over the URL window, then filter
+  // in JS by decision when view is 'new' or 'ignored'.
   let itemsQuery = client
     .from('radar_items')
     .select('id,source_id,title,url,image_url,summary,published_at,created_at,decision,decision_at')
-    .gte('published_at', args.sinceIso)
-    .order('published_at', { ascending: false, nullsFirst: false })
-    .order('created_at',   { ascending: false })
-    .order('id',           { ascending: true })
     .limit(RADAR_FETCH_CAP)
+
+  if (view === 'saved') {
+    itemsQuery = itemsQuery
+      .eq('decision', 'saved')
+      .gte('decision_at', savedSinceIso)
+      .order('decision_at',  { ascending: false, nullsFirst: false })
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('id',           { ascending: true })
+  } else {
+    itemsQuery = itemsQuery
+      .gte('published_at', args.sinceIso)
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at',   { ascending: false })
+      .order('id',           { ascending: true })
+    if (view === 'new' || view === 'ignored') {
+      itemsQuery = itemsQuery.eq('decision', view)
+    }
+  }
   if (args.sourceId) itemsQuery = itemsQuery.eq('source_id', args.sourceId)
 
   const { data: itemsRaw, error: itemsErr } = await itemsQuery
   if (itemsErr) throw new Error(`radar_feed_items_failed: ${itemsErr.message}`)
   const items = itemsRaw ?? []
+
+  const counts = await fetchRadarCounts(client, {
+    sinceIso:      args.sinceIso,
+    savedSinceIso,
+    sourceId:      args.sourceId,
+  })
 
   // Pull recent operator decisions so the rerank can weight by source/theme/
   // format. Window is independent of the active filter window — what's
@@ -267,16 +324,28 @@ export async function getRadarFeed(
   // Final ordering happens in JS so `composite NULLS LAST` is honoured even
   // when `published_at` desc would surface unscored items first. We sort by
   // the feedback-adjusted composite so saved themes/sources/formats float;
-  // the raw composite is the tiebreaker.
-  rows.sort((a, b) => {
-    const adj = compareDesc(a.feedbackAdjustedComposite, b.feedbackAdjustedComposite)
-    if (adj !== 0) return adj
-    const c = compareDesc(a.composite, b.composite)
-    if (c !== 0) return c
-    const p = compareIsoDesc(a.publishedAt, b.publishedAt)
-    if (p !== 0) return p
-    return compareIsoDesc(a.createdAt, b.createdAt)
-  })
+  // the raw composite is the tiebreaker. In the Saved view, recency of the
+  // save matters more than score — the operator wants the freshest entry of
+  // their shortlist on top, so `decision_at` becomes the primary key.
+  if (view === 'saved') {
+    rows.sort((a, b) => {
+      const d = compareIsoDesc(a.decisionAt, b.decisionAt)
+      if (d !== 0) return d
+      const c = compareDesc(a.composite, b.composite)
+      if (c !== 0) return c
+      return compareIsoDesc(a.publishedAt, b.publishedAt)
+    })
+  } else {
+    rows.sort((a, b) => {
+      const adj = compareDesc(a.feedbackAdjustedComposite, b.feedbackAdjustedComposite)
+      if (adj !== 0) return adj
+      const c = compareDesc(a.composite, b.composite)
+      if (c !== 0) return c
+      const p = compareIsoDesc(a.publishedAt, b.publishedAt)
+      if (p !== 0) return p
+      return compareIsoDesc(a.createdAt, b.createdAt)
+    })
+  }
 
   const display = rows.slice(0, RADAR_DISPLAY_CAP)
 
@@ -316,7 +385,44 @@ export async function getRadarFeed(
   const sourceOptions: RadarFeedSourceOption[] = (sources as RadarSourceRow[])
     .map((s) => ({ id: s.id, label: s.label }))
 
-  return { items: display, kpis, sources: sourceOptions }
+  return { items: display, kpis, sources: sourceOptions, counts }
+}
+
+// Counts shown in the segmented view tabs. `all`, `new`, and `ignored` are
+// scoped to the URL window; `saved` is scoped to the fixed 30-day lookback
+// on `decision_at`. Source filter applies to all four. Soft-fails to zero so
+// a count query failure cannot break the page.
+async function fetchRadarCounts(
+  client:    ReturnType<typeof asRadarClient>,
+  args:      { sinceIso: string; savedSinceIso: string; sourceId?: string },
+): Promise<RadarFeedCounts> {
+  const empty: RadarFeedCounts = { all: 0, saved: 0, new: 0, ignored: 0 }
+
+  let windowQuery = client
+    .from('radar_items')
+    .select('decision')
+    .gte('published_at', args.sinceIso)
+  if (args.sourceId) windowQuery = windowQuery.eq('source_id', args.sourceId)
+
+  let savedQuery = client
+    .from('radar_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('decision', 'saved')
+    .gte('decision_at', args.savedSinceIso)
+  if (args.sourceId) savedQuery = savedQuery.eq('source_id', args.sourceId)
+
+  const [windowRes, savedRes] = await Promise.all([windowQuery, savedQuery])
+  const counts = { ...empty }
+
+  if (!windowRes.error && windowRes.data) {
+    for (const row of windowRes.data) {
+      counts.all += 1
+      if (row.decision === 'new')     counts.new     += 1
+      if (row.decision === 'ignored') counts.ignored += 1
+    }
+  }
+  if (!savedRes.error) counts.saved = savedRes.count ?? 0
+  return counts
 }
 
 // Aggregated decision tallies, keyed by source/theme/format. Each value is
