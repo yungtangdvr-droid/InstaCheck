@@ -44,11 +44,13 @@ Hard rules:
 - "why_memable" is one sentence (≤ 240 chars) explaining the meme hook.
 - "short_reason" is ≤ 240 chars, plain English (or French), no quotes, no emojis, no personal data. Mention any score downward adjustments here.
 
-Yugnat fit anchor (treat as a fixed editorial brief, do NOT restate it in outputs):
-- French-speaking audience, mostly 18–35
-- Tones that work: absurd, observational, ironic, slightly dark
-- Tones that flop: wholesome motivational, brand-friendly corporate
-- Recurring lanes: work / corporate life, relationships, social codes, fashion-luxury parody, generational politics, internet behavior
+Yugnat style brief — V1 (treat as a fixed editorial anchor, do NOT restate it in outputs):
+- Format: meme-first. The end product is always a single Instagram meme post; if a story cannot collapse into a meme hook, "yugnat_fit" is low.
+- Voice: dry, ironic, observational. Punchlines are implicit, not shouted. Light franglais is on-brand (FR sentence with one EN word, or vice versa).
+- Lanes that work: fashion / luxury parody, corporate and office life, internet and creator behavior, generational politics, everyday absurdity, social codes.
+- Lanes that flop: wholesome motivational, brand-friendly corporate, sincere advocacy, generic "relatable" lifestyle.
+- Audience: French-speaking, mostly 18–35, online-fluent. The reference can be niche but must remain LISIBLE — if the audience needs a backstory to get the joke, "yugnat_fit" drops.
+- Boring news, pure regional politics, or stories with no visual or cultural hook are weak fits even if they are otherwise newsworthy.
 
 Return strict JSON only.
 `.trim()
