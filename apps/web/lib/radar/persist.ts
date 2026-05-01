@@ -22,7 +22,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database, Json } from '@creator-hub/types/supabase'
-import type { RadarItemDecision } from '@creator-hub/types'
+import type { RadarItemDecision, RadarScoreStatus } from '@creator-hub/types'
 
 import { fingerprint } from './dedup'
 import type { ParsedRadarItem } from './fetch-rss'
@@ -103,6 +103,74 @@ type RadarItemInsert = {
   decision_at?:  string | null
 }
 
+export type RadarItemScoreRow = {
+  id:                  string
+  radar_item_id:       string
+  provider:            string
+  model:               string
+  prompt_version:      string
+  status:              RadarScoreStatus
+  meme_potential:      number | null
+  yugnat_fit:          number | null
+  timing_urgency:      number | null
+  visual_potential:    number | null
+  cultural_relevance:  number | null
+  composite:           number | null
+  why_memable:         string | null
+  meme_angles:         Json | null
+  recommended_format:  string | null
+  cultural_references: string[]
+  primary_theme:       string | null
+  timing_window_hours: number | null
+  sensitivity_context: string[]
+  controversy_level:   string | null
+  misinformation_risk: string | null
+  legal_caution:       string | null
+  tragedy_context:     string | null
+  confidence:          number | null
+  short_reason:        string | null
+  analysis_json:       Json | null
+  input_tokens:        number | null
+  output_tokens:       number | null
+  error_message:       string | null
+  scored_at:           string | null
+  created_at:          string
+  updated_at:          string
+}
+
+export type RadarItemScoreInsert = {
+  id?:                  string
+  radar_item_id:        string
+  provider:             string
+  model:                string
+  prompt_version:       string
+  status:               RadarScoreStatus
+  meme_potential?:      number | null
+  yugnat_fit?:          number | null
+  timing_urgency?:      number | null
+  visual_potential?:    number | null
+  cultural_relevance?:  number | null
+  composite?:           number | null
+  why_memable?:         string | null
+  meme_angles?:         Json | null
+  recommended_format?:  string | null
+  cultural_references?: string[]
+  primary_theme?:       string | null
+  timing_window_hours?: number | null
+  sensitivity_context?: string[]
+  controversy_level?:   string | null
+  misinformation_risk?: string | null
+  legal_caution?:       string | null
+  tragedy_context?:     string | null
+  confidence?:          number | null
+  short_reason?:        string | null
+  analysis_json?:       Json | null
+  input_tokens?:        number | null
+  output_tokens?:       number | null
+  error_message?:       string | null
+  scored_at?:           string | null
+}
+
 type RadarTables = {
   radar_sources: {
     Row:    RadarSourceRow
@@ -120,6 +188,12 @@ type RadarTables = {
     Row:    RadarItemRow
     Insert: RadarItemInsert
     Update: Partial<RadarItemInsert>
+    Relationships: []
+  }
+  radar_item_scores: {
+    Row:    RadarItemScoreRow
+    Insert: RadarItemScoreInsert
+    Update: Partial<RadarItemScoreInsert>
     Relationships: []
   }
 }
@@ -294,15 +368,107 @@ export async function ingestItem(
   return { rawInserted, itemInserted: true }
 }
 
+// ----- Scoring candidate selection / persistence -----
+
+export type RadarScoreCandidate = {
+  id:           string
+  title:        string
+  url:          string
+  summary:      string | null
+  published_at: string | null
+  created_at:   string
+  source_id:    string
+}
+
+// Joins the source label/url so the scoring prompt has `source_label`
+// + `source_domain` without a second per-row round-trip.
+export type RadarScoreCandidateWithSource = RadarScoreCandidate & {
+  source_label: string
+  source_url:   string
+}
+
+// Pulls radar_items in the [since, now] window, ordered for
+// deterministic paging (published_at desc NULLS last → created_at desc → id asc).
+export async function fetchRadarCandidates(
+  supabase: SupabaseClient<Database>,
+  args: { since: string; limit: number },
+): Promise<RadarScoreCandidate[]> {
+  const client = asRadarClient(supabase)
+  const { data, error } = await client
+    .from('radar_items')
+    .select('id,title,url,summary,published_at,created_at,source_id')
+    .gte('published_at', args.since)
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('created_at',   { ascending: false })
+    .order('id',           { ascending: true })
+    .limit(args.limit)
+  if (error) throw new Error(`radar_candidates_query_failed: ${error.message}`)
+  return data ?? []
+}
+
+// Lookup of existing score rows for the candidate set, keyed by
+// `radar_item_id`. Used both for eligibility filtering and for
+// detecting whether we need to upsert vs insert.
+export async function fetchExistingScores(
+  supabase: SupabaseClient<Database>,
+  itemIds:  string[],
+): Promise<Map<string, { radar_item_id: string; status: RadarScoreStatus; prompt_version: string }>> {
+  if (itemIds.length === 0) return new Map()
+  const client = asRadarClient(supabase)
+  const { data, error } = await client
+    .from('radar_item_scores')
+    .select('radar_item_id,status,prompt_version')
+    .in('radar_item_id', itemIds)
+  if (error) throw new Error(`radar_existing_scores_query_failed: ${error.message}`)
+  const out = new Map<string, { radar_item_id: string; status: RadarScoreStatus; prompt_version: string }>()
+  for (const row of data ?? []) {
+    out.set(row.radar_item_id, {
+      radar_item_id:  row.radar_item_id,
+      status:         row.status,
+      prompt_version: row.prompt_version,
+    })
+  }
+  return out
+}
+
+export async function fetchSourcesByIds(
+  supabase: SupabaseClient<Database>,
+  ids:      string[],
+): Promise<Map<string, RadarSourceRow>> {
+  if (ids.length === 0) return new Map()
+  const client = asRadarClient(supabase)
+  const { data, error } = await client
+    .from('radar_sources')
+    .select('id,url,label,language,active,last_fetch_at,last_error,created_at')
+    .in('id', ids)
+  if (error) throw new Error(`radar_sources_lookup_failed: ${error.message}`)
+  return new Map((data ?? []).map((s) => [s.id, s]))
+}
+
+export async function upsertRadarScore(
+  supabase: SupabaseClient<Database>,
+  insert:   RadarItemScoreInsert,
+): Promise<void> {
+  const client = asRadarClient(supabase)
+  const { error } = await client
+    .from('radar_item_scores')
+    .upsert(insert, { onConflict: 'radar_item_id' })
+  if (error) throw new Error(`radar_score_upsert_failed: ${error.message}`)
+}
+
 // ----- automation_runs -----
 
+const RADAR_INGEST_AUTOMATION = 'meme-radar-rss-ingest'
+export const RADAR_SCORE_AUTOMATION = 'meme-radar-score'
+
 export async function logAutomationRun(
-  supabase: SupabaseClient<Database>,
-  status:   'success' | 'failed' | 'skipped',
-  summary:  Record<string, unknown>,
+  supabase:       SupabaseClient<Database>,
+  status:         'success' | 'failed' | 'skipped',
+  summary:        Record<string, unknown>,
+  automationName: string = RADAR_INGEST_AUTOMATION,
 ): Promise<void> {
   const { error } = await supabase.from('automation_runs').insert({
-    automation_name: 'meme-radar-rss-ingest',
+    automation_name: automationName,
     status,
     result_summary:  JSON.stringify(summary),
   })
