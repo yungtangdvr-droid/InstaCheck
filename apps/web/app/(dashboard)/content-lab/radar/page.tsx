@@ -20,6 +20,7 @@ import { RadarKpiStrip } from '@/features/content-lab/radar/RadarKpiStrip'
 import { RadarFilters } from '@/features/content-lab/radar/RadarFilters'
 import { RadarItemCard } from '@/features/content-lab/radar/RadarItemCard'
 import { RadarViewTabs } from '@/features/content-lab/radar/RadarViewTabs'
+import { RefreshRadarButton } from '@/features/content-lab/radar/RefreshRadarButton'
 
 type SearchParams = Promise<{ window?: string; source?: string; view?: string }>
 
@@ -69,6 +70,7 @@ export default async function RadarPage({
         eyebrow="Content Lab"
         title="Meme Radar"
         description="Flux d'actualités scoré par potentiel mémable et fit Yugnat. Aucun item n'est masqué automatiquement."
+        actions={<RefreshRadarButton />}
       />
 
       <RadarKpiStrip kpis={feed.kpis} window={window} />

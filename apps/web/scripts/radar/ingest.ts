@@ -22,18 +22,12 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
-import { fetchRss } from '../../lib/radar/fetch-rss'
+import { logAutomationRun } from '../../lib/radar/persist'
 import {
-  ingestItem,
-  listActiveSources,
-  logAutomationRun,
-  markSourceFetched,
-  type RadarSourceRow,
-} from '../../lib/radar/persist'
-import { fingerprint } from '../../lib/radar/dedup'
-
-const AUTOMATION_NAME    = 'meme-radar-rss-ingest'
-const DEFAULT_AGE_DAYS   = 7
+  RADAR_INGEST_AUTOMATION,
+  radarIngestDefaultCutoff,
+  runRadarIngest,
+} from '../../lib/radar/ingest-batch'
 
 type Cli = {
   dryRun:  boolean
@@ -89,110 +83,7 @@ function resolveCutoff(since: string | null): Date {
     }
     return new Date(t)
   }
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - DEFAULT_AGE_DAYS)
-  return d
-}
-
-interface PerSourceResult {
-  url:           string
-  label:         string
-  fetched:       number
-  eligible:      number
-  rawInserted:   number
-  itemsInserted: number
-  duplicates:    number
-  skippedOld:    number
-  error?:        string
-}
-
-async function processSource(
-  supabase:     ReturnType<typeof createClient<Database>>,
-  source:       RadarSourceRow,
-  cutoff:       Date,
-  limit:        number | null,
-  dryRun:       boolean,
-): Promise<PerSourceResult> {
-  const result: PerSourceResult = {
-    url:           source.url,
-    label:         source.label,
-    fetched:       0,
-    eligible:      0,
-    rawInserted:   0,
-    itemsInserted: 0,
-    duplicates:    0,
-    skippedOld:    0,
-  }
-
-  let parsed
-  try {
-    parsed = await fetchRss(source.url)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'fetch_failed'
-    result.error = msg
-    if (!dryRun) {
-      try {
-        await markSourceFetched(supabase, source.id, false, msg)
-      } catch (markErr) {
-        console.error(`[radar:ingest] mark_source_fetched failed for ${source.url}:`,
-          markErr instanceof Error ? markErr.message : markErr)
-      }
-    }
-    return result
-  }
-
-  result.fetched = parsed.items.length
-
-  // Cutoff filter — items without a published_at are kept (we cannot prove
-  // they are old). De-dup within a single feed by fingerprint to keep the
-  // dry-run count consistent with what the DB would accept.
-  const seenFp = new Set<string>()
-  const eligible = []
-  for (const item of parsed.items) {
-    if (item.publishedAt) {
-      const t = Date.parse(item.publishedAt)
-      if (Number.isFinite(t) && t < cutoff.getTime()) {
-        result.skippedOld++
-        continue
-      }
-    }
-    const fp = fingerprint(item.title, item.url)
-    if (seenFp.has(fp)) {
-      result.duplicates++
-      continue
-    }
-    seenFp.add(fp)
-    eligible.push(item)
-    if (limit && eligible.length >= limit) break
-  }
-  result.eligible = eligible.length
-
-  if (dryRun) {
-    return result
-  }
-
-  for (const item of eligible) {
-    try {
-      const r = await ingestItem(supabase, source.id, item)
-      if (r.rawInserted)  result.rawInserted++
-      if (r.itemInserted) result.itemsInserted++
-      if (!r.itemInserted && !r.rawInserted) result.duplicates++
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'ingest_item_failed'
-      // Continue the loop; first per-item error is surfaced on the source.
-      if (!result.error) result.error = msg
-      console.error(`[radar:ingest] ${source.url} :: item failed: ${msg}`)
-    }
-  }
-
-  try {
-    await markSourceFetched(supabase, source.id, !result.error, result.error ?? null)
-  } catch (markErr) {
-    console.error(`[radar:ingest] mark_source_fetched failed for ${source.url}:`,
-      markErr instanceof Error ? markErr.message : markErr)
-  }
-
-  return result
+  return radarIngestDefaultCutoff()
 }
 
 async function main() {
@@ -212,28 +103,31 @@ async function main() {
   }
 
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseKey)
-  const startedAt = Date.now()
 
-  let sources: RadarSourceRow[]
+  let result
   try {
-    sources = await listActiveSources(supabase, cli.source ?? undefined)
+    result = await runRadarIngest({
+      supabase,
+      cutoff,
+      limit:        cli.limit,
+      sourceFilter: cli.source,
+      dryRun:       cli.dryRun,
+    })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'list_sources_failed'
+    const msg = err instanceof Error ? err.message : 'ingest_failed'
     console.error(`[radar:ingest] ${msg}`)
     process.exit(1)
   }
 
-  if (sources.length === 0) {
+  if (result.totalSources === 0) {
     const summary = {
       ok:           true,
       dryRun:       cli.dryRun,
-      reason:       cli.source
-        ? `no_active_source_matching:${cli.source}`
-        : 'no_active_sources',
-      cutoff:       cutoff.toISOString(),
+      reason:       result.noOpReason,
+      cutoff:       result.cutoff,
       perSource:    [],
       totalSources: 0,
-      durationMs:   Date.now() - startedAt,
+      durationMs:   result.durationMs,
     }
     console.log(JSON.stringify(summary, null, 2))
     if (!cli.dryRun) {
@@ -246,10 +140,7 @@ async function main() {
     return
   }
 
-  const perSource: PerSourceResult[] = []
-  for (const source of sources) {
-    const r = await processSource(supabase, source, cutoff, cli.limit, cli.dryRun)
-    perSource.push(r)
+  for (const r of result.perSource) {
     const tag = cli.dryRun ? '[dry-run]' : '[radar:ingest]'
     if (r.error) {
       console.log(`${tag} ${r.url} → error=${r.error}`)
@@ -260,34 +151,20 @@ async function main() {
     }
   }
 
-  const totals = perSource.reduce(
-    (acc, r) => {
-      acc.fetched       += r.fetched
-      acc.eligible      += r.eligible
-      acc.rawInserted   += r.rawInserted
-      acc.itemsInserted += r.itemsInserted
-      acc.skippedOld    += r.skippedOld
-      acc.duplicates    += r.duplicates
-      if (r.error) acc.errors++
-      return acc
-    },
-    { fetched: 0, eligible: 0, rawInserted: 0, itemsInserted: 0, skippedOld: 0, duplicates: 0, errors: 0 },
-  )
-
   const summary = {
-    ok:           totals.errors === 0,
+    ok:           result.ok,
     dryRun:       cli.dryRun,
-    automation:   AUTOMATION_NAME,
-    cutoff:       cutoff.toISOString(),
-    totalSources: sources.length,
-    totals,
-    perSource,
-    durationMs:   Date.now() - startedAt,
+    automation:   RADAR_INGEST_AUTOMATION,
+    cutoff:       result.cutoff,
+    totalSources: result.totalSources,
+    totals:       result.totals,
+    perSource:    result.perSource,
+    durationMs:   result.durationMs,
   }
   console.log(JSON.stringify(summary, null, 2))
 
   if (!cli.dryRun) {
-    const status: 'success' | 'failed' = totals.errors === 0 ? 'success' : 'failed'
+    const status: 'success' | 'failed' = result.totals.errors === 0 ? 'success' : 'failed'
     try {
       await logAutomationRun(supabase, status, summary)
     } catch (err) {
@@ -295,7 +172,7 @@ async function main() {
     }
   }
 
-  if (totals.errors > 0) process.exit(1)
+  if (result.totals.errors > 0) process.exit(1)
 }
 
 main().catch((err) => {
