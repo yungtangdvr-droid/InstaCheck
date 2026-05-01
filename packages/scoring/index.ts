@@ -4,6 +4,12 @@ import type {
   TOpportunityHealthScore,
 } from '@creator-hub/types'
 
+export {
+  RADAR_SCORE_WEIGHTS,
+  radarComposite,
+  type TRadarSubScores,
+} from './radar'
+
 // ─── Post performance score ───────────────────────────────────────────────────
 
 // Canonical weights for post performance scoring. Single source of truth —

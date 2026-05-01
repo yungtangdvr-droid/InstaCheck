@@ -10,7 +10,8 @@
     "content:analyze": "tsx scripts/content-analysis/run-batch.ts",
     "probe:benchmark": "tsx scripts/benchmark/probe-benchmark.ts",
     "radar:seed-sources": "tsx scripts/radar/seed-sources.ts",
-    "radar:ingest": "tsx scripts/radar/ingest.ts"
+    "radar:ingest": "tsx scripts/radar/ingest.ts",
+    "radar:score": "tsx scripts/radar/score.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
