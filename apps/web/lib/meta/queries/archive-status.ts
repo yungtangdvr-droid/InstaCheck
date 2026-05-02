@@ -1,9 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
-import { ARCHIVE_JOB_NAME } from '@/lib/meta/archive-backfill'
+import {
+  ARCHIVE_JOB_NAME,
+  STALE_RUNNING_THRESHOLD_MS,
+} from '@/lib/meta/archive-backfill'
 
 // Read-only counters surfaced by /content-lab/archive. Issues a small
 // number of `head: true, count: 'exact'` queries — no row data returned.
+
+export type ArchiveUiState = 'idle' | 'running' | 'stale' | 'complete' | 'error'
 
 export type ArchiveStatusCounts = {
   postsTotal:                 number
@@ -27,6 +32,7 @@ export type ArchiveStatusCounts = {
 export type ArchiveCursorView = {
   jobName:                string
   status:                 string
+  uiState:                ArchiveUiState
   cursor:                 string | null
   lastProcessedMediaId:   string | null
   fetchedCount:           number
@@ -37,6 +43,27 @@ export type ArchiveCursorView = {
   ranAt:                  string | null
   finishedAt:             string | null
   lastError:              string | null
+}
+
+// Derived state shown in the UI badge. Computed (not stored) so a
+// crashed run that left status='running' surfaces as 'stale' even
+// before the next backfill tick clears it.
+function deriveUiState(args: {
+  status: string
+  ranAt:  string | null
+}): ArchiveUiState {
+  switch (args.status) {
+    case 'complete': return 'complete'
+    case 'error':    return 'error'
+    case 'running': {
+      if (!args.ranAt) return 'stale'
+      const age = Date.now() - new Date(args.ranAt).getTime()
+      if (Number.isFinite(age) && age > STALE_RUNNING_THRESHOLD_MS) return 'stale'
+      return 'running'
+    }
+    // 'idle', 'paused', or any unknown future value collapses to idle.
+    default: return 'idle'
+  }
 }
 
 type Db = SupabaseClient<Database>
@@ -135,6 +162,7 @@ export async function getArchiveCursor(supabase: Db): Promise<ArchiveCursorView 
   return {
     jobName:              data.job_name,
     status:               data.status,
+    uiState:              deriveUiState({ status: data.status, ranAt: data.ran_at }),
     cursor:               data.cursor,
     lastProcessedMediaId: data.last_processed_media_id,
     fetchedCount:         data.fetched_count,

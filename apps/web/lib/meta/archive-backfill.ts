@@ -24,6 +24,12 @@ export const DEFAULT_TIME_BUDGET_MS = 60_000
 export const MAX_TIME_BUDGET_MS     = 90_000
 const INTER_PAGE_SLEEP_MS           = 250
 
+// Anything older than this with status='running' is considered a dead
+// run and is force-released before the next acquire. Sized well above
+// MAX_TIME_BUDGET_MS (90s) and route maxDuration (120s) to avoid
+// killing legitimate in-flight work.
+export const STALE_RUNNING_THRESHOLD_MS = 5 * 60_000
+
 export type ArchiveBackfillOptions = {
   pageBudget?:   number
   timeBudgetMs?: number
@@ -38,6 +44,7 @@ export type ArchiveBackfillResult = {
   skippedThisRun: number
   errorThisRun:   boolean
   pagesThisRun:   number
+  staleCleared:   boolean
   totals: {
     fetchedCount:  number
     upsertedCount: number
@@ -126,82 +133,60 @@ export async function runArchiveMediaBackfill(
   }
   const accountRowId = accountRow.id
 
-  // 2) Read or create the cursor row for this job.
-  let cursorRow = await loadCursorRow(supabase)
-  if (!cursorRow) {
-    const { data, error } = await supabase
-      .from('ingestion_cursors')
-      .insert({ job_name: ARCHIVE_JOB_NAME, status: 'idle' })
-      .select('*')
-      .single()
-    if (error || !data) {
-      throw new Error(`ingestion_cursors insert failed: ${error?.message ?? 'unknown'}`)
-    }
-    cursorRow = data
+  // 2) Ensure cursor row exists.
+  let cursorRow = await ensureCursorRow(supabase)
+
+  // 3) Stale-running recovery. If a previous run died with status='running'
+  //    and ran_at older than STALE_RUNNING_THRESHOLD_MS, force-release it
+  //    by transitioning to 'error' with a breadcrumb. The atomic acquire
+  //    below will then pick it back up. Uses ran_at (not started_at) so
+  //    long-running jobs that legitimately update their ran_at every page
+  //    are never falsely classified as stale.
+  const staleCleared = await clearStaleRunning(supabase)
+  if (staleCleared) {
+    const refreshed = await loadCursorRow(supabase)
+    if (refreshed) cursorRow = refreshed
   }
 
-  // 3) Concurrency guard. If another invocation is already running,
-  //    return early with the current snapshot — never two writers.
-  if (cursorRow.status === 'running') {
-    return {
-      jobName: ARCHIVE_JOB_NAME,
-      status:  'running',
-      startedThisRun:  false,
-      fetchedThisRun:  0,
-      upsertedThisRun: 0,
-      skippedThisRun:  0,
-      errorThisRun:    false,
-      pagesThisRun:    0,
-      totals: {
-        fetchedCount:  cursorRow.fetched_count,
-        upsertedCount: cursorRow.upserted_count,
-        skippedCount:  cursorRow.skipped_count,
-        errorCount:    cursorRow.error_count,
-      },
-      cursor:               cursorRow.cursor,
-      lastProcessedMediaId: cursorRow.last_processed_media_id,
-      reachedEndOfArchive:  false,
-      stoppedReason:        'already_running',
-    }
-  }
-
+  // 4) Short-circuit on terminal 'complete' BEFORE attempting the lock,
+  //    so scheduled ticks against a finished archive don't churn the
+  //    cursor row or log spam.
   if (cursorRow.status === 'complete') {
-    return {
-      jobName: ARCHIVE_JOB_NAME,
-      status:  'complete',
-      startedThisRun:  false,
-      fetchedThisRun:  0,
-      upsertedThisRun: 0,
-      skippedThisRun:  0,
-      errorThisRun:    false,
-      pagesThisRun:    0,
-      totals: {
-        fetchedCount:  cursorRow.fetched_count,
-        upsertedCount: cursorRow.upserted_count,
-        skippedCount:  cursorRow.skipped_count,
-        errorCount:    cursorRow.error_count,
-      },
-      cursor:               cursorRow.cursor,
-      lastProcessedMediaId: cursorRow.last_processed_media_id,
-      reachedEndOfArchive:  true,
-      stoppedReason:        'end_of_archive',
-    }
+    return earlyResult({
+      cursorRow,
+      status:              'complete',
+      reachedEndOfArchive: true,
+      stoppedReason:       'end_of_archive',
+      staleCleared,
+    })
   }
 
-  // 4) Mark running.
-  const startedAt = cursorRow.started_at ?? new Date().toISOString()
-  {
-    const { error } = await supabase
-      .from('ingestion_cursors')
-      .update({
-        status:     'running',
-        started_at: startedAt,
-        ran_at:     new Date().toISOString(),
-        last_error: null,
+  // 5) Atomic lock acquire. The conditional UPDATE both guards against
+  //    racing writers and returns the freshly-locked row in one trip.
+  const locked = await acquireLock(supabase, cursorRow.started_at)
+  if (!locked) {
+    // Either another worker holds the lock, or status flipped to
+    // 'complete' between the short-circuit check and acquire. Re-read
+    // and return the truthful current state.
+    const fresh = (await loadCursorRow(supabase)) ?? cursorRow
+    if (fresh.status === 'complete') {
+      return earlyResult({
+        cursorRow:           fresh,
+        status:              'complete',
+        reachedEndOfArchive: true,
+        stoppedReason:       'end_of_archive',
+        staleCleared,
       })
-      .eq('job_name', ARCHIVE_JOB_NAME)
-    if (error) throw new Error(`ingestion_cursors lock failed: ${error.message}`)
+    }
+    return earlyResult({
+      cursorRow:           fresh,
+      status:              'running',
+      reachedEndOfArchive: false,
+      stoppedReason:       'already_running',
+      staleCleared,
+    })
   }
+  cursorRow = locked
 
   let fetchedThisRun  = 0
   let upsertedThisRun = 0
@@ -261,6 +246,7 @@ export async function runArchiveMediaBackfill(
       const hasNextPage    = Boolean(page.paging?.next)
 
       // Persist cursor + counters only now (after the page committed).
+      // ran_at refresh here also doubles as a stale-lock heartbeat.
       const { error: updErr } = await supabase
         .from('ingestion_cursors')
         .update({
@@ -315,12 +301,13 @@ export async function runArchiveMediaBackfill(
       skippedThisRun,
       errorThisRun,
       pagesThisRun,
+      staleCleared,
       reachedEndOfArchive: false,
       stoppedReason:       'error',
     })
   }
 
-  // 5) Mark final status.
+  // 6) Mark final status.
   const finalStatus: 'complete' | 'idle' = reachedEndOfArchive ? 'complete' : 'idle'
   const finishedAt = reachedEndOfArchive ? new Date().toISOString() : null
   {
@@ -345,6 +332,7 @@ export async function runArchiveMediaBackfill(
     skippedThisRun,
     errorThisRun,
     pagesThisRun,
+    staleCleared,
     reachedEndOfArchive,
     stoppedReason,
   })
@@ -362,6 +350,89 @@ async function loadCursorRow(supabase: SupabaseClient) {
 
 type CursorRow = NonNullable<Awaited<ReturnType<typeof loadCursorRow>>>
 
+async function ensureCursorRow(supabase: SupabaseClient): Promise<CursorRow> {
+  const existing = await loadCursorRow(supabase)
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('ingestion_cursors')
+    .insert({ job_name: ARCHIVE_JOB_NAME, status: 'idle' })
+    .select('*')
+    .single()
+  if (error || !data) {
+    throw new Error(`ingestion_cursors insert failed: ${error?.message ?? 'unknown'}`)
+  }
+  return data
+}
+
+// Force-release a dead lock. Returns true iff a stale row was rewritten.
+// Uses ran_at as the heartbeat: every successful page commit refreshes
+// ran_at, so a healthy run is never classified as stale.
+async function clearStaleRunning(supabase: SupabaseClient): Promise<boolean> {
+  const cutoffIso = new Date(Date.now() - STALE_RUNNING_THRESHOLD_MS).toISOString()
+  const breadcrumb = `stale lock cleared at ${new Date().toISOString()}`
+  const { data, error } = await supabase
+    .from('ingestion_cursors')
+    .update({
+      status:     'error',
+      last_error: breadcrumb,
+    })
+    .eq('job_name', ARCHIVE_JOB_NAME)
+    .eq('status', 'running')
+    .lt('ran_at', cutoffIso)
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(`ingestion_cursors stale clear failed: ${error.message}`)
+  return !!data
+}
+
+// Atomic lock acquire. Returns the locked row if we won the race,
+// null if another caller already holds the lock or the job is in a
+// terminal state. Preserves an existing `started_at` (treated as the
+// first-ever historical start of this job); only stamps `now()` when
+// no prior start exists.
+async function acquireLock(
+  supabase:        SupabaseClient,
+  preservedStart:  string | null
+): Promise<CursorRow | null> {
+  const nowIso = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('ingestion_cursors')
+    .update({
+      status:     'running',
+      ran_at:     nowIso,
+      started_at: preservedStart ?? nowIso,
+      last_error: null,
+    })
+    .eq('job_name', ARCHIVE_JOB_NAME)
+    .in('status', ['idle', 'paused', 'error'])
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`ingestion_cursors lock acquire failed: ${error.message}`)
+  return data
+}
+
+function earlyResult(args: {
+  cursorRow:           CursorRow
+  status:              ArchiveBackfillResult['status']
+  reachedEndOfArchive: boolean
+  stoppedReason:       ArchiveBackfillResult['stoppedReason']
+  staleCleared:        boolean
+}): ArchiveBackfillResult {
+  return buildResult({
+    cursorRow:           args.cursorRow,
+    status:              args.status,
+    startedThisRun:      false,
+    fetchedThisRun:      0,
+    upsertedThisRun:     0,
+    skippedThisRun:      0,
+    errorThisRun:        false,
+    pagesThisRun:        0,
+    staleCleared:        args.staleCleared,
+    reachedEndOfArchive: args.reachedEndOfArchive,
+    stoppedReason:       args.stoppedReason,
+  })
+}
+
 function buildResult(args: {
   cursorRow:           CursorRow
   status:              ArchiveBackfillResult['status']
@@ -371,6 +442,7 @@ function buildResult(args: {
   skippedThisRun:      number
   errorThisRun:        boolean
   pagesThisRun:        number
+  staleCleared:        boolean
   reachedEndOfArchive: boolean
   stoppedReason:       ArchiveBackfillResult['stoppedReason']
 }): ArchiveBackfillResult {
@@ -383,6 +455,7 @@ function buildResult(args: {
     skippedThisRun:  args.skippedThisRun,
     errorThisRun:    args.errorThisRun,
     pagesThisRun:    args.pagesThisRun,
+    staleCleared:    args.staleCleared,
     totals: {
       fetchedCount:  args.cursorRow.fetched_count,
       upsertedCount: args.cursorRow.upserted_count,
