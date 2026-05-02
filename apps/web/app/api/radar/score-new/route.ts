@@ -1,24 +1,14 @@
-// Manual Meme Radar refresh trigger.
+// Manual Meme Radar score chunk.
 // Authenticated route called by the "Refresh Radar" button on
-// /content-lab/radar. Runs the RSS ingest and the score batch in
-// sequence, capping scoring at 20 items per click. Each step writes its
-// own automation_runs row so the operator can audit the manual runs the
-// same way the cron-driven runs are audited.
-//
-// Library-only: no shell-out, no CLI invocation. Mirrors the in-process
-// inFlight + auth pattern used by /api/meta/sync-now and
-// /api/content/analyze-new.
+// /content-lab/radar after /api/radar/ingest-now. Each call scores up
+// to SCORE_LIMIT (hard cap 5) new items; the client loops the route to
+// drain the backlog and stops early when there is nothing left.
 
 import { type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import {
-  RADAR_INGEST_AUTOMATION,
-  radarIngestDefaultCutoff,
-  runRadarIngest,
-} from '@/lib/radar/ingest-batch'
 import {
   DEFAULT_GEMINI_MODEL,
   DEFAULT_OPENAI_MODEL,
@@ -32,16 +22,9 @@ import {
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-// Compatibility endpoint. The /content-lab/radar refresh button now drives
-// the workflow via /api/radar/ingest-now + /api/radar/score-new (looped),
-// so this route is kept for cron / external callers only and the per-call
-// scoring cap is lowered to 5 to match the new-style chunk size.
 const SCORE_LIMIT     = 5
 const SCORE_WINDOW_HR = 48
 
-// Best-effort in-process guard. Cold starts reset this, which is fine for
-// a single-operator product — it just keeps the same instance from
-// running two concurrent refreshes.
 let inFlight = false
 
 function scoreSinceIso(now: Date = new Date()): string {
@@ -82,7 +65,7 @@ export async function POST(_request: NextRequest) {
 
   if (inFlight) {
     return Response.json(
-      { ok: false, error: 'Radar refresh already running' },
+      { ok: false, error: 'Radar score already running' },
       { status: 409 },
     )
   }
@@ -92,62 +75,8 @@ export async function POST(_request: NextRequest) {
 
   inFlight = true
   try {
-    // ----- Step 1: ingest -----
-    let ingest
-    try {
-      ingest = await runRadarIngest({
-        supabase,
-        cutoff: radarIngestDefaultCutoff(),
-        dryRun: false,
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'ingest_failed'
-      console.error('[POST /api/radar/refresh] ingest fatal:', message)
-      try {
-        await logAutomationRun(
-          supabase,
-          'failed',
-          { error: message.slice(0, 500), triggeredBy: 'manual' },
-          RADAR_INGEST_AUTOMATION,
-        )
-      } catch {
-        // swallow logging failure
-      }
-      return Response.json({ ok: false, error: message }, { status: 500 })
-    }
-
-    const ingestStatus: 'success' | 'failed' | 'skipped' =
-      ingest.totalSources === 0 ? 'skipped'
-      : ingest.totals.errors > 0 ? 'failed'
-      :                            'success'
-
-    try {
-      await logAutomationRun(
-        supabase,
-        ingestStatus,
-        {
-          ok:           ingest.ok,
-          automation:   RADAR_INGEST_AUTOMATION,
-          cutoff:       ingest.cutoff,
-          totalSources: ingest.totalSources,
-          totals:       ingest.totals,
-          perSource:    ingest.perSource,
-          durationMs:   ingest.durationMs,
-          noOpReason:   ingest.noOpReason,
-          triggeredBy:  'manual',
-        },
-        RADAR_INGEST_AUTOMATION,
-      )
-    } catch {
-      // non-fatal
-    }
-
-    // ----- Step 2: score -----
-    // A failure inside scoring is reported as partial success (HTTP 200)
-    // — the ingest itself already succeeded by this point.
-    let scoreOk     = true
-    let scoreError: string | null = null
     let scoreResult: Awaited<ReturnType<typeof runRadarScoreBatch>> | null = null
+    let scoreError: string | null = null
 
     try {
       scoreResult = await runRadarScoreBatch({
@@ -165,9 +94,8 @@ export async function POST(_request: NextRequest) {
         },
       })
     } catch (err) {
-      scoreOk    = false
       scoreError = err instanceof Error ? err.message : 'score_failed'
-      console.error('[POST /api/radar/refresh] score fatal:', scoreError)
+      console.error('[POST /api/radar/score-new] score fatal:', scoreError)
     }
 
     if (scoreResult) {
@@ -215,35 +143,12 @@ export async function POST(_request: NextRequest) {
       } catch {
         // non-fatal
       }
-    }
 
-    const partial = !scoreOk || (scoreResult ? scoreResult.failed > 0 : false) || ingest.totals.errors > 0
-
-    return Response.json({
-      ok:         true,
-      partial,
-      ingest: {
-        sourcesProcessed: ingest.totalSources,
-        itemsInserted:    ingest.totals.itemsInserted,
-        rawInserted:      ingest.totals.rawInserted,
-        duplicates:       ingest.totals.duplicates,
-        skippedOld:       ingest.totals.skippedOld,
-        errors:           ingest.totals.errors,
-        noOpReason:       ingest.noOpReason,
-      },
-      score: scoreResult
-        ? {
-            scoreCap:       SCORE_LIMIT,
-            candidateCount: scoreResult.candidates.length,
-            processed:      scoreResult.processed,
-            completed:      scoreResult.completed,
-            failed:         scoreResult.failed,
-            skipped:        scoreResult.skipped,
-            providerCounts: scoreResult.providerCounts,
-            noOpReason:     scoreResult.noOpReason,
-            error:          null,
-          }
-        : {
+      return Response.json(
+        {
+          ok:    false,
+          error: scoreError ?? 'score_failed',
+          score: {
             scoreCap:       SCORE_LIMIT,
             candidateCount: 0,
             processed:      0,
@@ -254,6 +159,26 @@ export async function POST(_request: NextRequest) {
             noOpReason:     null,
             error:          scoreError,
           },
+          durationMs: Date.now() - startedAt,
+        },
+        { status: 500 },
+      )
+    }
+
+    return Response.json({
+      ok:      true,
+      partial: scoreResult.failed > 0,
+      score: {
+        scoreCap:       SCORE_LIMIT,
+        candidateCount: scoreResult.candidates.length,
+        processed:      scoreResult.processed,
+        completed:      scoreResult.completed,
+        failed:         scoreResult.failed,
+        skipped:        scoreResult.skipped,
+        providerCounts: scoreResult.providerCounts,
+        noOpReason:     scoreResult.noOpReason,
+        error:          null,
+      },
       durationMs: Date.now() - startedAt,
     })
   } finally {
