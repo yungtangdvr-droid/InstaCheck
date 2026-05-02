@@ -1,9 +1,15 @@
-// Manual Meme Radar refresh trigger.
-// Authenticated route called by the "Refresh Radar" button on
-// /content-lab/radar. Runs the RSS ingest and the score batch in
-// sequence, capping scoring at 20 items per click. Each step writes its
-// own automation_runs row so the operator can audit the manual runs the
-// same way the cron-driven runs are audited.
+// Manual Meme Radar refresh trigger (LEGACY — kept for backwards
+// compatibility).
+//
+// Originally wired to the "Refresh Radar" button on /content-lab/radar.
+// The button now drives the split flow via /api/radar/ingest-now and
+// repeated /api/radar/score-new calls because this single-request
+// version was timing out at 504 (RSS ingest + scoring of up to 20 items
+// in one HTTP request was too long-running for the platform).
+//
+// This route is intentionally not deleted: external probes / saved
+// curl commands may still target it. The score cap is reduced to 5 so
+// it cannot reproduce the original timeout.
 //
 // Library-only: no shell-out, no CLI invocation. Mirrors the in-process
 // inFlight + auth pattern used by /api/meta/sync-now and
@@ -32,7 +38,7 @@ import {
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-const SCORE_LIMIT     = 20
+const SCORE_LIMIT     = 5
 const SCORE_WINDOW_HR = 48
 
 // Best-effort in-process guard. Cold starts reset this, which is fine for

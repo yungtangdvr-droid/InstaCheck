@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
-type TRefreshBody = {
+type TIngestBody = {
   ok?:        boolean
   partial?:   boolean
   error?:     string
@@ -17,6 +17,13 @@ type TRefreshBody = {
     errors:           number
     noOpReason:       string | null
   }
+}
+
+type TScoreBody = {
+  ok?:        boolean
+  partial?:   boolean
+  error?:     string
+  durationMs?:number
   score?: {
     scoreCap:       number
     candidateCount: number
@@ -30,49 +37,113 @@ type TRefreshBody = {
   }
 }
 
+type TPhase =
+  | { kind: 'idle' }
+  | { kind: 'ingest' }
+  | { kind: 'score';   index: number; total: number }
+
 type TResult =
   | { kind: 'idle' }
-  | { kind: 'refreshing' }
   | { kind: 'success' | 'partial' | 'error'; message: string }
 
 const NBSP = ' '
+const SCORE_BATCH_LIMIT = 4
 
 export function RefreshRadarButton() {
   const router = useRouter()
+  const [phase,  setPhase]  = useState<TPhase>({ kind: 'idle' })
   const [result, setResult] = useState<TResult>({ kind: 'idle' })
   const [isPending, startTransition] = useTransition()
 
   async function trigger() {
-    setResult({ kind: 'refreshing' })
+    setResult({ kind: 'idle' })
+    setPhase({ kind: 'ingest' })
 
+    let ingestBody: TIngestBody | null = null
     try {
-      const res = await fetch('/api/radar/refresh', {
+      const res = await fetch('/api/radar/ingest-now', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
       })
-      const body = await res.json().catch(() => null) as TRefreshBody | null
+      ingestBody = await res.json().catch(() => null) as TIngestBody | null
 
-      if (!res.ok || !body?.ok) {
-        const detail = body?.error ?? `Erreur ${res.status}`
+      if (!res.ok || !ingestBody?.ok) {
+        const detail = ingestBody?.error ?? `Erreur ${res.status}`
+        setPhase({ kind: 'idle' })
         setResult({ kind: 'error', message: detail.slice(0, 160) })
         return
       }
-
-      setResult(formatSuccess(body))
-      startTransition(() => router.refresh())
     } catch (err) {
+      setPhase({ kind: 'idle' })
       setResult({
         kind:    'error',
         message: err instanceof Error ? err.message.slice(0, 160) : 'Erreur réseau',
       })
+      return
     }
+
+    let totals = {
+      candidateCount: 0,
+      processed:      0,
+      completed:      0,
+      failed:         0,
+      skipped:        0,
+      batches:        0,
+      scoreError:     null as string | null,
+      partial:        false,
+    }
+
+    for (let i = 1; i <= SCORE_BATCH_LIMIT; i++) {
+      setPhase({ kind: 'score', index: i, total: SCORE_BATCH_LIMIT })
+
+      let body: TScoreBody | null = null
+      try {
+        const res = await fetch('/api/radar/score-new', {
+          method:  'POST',
+          headers: { 'content-type': 'application/json' },
+        })
+        body = await res.json().catch(() => null) as TScoreBody | null
+
+        if (!res.ok || !body?.ok) {
+          totals.scoreError = (body?.error ?? `Erreur ${res.status}`).slice(0, 160)
+          totals.partial    = true
+          break
+        }
+      } catch (err) {
+        totals.scoreError = err instanceof Error ? err.message.slice(0, 160) : 'Erreur réseau'
+        totals.partial    = true
+        break
+      }
+
+      const s = body.score
+      if (!s) {
+        totals.scoreError = 'score_missing'
+        totals.partial    = true
+        break
+      }
+
+      totals.batches        += 1
+      totals.candidateCount += s.candidateCount
+      totals.processed      += s.processed
+      totals.completed      += s.completed
+      totals.failed         += s.failed
+      totals.skipped        += s.skipped
+      if (s.failed > 0 || body.partial || s.error) totals.partial = true
+
+      if (s.processed === 0 || s.candidateCount === 0) break
+    }
+
+    setPhase({ kind: 'idle' })
+    setResult(formatSummary(ingestBody, totals))
+    startTransition(() => router.refresh())
   }
 
-  const isLoading = result.kind === 'refreshing' || isPending
+  const isLoading = phase.kind !== 'idle' || isPending
   const label =
-    result.kind === 'refreshing' ? `Refresh en cours…` :
-    isPending                    ? 'Mise à jour…' :
-                                   'Refresh Radar'
+    phase.kind === 'ingest' ? 'Sync RSS…' :
+    phase.kind === 'score'  ? `Analyse ${phase.index}/${phase.total}…` :
+    isPending               ? 'Mise à jour…' :
+                              'Refresh Radar'
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -81,7 +152,7 @@ export function RefreshRadarButton() {
         onClick={trigger}
         disabled={isLoading}
         aria-busy={isLoading}
-        title="Ingest RSS puis scoring des nouveaux items (max 20 par clic)."
+        title="Ingest RSS puis scoring des nouveaux items (max 4 × 5 par clic)."
         className="inline-flex items-center gap-1.5 rounded-md border border-border bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading && (
@@ -92,14 +163,14 @@ export function RefreshRadarButton() {
         )}
         {label}
       </button>
-      {result.kind === 'idle' && (
+      {result.kind === 'idle' && phase.kind === 'idle' && (
         <span className="text-[10px] text-muted-foreground">
-          Ingest RSS puis scoring · max 20 / clic
+          Ingest RSS puis scoring · max 4{NBSP}×{NBSP}5 / clic
         </span>
       )}
-      {result.kind === 'refreshing' && (
+      {phase.kind !== 'idle' && (
         <span className="text-[10px] text-muted-foreground">
-          Peut prendre 1 à 2{NBSP}min
+          Lots courts pour éviter les timeouts
         </span>
       )}
       {result.kind === 'success' && (
@@ -121,23 +192,38 @@ export function RefreshRadarButton() {
   )
 }
 
-function formatSuccess(body: TRefreshBody): TResult {
-  const ingest = body.ingest
-  const score  = body.score
+function formatSummary(
+  ingestBody: TIngestBody | null,
+  totals: {
+    candidateCount: number
+    processed:      number
+    completed:      number
+    failed:         number
+    skipped:        number
+    batches:        number
+    scoreError:     string | null
+    partial:        boolean
+  },
+): TResult {
+  const ingest = ingestBody?.ingest
   const sources    = ingest?.sourcesProcessed ?? 0
   const inserted   = ingest?.itemsInserted    ?? 0
   const ingestErrs = ingest?.errors           ?? 0
-  const completed  = score?.completed         ?? 0
-  const failed     = score?.failed            ?? 0
 
   const summary =
     `${sources} source${plural(sources)} · ${inserted} item${plural(inserted)} ingéré${plural(inserted)} · ` +
-    `${completed} scoré${plural(completed)}` +
-    (failed > 0 ? `, ${failed} échec${plural(failed)}` : '')
+    `${totals.completed} scoré${plural(totals.completed)}` +
+    (totals.failed > 0 ? `, ${totals.failed} échec${plural(totals.failed)}` : '') +
+    (totals.scoreError ? ` · scoring interrompu` : '')
 
-  if (body.partial || ingestErrs > 0 || failed > 0 || score?.error) {
-    return { kind: 'partial', message: summary }
-  }
+  const isPartial =
+    totals.partial ||
+    ingestErrs > 0 ||
+    Boolean(ingestBody?.partial) ||
+    totals.failed > 0 ||
+    Boolean(totals.scoreError)
+
+  if (isPartial) return { kind: 'partial', message: summary }
   return { kind: 'success', message: summary }
 }
 
