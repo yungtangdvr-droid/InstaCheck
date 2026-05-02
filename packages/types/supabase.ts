@@ -802,6 +802,27 @@ export type Database = {
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "post_archive_state_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "v_mart_format_performance"
+            referencedColumns: ["top_post_id"]
+          },
+          {
+            foreignKeyName: "post_archive_state_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "v_mart_post_performance"
+            referencedColumns: ["post_id"]
+          },
+          {
+            foreignKeyName: "post_archive_state_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "v_mart_theme_performance"
+            referencedColumns: ["top_post_id"]
+          },
         ]
       }
       post_content_analysis: {
@@ -1075,6 +1096,212 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      radar_item_scores: {
+        Row: {
+          analysis_json: Json | null
+          composite: number | null
+          confidence: number | null
+          controversy_level: string | null
+          created_at: string
+          cultural_references: string[]
+          cultural_relevance: number | null
+          error_message: string | null
+          id: string
+          input_tokens: number | null
+          legal_caution: string | null
+          meme_angles: Json | null
+          meme_potential: number | null
+          misinformation_risk: string | null
+          model: string
+          output_tokens: number | null
+          primary_theme: string | null
+          prompt_version: string
+          provider: string
+          radar_item_id: string
+          recommended_format: string | null
+          scored_at: string | null
+          sensitivity_context: string[]
+          short_reason: string | null
+          status: Database["public"]["Enums"]["radar_score_status"]
+          timing_urgency: number | null
+          timing_window_hours: number | null
+          tragedy_context: string | null
+          updated_at: string
+          visual_potential: number | null
+          why_memable: string | null
+          yugnat_fit: number | null
+        }
+        Insert: {
+          analysis_json?: Json | null
+          composite?: number | null
+          confidence?: number | null
+          controversy_level?: string | null
+          created_at?: string
+          cultural_references?: string[]
+          cultural_relevance?: number | null
+          error_message?: string | null
+          id?: string
+          input_tokens?: number | null
+          legal_caution?: string | null
+          meme_angles?: Json | null
+          meme_potential?: number | null
+          misinformation_risk?: string | null
+          model: string
+          output_tokens?: number | null
+          primary_theme?: string | null
+          prompt_version: string
+          provider: string
+          radar_item_id: string
+          recommended_format?: string | null
+          scored_at?: string | null
+          sensitivity_context?: string[]
+          short_reason?: string | null
+          status?: Database["public"]["Enums"]["radar_score_status"]
+          timing_urgency?: number | null
+          timing_window_hours?: number | null
+          tragedy_context?: string | null
+          updated_at?: string
+          visual_potential?: number | null
+          why_memable?: string | null
+          yugnat_fit?: number | null
+        }
+        Update: {
+          analysis_json?: Json | null
+          composite?: number | null
+          confidence?: number | null
+          controversy_level?: string | null
+          created_at?: string
+          cultural_references?: string[]
+          cultural_relevance?: number | null
+          error_message?: string | null
+          id?: string
+          input_tokens?: number | null
+          legal_caution?: string | null
+          meme_angles?: Json | null
+          meme_potential?: number | null
+          misinformation_risk?: string | null
+          model?: string
+          output_tokens?: number | null
+          primary_theme?: string | null
+          prompt_version?: string
+          provider?: string
+          radar_item_id?: string
+          recommended_format?: string | null
+          scored_at?: string | null
+          sensitivity_context?: string[]
+          short_reason?: string | null
+          status?: Database["public"]["Enums"]["radar_score_status"]
+          timing_urgency?: number | null
+          timing_window_hours?: number | null
+          tragedy_context?: string | null
+          updated_at?: string
+          visual_potential?: number | null
+          why_memable?: string | null
+          yugnat_fit?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "radar_item_scores_radar_item_id_fkey"
+            columns: ["radar_item_id"]
+            isOneToOne: true
+            referencedRelation: "radar_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      radar_items: {
+        Row: {
+          created_at: string
+          decision: Database["public"]["Enums"]["radar_item_decision"]
+          decision_at: string | null
+          fingerprint: string
+          id: string
+          image_url: string | null
+          published_at: string | null
+          raw_item_id: string
+          source_id: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          decision?: Database["public"]["Enums"]["radar_item_decision"]
+          decision_at?: string | null
+          fingerprint: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_item_id: string
+          source_id: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          decision?: Database["public"]["Enums"]["radar_item_decision"]
+          decision_at?: string | null
+          fingerprint?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_item_id?: string
+          source_id?: string
+          summary?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "radar_items_raw_item_id_fkey"
+            columns: ["raw_item_id"]
+            isOneToOne: false
+            referencedRelation: "raw_radar_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "radar_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "radar_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      radar_sources: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          label: string
+          language: string | null
+          last_error: string | null
+          last_fetch_at: string | null
+          url: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label: string
+          language?: string | null
+          last_error?: string | null
+          last_fetch_at?: string | null
+          url: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          language?: string | null
+          last_error?: string | null
+          last_fetch_at?: string | null
+          url?: string
+        }
+        Relationships: []
       }
       raw_benchmark_instagram_account_daily: {
         Row: {
@@ -1360,6 +1587,53 @@ export type Database = {
           viewer_id?: string
         }
         Relationships: []
+      }
+      raw_radar_items: {
+        Row: {
+          external_id: string
+          fetched_at: string
+          id: string
+          image_url: string | null
+          published_at: string | null
+          raw_json: Json | null
+          source_id: string
+          summary: string | null
+          title: string
+          url: string
+        }
+        Insert: {
+          external_id: string
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_json?: Json | null
+          source_id: string
+          summary?: string | null
+          title: string
+          url: string
+        }
+        Update: {
+          external_id?: string
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_json?: Json | null
+          source_id?: string
+          summary?: string | null
+          title?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_radar_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "radar_sources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       raw_umami_events: {
         Row: {
@@ -1732,6 +2006,8 @@ export type Database = {
         | "lost"
         | "dormant"
       media_type: "IMAGE" | "VIDEO" | "CAROUSEL_ALBUM"
+      radar_item_decision: "new" | "saved" | "ignored"
+      radar_score_status: "pending" | "completed" | "failed" | "skipped"
       task_status: "todo" | "done" | "snoozed"
       touchpoint_type: "email" | "dm" | "call" | "meeting" | "other"
     }
@@ -1912,6 +2188,8 @@ export const Constants = {
         "dormant",
       ],
       media_type: ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"],
+      radar_item_decision: ["new", "saved", "ignored"],
+      radar_score_status: ["pending", "completed", "failed", "skipped"],
       task_status: ["todo", "done", "snoozed"],
       touchpoint_type: ["email", "dm", "call", "meeting", "other"],
     },
