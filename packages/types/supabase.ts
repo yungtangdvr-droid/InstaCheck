@@ -592,6 +592,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ingestion_cursors: {
+        Row: {
+          created_at: string
+          cursor: string | null
+          error_count: number
+          fetched_count: number
+          finished_at: string | null
+          id: string
+          job_name: string
+          last_error: string | null
+          last_processed_media_id: string | null
+          payload: Json
+          ran_at: string | null
+          skipped_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          upserted_count: number
+        }
+        Insert: {
+          created_at?: string
+          cursor?: string | null
+          error_count?: number
+          fetched_count?: number
+          finished_at?: string | null
+          id?: string
+          job_name: string
+          last_error?: string | null
+          last_processed_media_id?: string | null
+          payload?: Json
+          ran_at?: string | null
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          upserted_count?: number
+        }
+        Update: {
+          created_at?: string
+          cursor?: string | null
+          error_count?: number
+          fetched_count?: number
+          finished_at?: string | null
+          id?: string
+          job_name?: string
+          last_error?: string | null
+          last_processed_media_id?: string | null
+          payload?: Json
+          ran_at?: string | null
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          upserted_count?: number
+        }
+        Relationships: []
+      }
       opportunities: {
         Row: {
           booking_url: string | null
@@ -690,6 +747,59 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_archive_state: {
+        Row: {
+          ai_tagging_status: string
+          archive_priority: number | null
+          created_at: string
+          embedding_status: string
+          human_review_status: string
+          last_error: string | null
+          last_indexed_at: string
+          metadata_status: string
+          metrics_status: string
+          pattern_status: string
+          post_id: string
+          updated_at: string
+        }
+        Insert: {
+          ai_tagging_status?: string
+          archive_priority?: number | null
+          created_at?: string
+          embedding_status?: string
+          human_review_status?: string
+          last_error?: string | null
+          last_indexed_at?: string
+          metadata_status?: string
+          metrics_status?: string
+          pattern_status?: string
+          post_id: string
+          updated_at?: string
+        }
+        Update: {
+          ai_tagging_status?: string
+          archive_priority?: number | null
+          created_at?: string
+          embedding_status?: string
+          human_review_status?: string
+          last_error?: string | null
+          last_indexed_at?: string
+          metadata_status?: string
+          metrics_status?: string
+          pattern_status?: string
+          post_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_archive_state_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
         ]
