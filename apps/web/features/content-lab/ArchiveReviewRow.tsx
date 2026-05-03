@@ -34,6 +34,22 @@ const MEDIA_TYPE_LABELS: Record<string, string> = {
   STORY:          'Story',
 }
 
+const HUMAN_REVIEW_LABELS: Record<string, string> = {
+  pending:  'À analyser',
+  approved: 'Validé',
+  rejected: 'Écarté',
+}
+
+type EraIndexTone = 'neutral' | 'amber' | 'emerald'
+
+function eraIndexBadge(index: number | null): { label: string; tone: EraIndexTone } {
+  if (index === null) return { label: 'Signal insuffisant', tone: 'neutral' }
+  if (index < 90)     return { label: 'Sous sa période', tone: 'amber' }
+  if (index < 125)    return { label: 'Dans la norme', tone: 'neutral' }
+  if (index < 150)    return { label: 'Fort pour sa période', tone: 'emerald' }
+  return { label: 'Très fort pour sa période', tone: 'emerald' }
+}
+
 function fmtDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -88,23 +104,22 @@ export function ArchiveReviewRow({ item }: { item: ArchiveReviewItem }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {item.eraNormalizedIndex !== null ? (
-            <span
-              title="Index vs période comparable (100 = baseline archive même format/année ou même époque)"
-              className={cn(
-                'rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums',
-                item.eraNormalizedIndex >= 125
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : item.eraNormalizedIndex >= 90
-                    ? 'border-border bg-muted text-card-foreground'
-                    : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-              )}
-            >
-              index {item.eraNormalizedIndex}
-            </span>
-          ) : null}
-          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums text-card-foreground">
-            score {item.score}
+          {(() => {
+            const { label, tone } = eraIndexBadge(item.eraNormalizedIndex)
+            const rawSuffix =
+              item.eraNormalizedIndex !== null
+                ? ` Valeur brute : ${item.eraNormalizedIndex}.`
+                : ''
+            return (
+              <span
+                title={`Index vs période comparable (100 = baseline archive même format/année ou même époque).${rawSuffix}`}
+              >
+                <Chip tone={tone}>{label}</Chip>
+              </span>
+            )
+          })()}
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            Priorité interne : {item.score}
           </span>
           <a
             href={item.permalink}
@@ -157,7 +172,9 @@ export function ArchiveReviewRow({ item }: { item: ArchiveReviewItem }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <Chip tone="emerald">métadonnées : {item.archiveMetadataStatus}</Chip>
-        <Chip tone="amber">revue humaine : {item.archiveHumanReviewStatus}</Chip>
+        <Chip tone="amber">
+          Statut archive : {HUMAN_REVIEW_LABELS[item.archiveHumanReviewStatus] ?? item.archiveHumanReviewStatus}
+        </Chip>
       </div>
 
       {item.reasons.length > 0 ? (
