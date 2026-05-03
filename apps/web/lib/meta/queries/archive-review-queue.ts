@@ -7,10 +7,12 @@ import type { Database } from '@creator-hub/types/supabase'
 
 export const ARCHIVE_REVIEW_DEFAULT_PAGE_SIZE = 25
 
-// Hard cap on the gated candidate pool we score in memory. Single-tenant
-// archive volume is comfortably below this; if we ever hit it the page
-// surfaces a `truncated` flag so the operator knows.
-export const ARCHIVE_REVIEW_CANDIDATE_CAP = 500
+// Maximum number of gated rows we score in memory per request. The
+// archive holds ~28k posts on this account, so we will routinely score
+// only a window of the eligible set (most-recent first). The exact
+// `eligibleTotal` is reported separately so the UI can show how much
+// of the pool is being analysed.
+export const ARCHIVE_REVIEW_CANDIDATE_WINDOW = 2000
 
 // Diversity bonus: top-N most-recent posts per (media_type, year-month).
 const REPRESENTATIVE_SAMPLE_PER_BUCKET = 3
@@ -45,19 +47,21 @@ export type ArchiveReviewItem = {
 }
 
 export type ArchiveReviewKpis = {
-  eligibleTotal:        number
-  inQueue:              number
-  captionPresentShare:  number
-  withMetricsShare:     number
+  eligibleTotal:         number
+  candidateWindow:       number
+  candidateWindowLimit:  number
+  captionPresentShare:   number
+  withMetricsShare:      number
 }
 
 export type ArchiveReviewQueue = {
-  items:     ArchiveReviewItem[]
-  total:     number
-  page:      number
-  pageSize:  number
-  truncated: boolean
-  kpis:      ArchiveReviewKpis
+  items:                 ArchiveReviewItem[]
+  total:                 number
+  page:                  number
+  pageSize:              number
+  windowed:              boolean
+  candidateWindowLimit:  number
+  kpis:                  ArchiveReviewKpis
 }
 
 type Db = SupabaseClient<Database>
@@ -116,16 +120,18 @@ export async function getArchiveReviewQueue(
 
   if (eligibleTotal === 0) {
     return {
-      items:     [],
-      total:     0,
-      page:      1,
+      items:                [],
+      total:                0,
+      page:                 1,
       pageSize,
-      truncated: false,
+      windowed:             false,
+      candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
       kpis: {
-        eligibleTotal:       0,
-        inQueue:             0,
-        captionPresentShare: 0,
-        withMetricsShare:    0,
+        eligibleTotal:        0,
+        candidateWindow:      0,
+        candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+        captionPresentShare:  0,
+        withMetricsShare:     0,
       },
     }
   }
@@ -146,12 +152,12 @@ export async function getArchiveReviewQueue(
     .eq('post_archive_state.human_review_status', 'pending')
     .order('posted_at', { ascending: false })
     .order('id',        { ascending: true })
-    .limit(ARCHIVE_REVIEW_CANDIDATE_CAP)
+    .limit(ARCHIVE_REVIEW_CANDIDATE_WINDOW)
   if (gatedRes.error) {
     throw new Error(`archive review gated query failed: ${gatedRes.error.message}`)
   }
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
-  const truncated = gated.length >= ARCHIVE_REVIEW_CANDIDATE_CAP && eligibleTotal > gated.length
+  const windowed = eligibleTotal > gated.length
 
   // ----- Latest metrics per post (best-effort) -------------------------
   const postIds = gated.map((r) => r.id)
@@ -264,15 +270,17 @@ export async function getArchiveReviewQueue(
   const denom = gated.length || 1
   return {
     items,
-    total:     scored.length,
+    total:                scored.length,
     page,
     pageSize,
-    truncated,
+    windowed,
+    candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
     kpis: {
       eligibleTotal,
-      inQueue:             scored.length,
-      captionPresentShare: captionPresentCount / denom,
-      withMetricsShare:    withMetricsCount    / denom,
+      candidateWindow:      scored.length,
+      candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+      captionPresentShare:  captionPresentCount / denom,
+      withMetricsShare:     withMetricsCount    / denom,
     },
   }
 }

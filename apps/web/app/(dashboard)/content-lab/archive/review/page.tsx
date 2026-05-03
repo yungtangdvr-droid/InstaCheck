@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ArchiveReviewRow } from '@/features/content-lab/ArchiveReviewRow'
 import {
   getArchiveReviewQueue,
-  ARCHIVE_REVIEW_CANDIDATE_CAP,
+  ARCHIVE_REVIEW_CANDIDATE_WINDOW,
 } from '@/lib/meta/queries/archive-review-queue'
 
 export const dynamic = 'force-dynamic'
@@ -60,35 +60,49 @@ export default async function ArchiveReviewPage({
 
       <section className="space-y-3">
         <SectionHeader
-          title="Couverture de la file"
-          description={`Calculé sur le pool gating actuel (cap ${NF.format(ARCHIVE_REVIEW_CANDIDATE_CAP)} candidats).`}
+          title="Couverture de la priorisation"
+          description={`Total éligible compté en base ; la fenêtre analysée est limitée aux ${NF.format(ARCHIVE_REVIEW_CANDIDATE_WINDOW)} posts les plus récents.`}
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KpiTile
-            label="Éligibles"
+            label="Total éligible"
             value={NF.format(queue.kpis.eligibleTotal)}
             hint="metadata = imported · revue humaine = pending"
           />
           <KpiTile
-            label="Dans la file"
-            value={NF.format(queue.kpis.inQueue)}
+            label="Fenêtre analysée"
+            value={NF.format(queue.kpis.candidateWindow)}
             hint={
-              queue.truncated
-                ? 'Tronqué au cap 500 — élargir le cap si besoin'
-                : 'Pool complet scoré'
+              queue.windowed
+                ? `Limite ${NF.format(queue.kpis.candidateWindowLimit)} · posts les plus récents d'abord`
+                : 'Tous les posts éligibles ont été scorés'
             }
           />
           <KpiTile
-            label="Avec légende IG"
+            label="Avec légende"
             value={PCT.format(queue.kpis.captionPresentShare)}
-            hint="Part du pool avec une légende non vide"
+            hint="Part de la fenêtre analysée"
           />
           <KpiTile
             label="Avec métriques"
             value={PCT.format(queue.kpis.withMetricsShare)}
-            hint="Part du pool ayant au moins une ligne post_metrics_daily"
+            hint="Part de la fenêtre avec ≥ 1 ligne post_metrics_daily"
           />
         </div>
+        {queue.windowed ? (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            Priorisation calculée sur une fenêtre de{' '}
+            <strong className="tabular-nums">
+              {NF.format(queue.kpis.candidateWindow)}
+            </strong>{' '}
+            posts parmi{' '}
+            <strong className="tabular-nums">
+              {NF.format(queue.kpis.eligibleTotal)}
+            </strong>{' '}
+            éligibles. Les posts plus anciens entreront dans la fenêtre à mesure
+            que les plus récents passeront en revue humaine.
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -121,7 +135,7 @@ export default async function ArchiveReviewPage({
           >
             <span className="text-xs text-muted-foreground">
               Page {NF.format(safePage)} / {NF.format(totalPages)} ·{' '}
-              {NF.format(queue.total)} posts dans la file
+              {NF.format(queue.total)} posts dans la fenêtre analysée
             </span>
             <div className="flex items-center gap-2">
               <PagerLink
