@@ -41,6 +41,25 @@ const ITEMS_BY_AXIS: Record<TaxonomyAxis, TaxonomyItem[]> = {
 
 const KEBAB_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
+// Expected per-axis item counts derived from the V1 brief.
+// Acts as a tripwire : if a contributor adds, removes or merges
+// items, the self-check fails until this map is consciously
+// updated. Keeps the report and the data forever in sync.
+const EXPECTED_ITEM_COUNTS: Record<TaxonomyAxis, number> = {
+  subject:             45,
+  mechanic:            39,
+  manifestation:       29,
+  text_image_relation: 19,
+  tone:                24,
+  replicability:       14,
+  stance:              21,
+  social_function:     17,
+  intertextuality:     26,
+  readability:         12,
+  temporality:         18,
+  risk:                14,
+}
+
 export class TaxonomyValidationError extends Error {
   constructor(public readonly issues: string[]) {
     super(`Taxonomy is malformed:\n- ${issues.join('\n- ')}`)
@@ -59,6 +78,7 @@ export class TaxonomyValidationError extends Error {
 //   5. Each item.priority matches its axis-level priority.
 //   6. Labels and descriptions are non-empty.
 //   7. The core/advanced split matches the spec.
+//   8. Each axis carries the expected V1 item count.
 function validateTaxonomy(): TaxonomyAxisDef[] {
   const issues: string[] = []
 
@@ -103,6 +123,13 @@ function validateTaxonomy(): TaxonomyAxisDef[] {
       issues.push(`axis "${axisId}" has no items`)
       defs.push({ ...meta, items: [] })
       continue
+    }
+
+    const expectedCount = EXPECTED_ITEM_COUNTS[axisId]
+    if (items.length !== expectedCount) {
+      issues.push(
+        `axis "${axisId}" has ${items.length} items, expected ${expectedCount}`,
+      )
     }
 
     const seen = new Set<string>()
