@@ -907,3 +907,7 @@ export type TPeerPercentilePayload = {
 // --- Meme Radar (PR 1: schema + types) ---
 
 export * from './radar'
+
+// --- Creative Taxonomy V1 (foundation, read-only) ---
+
+export * from './taxonomy'

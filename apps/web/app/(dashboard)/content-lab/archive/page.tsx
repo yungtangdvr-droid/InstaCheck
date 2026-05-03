@@ -38,12 +38,20 @@ export default async function ArchiveStatusPage() {
         title="Archive — état d'indexation"
         description="Vue lecture seule de l'avancement du backfill métadonnées (V1). Aucun appel d'insights, d'IA ni d'embeddings n'est déclenché par cette page."
         actions={
-          <Link
-            href="/content-lab/archive/review"
-            className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
-          >
-            File de revue →
-          </Link>
+          <>
+            <Link
+              href="/content-lab/archive/review"
+              className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+            >
+              File de revue →
+            </Link>
+            <Link
+              href="/content-lab/taxonomy"
+              className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+            >
+              Taxonomie →
+            </Link>
+          </>
         }
       />
 

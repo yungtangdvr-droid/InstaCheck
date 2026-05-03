@@ -49,12 +49,20 @@ export default async function ArchiveReviewPage({
         title="File de revue archive"
         description="Liste lecture seule des posts à revoir en priorité. Aucune action destructive ni IA. La file se met à jour naturellement à mesure que le backfill métadonnées progresse — l'ordre peut donc évoluer entre deux visites."
         actions={
-          <Link
-            href="/content-lab/archive"
-            className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
-          >
-            ← État d'indexation
-          </Link>
+          <>
+            <Link
+              href="/content-lab/archive"
+              className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+            >
+              ← État d'indexation
+            </Link>
+            <Link
+              href="/content-lab/taxonomy"
+              className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+            >
+              Taxonomie →
+            </Link>
+          </>
         }
       />
 
