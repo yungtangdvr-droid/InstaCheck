@@ -1818,6 +1818,42 @@ export type Database = {
       }
     }
     Views: {
+      v_archive_baseline_era_format: {
+        Row: {
+          count_comments: number | null
+          count_likes: number | null
+          count_profile_visits: number | null
+          count_saves: number | null
+          count_shares: number | null
+          era: string | null
+          mean_comments: number | null
+          mean_likes: number | null
+          mean_profile_visits: number | null
+          mean_saves: number | null
+          mean_shares: number | null
+          media_type: Database["public"]["Enums"]["media_type"] | null
+          sample_size: number | null
+        }
+        Relationships: []
+      }
+      v_archive_baseline_year_format: {
+        Row: {
+          count_comments: number | null
+          count_likes: number | null
+          count_profile_visits: number | null
+          count_saves: number | null
+          count_shares: number | null
+          mean_comments: number | null
+          mean_likes: number | null
+          mean_profile_visits: number | null
+          mean_saves: number | null
+          mean_shares: number | null
+          media_type: Database["public"]["Enums"]["media_type"] | null
+          sample_size: number | null
+          year: number | null
+        }
+        Relationships: []
+      }
       v_mart_benchmark_peer_percentile: {
         Row: {
           account_count: number | null

@@ -39,16 +39,11 @@ const INDEX_DISPLAY_CAP = 250
 // Reason chip threshold: post outperforms its comparable archive cell.
 const ERA_OUTPERFORMER_THRESHOLD = 125
 
-// Per (year, media_type) bucket, the maximum number of archive-eligible
-// posts pulled to hydrate the same-year baseline. 500 saturates any
-// realistic year on a single-operator account.
-const BASELINE_PER_YEAR_BUCKET_LIMIT = 500
-
-// Per (era, media_type) bucket, the maximum number of archive-eligible
-// posts pulled to hydrate the era fallback. Each era spans up to two
-// (or, for `pre_2019` / `2025_plus`, more) calendar years, so 500 is
-// usually enough to satisfy ERA_MIN_SAMPLE = 5 at era granularity.
-const BASELINE_PER_ERA_BUCKET_LIMIT = 500
+// Maximum number of (year, media_type) or (era, media_type) keys we
+// pass to a single `.in(...)` filter against the baseline views. Mirrors
+// METRICS_CHUNK_SIZE — keeps the URL under PostgREST's request limit
+// even when the candidate window spans many historical buckets.
+const BASELINE_KEY_CHUNK_SIZE = 200
 
 export type ArchiveReviewReason =
   | 'caption_present'
@@ -226,17 +221,6 @@ function eraOfYear(year: number): TArchiveEra {
   return '2025_plus'
 }
 
-// Closed-open year range that defines the era for SQL predicates.
-// `pre_2019` starts at 2000 (Instagram launched in 2010, this is just a
-// safe lower bound). `2025_plus` runs to year 9999 to stay open-ended.
-const ERA_YEAR_RANGE: Record<TArchiveEra, { startYear: number; endYearExclusive: number }> = {
-  pre_2019:    { startYear: 2000, endYearExclusive: 2019 },
-  '2019_2020': { startYear: 2019, endYearExclusive: 2021 },
-  '2021_2022': { startYear: 2021, endYearExclusive: 2023 },
-  '2023_2024': { startYear: 2023, endYearExclusive: 2025 },
-  '2025_plus': { startYear: 2025, endYearExclusive: 9999 },
-}
-
 function yearOfIso(iso: string): number | null {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
@@ -275,38 +259,90 @@ function eraFormatKey(era: TArchiveEra, mt: ArchiveReviewMediaType): string {
   return `${era}__${mt}`
 }
 
-function accumulateMetric(cell: BaselineCell, metric: LatestMetric): void {
-  // Null = unknown → skip. Measured zero counts as a real zero.
-  for (const k of METRIC_KEYS) {
-    const v = metric[k]
-    if (v === null || v === undefined) continue
-    cell[k].sum   += v
-    cell[k].count += 1
-  }
+// Shape of one row coming back from
+// `public.v_archive_baseline_year_format` /
+// `public.v_archive_baseline_era_format`. Generated `Database` types
+// are not yet regenerated for these views (see project README on
+// running `pnpm db:types`); typed locally with the columns the view
+// actually returns.
+type ArchiveBaselineYearRow = {
+  year:                 number | null
+  media_type:           ArchiveReviewMediaType | null
+  count_saves:          number | null
+  count_shares:         number | null
+  count_comments:       number | null
+  count_likes:          number | null
+  count_profile_visits: number | null
+  mean_saves:           number | null
+  mean_shares:          number | null
+  mean_comments:        number | null
+  mean_likes:           number | null
+  mean_profile_visits:  number | null
 }
 
-function buildBaselines(
-  rows: ReadonlyArray<GatedRow>,
-  metrics: Map<string, LatestMetric>,
-): BaselineMaps {
-  const yearFormat = new Map<string, BaselineCell>()
-  const eraFormat  = new Map<string, BaselineCell>()
-  for (const r of rows) {
-    const m = metrics.get(r.id)
-    if (!m) continue
-    const year = yearOfIso(r.posted_at)
-    if (year === null) continue
-    const era = eraOfYear(year)
-    const yk = yearFormatKey(year, r.media_type)
-    const ek = eraFormatKey(era,  r.media_type)
-    let yc = yearFormat.get(yk)
-    if (!yc) { yc = emptyBaselineCell(); yearFormat.set(yk, yc) }
-    let ec = eraFormat.get(ek)
-    if (!ec) { ec = emptyBaselineCell(); eraFormat.set(ek, ec) }
-    accumulateMetric(yc, m)
-    accumulateMetric(ec, m)
+type ArchiveBaselineEraRow = {
+  era:                  string | null
+  media_type:           ArchiveReviewMediaType | null
+  count_saves:          number | null
+  count_shares:         number | null
+  count_comments:       number | null
+  count_likes:          number | null
+  count_profile_visits: number | null
+  mean_saves:           number | null
+  mean_shares:          number | null
+  mean_comments:        number | null
+  mean_likes:           number | null
+  mean_profile_visits:  number | null
+}
+
+const COUNT_KEYS: Record<MetricKey, keyof Pick<
+  ArchiveBaselineYearRow,
+  | 'count_saves' | 'count_shares' | 'count_comments'
+  | 'count_likes' | 'count_profile_visits'
+>> = {
+  saves:          'count_saves',
+  shares:         'count_shares',
+  comments:       'count_comments',
+  likes:          'count_likes',
+  profile_visits: 'count_profile_visits',
+}
+
+const MEAN_KEYS: Record<MetricKey, keyof Pick<
+  ArchiveBaselineYearRow,
+  | 'mean_saves' | 'mean_shares' | 'mean_comments'
+  | 'mean_likes' | 'mean_profile_visits'
+>> = {
+  saves:          'mean_saves',
+  shares:         'mean_shares',
+  comments:       'mean_comments',
+  likes:          'mean_likes',
+  profile_visits: 'mean_profile_visits',
+}
+
+function isArchiveEra(value: string | null | undefined): value is TArchiveEra {
+  return typeof value === 'string'
+    && (ARCHIVE_ERAS as readonly string[]).includes(value)
+}
+
+// Convert one view row (year or era grain) into the in-memory
+// BaselineCell shape used by `pickBaselineMeans`. The view exposes
+// `count_*` + `mean_*`; the cell stores `sum` + `count` so that the
+// existing per-metric ERA_MIN_SAMPLE gate keeps working unchanged
+// (`mean = sum / count`).
+function viewRowToCell(
+  row: ArchiveBaselineYearRow | ArchiveBaselineEraRow,
+): BaselineCell {
+  const cell = emptyBaselineCell()
+  for (const k of METRIC_KEYS) {
+    const count = row[COUNT_KEYS[k]]
+    const mean  = row[MEAN_KEYS[k]]
+    if (typeof count === 'number' && count > 0
+        && typeof mean === 'number' && Number.isFinite(mean)) {
+      cell[k].count = count
+      cell[k].sum   = mean * count
+    }
   }
-  return { yearFormat, eraFormat }
+  return cell
 }
 
 // Per metric, prefer the same-year + same-format cell if its sample size
@@ -571,149 +607,16 @@ export async function getArchiveReviewQueue(
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
   const windowed = filteredEligibleTotal > gated.length
 
-  // ----- Stable baseline universe -------------------------------------
-  // Era-normalized baselines must NOT shift when the user toggles
-  // year / mediaType / caption / metrics filters, and must hydrate
-  // properly for any old era / old year present in the rows being
-  // scored — even when those rows are far outside a "most-recent N"
-  // window on a large archive.
-  //
-  // Strategy:
-  //   1. Walk `gated` and collect the distinct (year, media_type) and
-  //      (era, media_type) pairs actually present.
-  //   2. For each (year, media_type) pair, hydrate up to
-  //      BASELINE_PER_YEAR_BUCKET_LIMIT archive-eligible posts from
-  //      exactly that calendar year and media_type. This is the
-  //      primary baseline source — a 2014 IMAGE post is compared
-  //      against eligible 2014 IMAGE posts, not against the era pool
-  //      dominated by later years.
-  //   3. For each (era, media_type) pair, hydrate up to
-  //      BASELINE_PER_ERA_BUCKET_LIMIT archive-eligible posts spanning
-  //      the era's year range and that media_type. This is the
-  //      fallback when the same-year cell does not have ≥ 5 samples
-  //      for a given metric.
-  //   4. Always fold `gated` into the union so the rows under review
-  //      are themselves represented.
-  //
-  // User filters are intentionally NOT applied to any of these queries.
-  // Bucket queries run in parallel — they are independent reads.
-  const yearFormatPairs = new Map<
-    string,
-    { year: number; mediaType: ArchiveReviewMediaType }
-  >()
-  const eraFormatPairs = new Map<
-    string,
-    { era: TArchiveEra; mediaType: ArchiveReviewMediaType }
-  >()
-  for (const r of gated) {
-    const y = yearOfIso(r.posted_at)
-    if (y === null) continue
-    const era = eraOfYear(y)
-    const yKey = `${y}__${r.media_type}`
-    if (!yearFormatPairs.has(yKey)) {
-      yearFormatPairs.set(yKey, { year: y, mediaType: r.media_type })
-    }
-    const eKey = `${era}__${r.media_type}`
-    if (!eraFormatPairs.has(eKey)) {
-      eraFormatPairs.set(eKey, { era, mediaType: r.media_type })
-    }
-  }
-
-  const yearBucketPromises = Array.from(yearFormatPairs.values()).map(
-    async ({ year, mediaType }) => {
-      const res = await supabase
-        .from('posts')
-        .select(`
-          id,
-          media_id,
-          media_type,
-          caption,
-          permalink,
-          posted_at,
-          post_archive_state!inner ( metadata_status, human_review_status )
-        `)
-        .eq('post_archive_state.metadata_status',     'imported')
-        .eq('post_archive_state.human_review_status', 'pending')
-        .eq('media_type', mediaType)
-        .gte('posted_at', isoYearStart(year))
-        .lt('posted_at',  isoYearStart(year + 1))
-        .order('posted_at', { ascending: false })
-        .order('id',        { ascending: true })
-        .limit(BASELINE_PER_YEAR_BUCKET_LIMIT)
-      if (res.error) {
-        throw new Error(
-          `archive review baseline year bucket (${year}/${mediaType}) query failed: ${res.error.message}`
-        )
-      }
-      return (res.data ?? []) as unknown as GatedRow[]
-    },
-  )
-
-  const eraBucketPromises = Array.from(eraFormatPairs.values()).map(
-    async ({ era, mediaType }) => {
-      const range = ERA_YEAR_RANGE[era]
-      const res = await supabase
-        .from('posts')
-        .select(`
-          id,
-          media_id,
-          media_type,
-          caption,
-          permalink,
-          posted_at,
-          post_archive_state!inner ( metadata_status, human_review_status )
-        `)
-        .eq('post_archive_state.metadata_status',     'imported')
-        .eq('post_archive_state.human_review_status', 'pending')
-        .eq('media_type', mediaType)
-        .gte('posted_at', isoYearStart(range.startYear))
-        .lt('posted_at',  isoYearStart(range.endYearExclusive))
-        .order('posted_at', { ascending: false })
-        .order('id',        { ascending: true })
-        .limit(BASELINE_PER_ERA_BUCKET_LIMIT)
-      if (res.error) {
-        throw new Error(
-          `archive review baseline era bucket (${era}/${mediaType}) query failed: ${res.error.message}`
-        )
-      }
-      return (res.data ?? []) as unknown as GatedRow[]
-    },
-  )
-
-  const bucketResults = await Promise.all([
-    ...yearBucketPromises,
-    ...eraBucketPromises,
-  ])
-
-  const baselineById = new Map<string, GatedRow>()
-  for (const rows of bucketResults) {
-    for (const row of rows) {
-      if (!baselineById.has(row.id)) baselineById.set(row.id, row)
-    }
-  }
-  // Always fold `gated` into the baseline pool — those rows are
-  // archive-eligible by construction and may sit outside any single
-  // bucket's LIMIT if the bucket is large.
-  for (const r of gated) {
-    if (!baselineById.has(r.id)) baselineById.set(r.id, r)
-  }
-
-  const baselineUniverse: GatedRow[] = Array.from(baselineById.values())
-
-  // ----- Latest metrics per post (best-effort, chunked) ----------------
-  // A single `.in('post_id', ids)` over the full window blew past
-  // PostgREST's URL limit and crashed the page in production (PR #77).
-  // We chunk the union of (gated ∪ baselineUniverse) and degrade
-  // gracefully if a chunk fails — the page still renders, with metrics
-  // shown as `—` for posts whose chunk could not be fetched.
-  const metricPostIdsSet = new Set<string>()
-  for (const r of gated)            metricPostIdsSet.add(r.id)
-  for (const r of baselineUniverse) metricPostIdsSet.add(r.id)
-  const metricPostIds = Array.from(metricPostIdsSet)
-
+  // ----- Latest metrics for gated candidate rows (chunked) -------------
+  // We only need metrics for the candidate rows themselves now —
+  // baselines come from the database-side aggregate views below, so
+  // the per-baseline-post metrics fan-out from PR #79 is gone.
+  // Chunking + graceful degradation kept verbatim for the candidate
+  // window (PostgREST URL-limit safety from PR #77).
+  const candidateIds = gated.map((r) => r.id)
   const latestMetrics = new Map<string, LatestMetric>()
-  for (let i = 0; i < metricPostIds.length; i += METRICS_CHUNK_SIZE) {
-    const chunk = metricPostIds.slice(i, i + METRICS_CHUNK_SIZE)
+  for (let i = 0; i < candidateIds.length; i += METRICS_CHUNK_SIZE) {
+    const chunk = candidateIds.slice(i, i + METRICS_CHUNK_SIZE)
     const metricsRes = await supabase
       .from('post_metrics_daily')
       .select('post_id, date, likes, comments, saves, shares, profile_visits')
@@ -740,8 +643,85 @@ export async function getArchiveReviewQueue(
     }
   }
 
-  // ----- Era-normalized baselines (built from baselineUniverse) --------
-  const baselines = buildBaselines(baselineUniverse, latestMetrics)
+  // ----- Era-normalized baselines (loaded from full-archive views) -----
+  // Read-only aggregates over the entire `metadata_status = 'imported'`
+  // archive (NOT filtered by human_review_status — approving or
+  // rejecting a post must not remove it from the historical comparison
+  // baseline). See migration 0015. On read failure we keep rendering
+  // and let `eraNormalizedIndex` fall through to null per row.
+  const yearKeysAll: number[] = []
+  const eraKeysAll:  TArchiveEra[] = []
+  const mediaKeysAll = new Set<ArchiveReviewMediaType>()
+  const yearKeysSeen = new Set<number>()
+  const eraKeysSeen  = new Set<TArchiveEra>()
+  for (const r of gated) {
+    const y = yearOfIso(r.posted_at)
+    if (y === null) continue
+    if (!yearKeysSeen.has(y)) { yearKeysSeen.add(y); yearKeysAll.push(y) }
+    const era = eraOfYear(y)
+    if (!eraKeysSeen.has(era)) { eraKeysSeen.add(era); eraKeysAll.push(era) }
+    mediaKeysAll.add(r.media_type)
+  }
+
+  const baselines: BaselineMaps = { yearFormat: new Map(), eraFormat: new Map() }
+  if (yearKeysAll.length > 0 && mediaKeysAll.size > 0) {
+    try {
+      const mediaList = Array.from(mediaKeysAll)
+      // Year-grain view: chunk year keys to keep .in(...) URL-safe.
+      for (let i = 0; i < yearKeysAll.length; i += BASELINE_KEY_CHUNK_SIZE) {
+        const chunk = yearKeysAll.slice(i, i + BASELINE_KEY_CHUNK_SIZE)
+        const res = await supabase
+          .from('v_archive_baseline_year_format')
+          .select(
+            'year, media_type, '
+            + 'count_saves, count_shares, count_comments, count_likes, count_profile_visits, '
+            + 'mean_saves, mean_shares, mean_comments, mean_likes, mean_profile_visits'
+          )
+          .in('year', chunk)
+          .in('media_type', mediaList)
+        if (res.error) {
+          throw new Error(`v_archive_baseline_year_format read failed: ${res.error.message}`)
+        }
+        for (const row of (res.data ?? []) as unknown as ArchiveBaselineYearRow[]) {
+          if (row.year === null || row.media_type === null) continue
+          baselines.yearFormat.set(
+            yearFormatKey(row.year, row.media_type),
+            viewRowToCell(row),
+          )
+        }
+      }
+      // Era-grain view: small, single read.
+      const eraRes = await supabase
+        .from('v_archive_baseline_era_format')
+        .select(
+          'era, media_type, '
+          + 'count_saves, count_shares, count_comments, count_likes, count_profile_visits, '
+          + 'mean_saves, mean_shares, mean_comments, mean_likes, mean_profile_visits'
+        )
+        .in('era', eraKeysAll)
+        .in('media_type', mediaList)
+      if (eraRes.error) {
+        throw new Error(`v_archive_baseline_era_format read failed: ${eraRes.error.message}`)
+      }
+      for (const row of (eraRes.data ?? []) as unknown as ArchiveBaselineEraRow[]) {
+        if (!isArchiveEra(row.era) || row.media_type === null) continue
+        baselines.eraFormat.set(
+          eraFormatKey(row.era, row.media_type),
+          viewRowToCell(row),
+        )
+      }
+    } catch (err) {
+      // Graceful degradation: keep page rendering, drop era-normalized
+      // index for every row. We do NOT fall back to the old per-bucket
+      // hydration — that path has been removed and would defeat the
+      // purpose of the views.
+      console.error(
+        `[archive-review] baseline view read failed; era_normalized index disabled for this request: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+    }
+  }
 
   // ----- Representative-sample buckets ---------------------------------
   // For each (media_type, year-month) bucket, the N most-recent posts get
