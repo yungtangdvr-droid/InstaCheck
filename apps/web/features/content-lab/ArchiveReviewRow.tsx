@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import type {
   ArchiveReviewItem,
   ArchiveReviewReason,
+  TArchiveEra,
 } from '@/lib/meta/queries/archive-review-queue'
 
 const NF = new Intl.NumberFormat('fr-FR')
@@ -14,6 +15,15 @@ const REASON_LABELS: Record<ArchiveReviewReason, string> = {
   recent_90d:            'Récent (≤ 90 j)',
   recent_365d:           'Récent (≤ 365 j)',
   representative_sample: 'Échantillon représentatif',
+  era_outperformer:      'Surperforme sa période',
+}
+
+const ERA_LABELS: Record<TArchiveEra, string> = {
+  pre_2019:   'Avant 2019',
+  '2019_2020': '2019-2020',
+  '2021_2022': '2021-2022',
+  '2023_2024': '2023-2024',
+  '2025_plus': '2025+',
 }
 
 const MEDIA_TYPE_LABELS: Record<string, string> = {
@@ -72,11 +82,27 @@ export function ArchiveReviewRow({ item }: { item: ArchiveReviewItem }) {
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone="info">{mediaTypeLabel}</Chip>
           <span className="text-xs text-muted-foreground">{fmtDate(item.postedAt)}</span>
+          {item.era ? <Chip>{ERA_LABELS[item.era]}</Chip> : null}
           <span className="font-mono text-[11px] text-muted-foreground">
             {item.mediaId}
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {item.eraNormalizedIndex !== null ? (
+            <span
+              title="Index vs période comparable (100 = baseline archive même format/année ou même époque)"
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums',
+                item.eraNormalizedIndex >= 125
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : item.eraNormalizedIndex >= 90
+                    ? 'border-border bg-muted text-card-foreground'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              )}
+            >
+              index {item.eraNormalizedIndex}
+            </span>
+          ) : null}
           <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums text-card-foreground">
             score {item.score}
           </span>

@@ -27,12 +27,36 @@ const METRICS_CHUNK_SIZE = 200
 const RECENT_90D_MS  = 90  * 24 * 60 * 60 * 1000
 const RECENT_365D_MS = 365 * 24 * 60 * 60 * 1000
 
+// Minimum sample size for a (year, media_type) or (era, media_type)
+// baseline cell to be considered usable for a per-metric ratio.
+const ERA_MIN_SAMPLE = 5
+
+// Display cap for the index. The index is unbounded in principle, but a
+// few outliers can push the chip into 4 digits which destabilises the
+// row layout. Capped at 250 = "≥ 2.5× comparable baseline".
+const INDEX_DISPLAY_CAP = 250
+
+// Reason chip threshold: post outperforms its comparable archive cell.
+const ERA_OUTPERFORMER_THRESHOLD = 125
+
+// Per (year, media_type) bucket, the maximum number of archive-eligible
+// posts pulled to hydrate the same-year baseline. 500 saturates any
+// realistic year on a single-operator account.
+const BASELINE_PER_YEAR_BUCKET_LIMIT = 500
+
+// Per (era, media_type) bucket, the maximum number of archive-eligible
+// posts pulled to hydrate the era fallback. Each era spans up to two
+// (or, for `pre_2019` / `2025_plus`, more) calendar years, so 500 is
+// usually enough to satisfy ERA_MIN_SAMPLE = 5 at era granularity.
+const BASELINE_PER_ERA_BUCKET_LIMIT = 500
+
 export type ArchiveReviewReason =
   | 'caption_present'
   | 'metrics_available'
   | 'recent_90d'
   | 'recent_365d'
   | 'representative_sample'
+  | 'era_outperformer'
 
 export type ArchiveReviewMediaType = Database['public']['Enums']['media_type']
 
@@ -49,6 +73,27 @@ export type ArchiveReviewSort =
   | 'date_desc'
   | 'date_asc'
   | 'metrics'
+  | 'era_normalized'
+
+// Coarse historical buckets for the archive. Used as a fallback baseline
+// when same-year + same-format does not have ≥ ERA_MIN_SAMPLE posts. The
+// exact cut-points are deliberately archive-specific and live here, not
+// in `packages/scoring`, because they only describe how this account's
+// engagement shape evolved over time.
+export type TArchiveEra =
+  | 'pre_2019'
+  | '2019_2020'
+  | '2021_2022'
+  | '2023_2024'
+  | '2025_plus'
+
+export const ARCHIVE_ERAS: readonly TArchiveEra[] = [
+  'pre_2019',
+  '2019_2020',
+  '2021_2022',
+  '2023_2024',
+  '2025_plus',
+] as const
 
 export type ArchiveReviewFilters = {
   year?:      number | null
@@ -73,8 +118,10 @@ export type ArchiveReviewItem = {
     comments:  number | null
     asOfDate:  string | null
   }
-  score:    number
-  reasons:  ArchiveReviewReason[]
+  score:               number
+  reasons:             ArchiveReviewReason[]
+  era:                 TArchiveEra | null
+  eraNormalizedIndex:  number | null
 }
 
 export type ArchiveReviewKpis = {
@@ -120,9 +167,201 @@ type GatedRow = {
 }
 
 type LatestMetric = {
-  date:     string
-  likes:    number | null
-  comments: number | null
+  date:           string
+  likes:          number | null
+  comments:       number | null
+  saves:          number | null
+  shares:         number | null
+  profile_visits: number | null
+}
+
+type MetricKey = 'saves' | 'shares' | 'comments' | 'likes' | 'profile_visits'
+
+const METRIC_KEYS: readonly MetricKey[] = [
+  'saves',
+  'shares',
+  'comments',
+  'likes',
+  'profile_visits',
+] as const
+
+// Default per-metric weights for the era-normalized index. Mirror the
+// canonical `POST_SCORE_WEIGHTS` shape from `packages/scoring` but with
+// `profile_visits` (snake_case) since that is the column name.
+const DEFAULT_METRIC_WEIGHTS: Record<MetricKey, number> = {
+  saves:          0.35,
+  shares:         0.30,
+  comments:       0.15,
+  likes:          0.10,
+  profile_visits: 0.10,
+}
+
+// Era-specific overrides — only declared where they meaningfully differ
+// from the default. Pre-2019 leans on likes + comments because Instagram
+// did not surface saves/shares/profile_visits reliably for this account.
+// 2019-2020 partially credits saves/shares as exposure improved. 2021+
+// keep the canonical weights.
+const ERA_WEIGHT_OVERRIDES: Partial<Record<TArchiveEra, Partial<Record<MetricKey, number>>>> = {
+  pre_2019: {
+    likes:          0.40,
+    comments:       0.45,
+    saves:          0.10,
+    shares:         0.05,
+    profile_visits: 0.00,
+  },
+  '2019_2020': {
+    likes:          0.25,
+    comments:       0.20,
+    saves:          0.30,
+    shares:         0.20,
+    profile_visits: 0.05,
+  },
+}
+
+function eraOfYear(year: number): TArchiveEra {
+  if (year <= 2018) return 'pre_2019'
+  if (year <= 2020) return '2019_2020'
+  if (year <= 2022) return '2021_2022'
+  if (year <= 2024) return '2023_2024'
+  return '2025_plus'
+}
+
+// Closed-open year range that defines the era for SQL predicates.
+// `pre_2019` starts at 2000 (Instagram launched in 2010, this is just a
+// safe lower bound). `2025_plus` runs to year 9999 to stay open-ended.
+const ERA_YEAR_RANGE: Record<TArchiveEra, { startYear: number; endYearExclusive: number }> = {
+  pre_2019:    { startYear: 2000, endYearExclusive: 2019 },
+  '2019_2020': { startYear: 2019, endYearExclusive: 2021 },
+  '2021_2022': { startYear: 2021, endYearExclusive: 2023 },
+  '2023_2024': { startYear: 2023, endYearExclusive: 2025 },
+  '2025_plus': { startYear: 2025, endYearExclusive: 9999 },
+}
+
+function yearOfIso(iso: string): number | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.getUTCFullYear()
+}
+
+function weightsForEra(era: TArchiveEra): Record<MetricKey, number> {
+  const overrides = ERA_WEIGHT_OVERRIDES[era] ?? {}
+  return { ...DEFAULT_METRIC_WEIGHTS, ...overrides }
+}
+
+type BaselineSlot = { sum: number; count: number }
+type BaselineCell = Record<MetricKey, BaselineSlot>
+
+function emptyBaselineCell(): BaselineCell {
+  return {
+    saves:          { sum: 0, count: 0 },
+    shares:         { sum: 0, count: 0 },
+    comments:       { sum: 0, count: 0 },
+    likes:          { sum: 0, count: 0 },
+    profile_visits: { sum: 0, count: 0 },
+  }
+}
+
+type BaselineMaps = {
+  // Keyed by `${year}__${media_type}` and `${era}__${media_type}`.
+  yearFormat: Map<string, BaselineCell>
+  eraFormat:  Map<string, BaselineCell>
+}
+
+function yearFormatKey(year: number, mt: ArchiveReviewMediaType): string {
+  return `${year}__${mt}`
+}
+
+function eraFormatKey(era: TArchiveEra, mt: ArchiveReviewMediaType): string {
+  return `${era}__${mt}`
+}
+
+function accumulateMetric(cell: BaselineCell, metric: LatestMetric): void {
+  // Null = unknown → skip. Measured zero counts as a real zero.
+  for (const k of METRIC_KEYS) {
+    const v = metric[k]
+    if (v === null || v === undefined) continue
+    cell[k].sum   += v
+    cell[k].count += 1
+  }
+}
+
+function buildBaselines(
+  rows: ReadonlyArray<GatedRow>,
+  metrics: Map<string, LatestMetric>,
+): BaselineMaps {
+  const yearFormat = new Map<string, BaselineCell>()
+  const eraFormat  = new Map<string, BaselineCell>()
+  for (const r of rows) {
+    const m = metrics.get(r.id)
+    if (!m) continue
+    const year = yearOfIso(r.posted_at)
+    if (year === null) continue
+    const era = eraOfYear(year)
+    const yk = yearFormatKey(year, r.media_type)
+    const ek = eraFormatKey(era,  r.media_type)
+    let yc = yearFormat.get(yk)
+    if (!yc) { yc = emptyBaselineCell(); yearFormat.set(yk, yc) }
+    let ec = eraFormat.get(ek)
+    if (!ec) { ec = emptyBaselineCell(); eraFormat.set(ek, ec) }
+    accumulateMetric(yc, m)
+    accumulateMetric(ec, m)
+  }
+  return { yearFormat, eraFormat }
+}
+
+// Per metric, prefer the same-year + same-format cell if its sample size
+// is ≥ ERA_MIN_SAMPLE; otherwise fall back to same-era + same-format if
+// IT has ≥ ERA_MIN_SAMPLE. Otherwise that metric is unusable for the
+// post and is dropped (weights renormalize over the survivors).
+function pickBaselineMeans(
+  baselines: BaselineMaps,
+  year: number,
+  era:  TArchiveEra,
+  mt:   ArchiveReviewMediaType,
+): Partial<Record<MetricKey, number>> {
+  const yc = baselines.yearFormat.get(yearFormatKey(year, mt))
+  const ec = baselines.eraFormat.get(eraFormatKey(era, mt))
+  const out: Partial<Record<MetricKey, number>> = {}
+  for (const k of METRIC_KEYS) {
+    const ys = yc?.[k]
+    if (ys && ys.count >= ERA_MIN_SAMPLE && ys.sum > 0) {
+      out[k] = ys.sum / ys.count
+      continue
+    }
+    const es = ec?.[k]
+    if (es && es.count >= ERA_MIN_SAMPLE && es.sum > 0) {
+      out[k] = es.sum / es.count
+    }
+  }
+  return out
+}
+
+function computeEraNormalizedIndex(
+  metric: LatestMetric | null,
+  era:    TArchiveEra,
+  means:  Partial<Record<MetricKey, number>>,
+): number | null {
+  if (!metric) return null
+  const weights = weightsForEra(era)
+
+  let weightedRatioSum = 0
+  let weightSum        = 0
+
+  for (const k of METRIC_KEYS) {
+    const value = metric[k]
+    if (value === null || value === undefined) continue   // unknown → skip
+    const w = weights[k]
+    if (w <= 0) continue
+    const mean = means[k]
+    if (mean === undefined || mean <= 0) continue
+    weightedRatioSum += w * (value / mean)
+    weightSum        += w
+  }
+
+  if (weightSum === 0) return null
+  const normalized = weightedRatioSum / weightSum  // 1.0 = at baseline
+  const index = Math.round(normalized * 100)
+  return Math.max(0, Math.min(INDEX_DISPLAY_CAP, index))
 }
 
 function hasCaption(caption: string | null): boolean {
@@ -332,20 +571,152 @@ export async function getArchiveReviewQueue(
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
   const windowed = filteredEligibleTotal > gated.length
 
+  // ----- Stable baseline universe -------------------------------------
+  // Era-normalized baselines must NOT shift when the user toggles
+  // year / mediaType / caption / metrics filters, and must hydrate
+  // properly for any old era / old year present in the rows being
+  // scored — even when those rows are far outside a "most-recent N"
+  // window on a large archive.
+  //
+  // Strategy:
+  //   1. Walk `gated` and collect the distinct (year, media_type) and
+  //      (era, media_type) pairs actually present.
+  //   2. For each (year, media_type) pair, hydrate up to
+  //      BASELINE_PER_YEAR_BUCKET_LIMIT archive-eligible posts from
+  //      exactly that calendar year and media_type. This is the
+  //      primary baseline source — a 2014 IMAGE post is compared
+  //      against eligible 2014 IMAGE posts, not against the era pool
+  //      dominated by later years.
+  //   3. For each (era, media_type) pair, hydrate up to
+  //      BASELINE_PER_ERA_BUCKET_LIMIT archive-eligible posts spanning
+  //      the era's year range and that media_type. This is the
+  //      fallback when the same-year cell does not have ≥ 5 samples
+  //      for a given metric.
+  //   4. Always fold `gated` into the union so the rows under review
+  //      are themselves represented.
+  //
+  // User filters are intentionally NOT applied to any of these queries.
+  // Bucket queries run in parallel — they are independent reads.
+  const yearFormatPairs = new Map<
+    string,
+    { year: number; mediaType: ArchiveReviewMediaType }
+  >()
+  const eraFormatPairs = new Map<
+    string,
+    { era: TArchiveEra; mediaType: ArchiveReviewMediaType }
+  >()
+  for (const r of gated) {
+    const y = yearOfIso(r.posted_at)
+    if (y === null) continue
+    const era = eraOfYear(y)
+    const yKey = `${y}__${r.media_type}`
+    if (!yearFormatPairs.has(yKey)) {
+      yearFormatPairs.set(yKey, { year: y, mediaType: r.media_type })
+    }
+    const eKey = `${era}__${r.media_type}`
+    if (!eraFormatPairs.has(eKey)) {
+      eraFormatPairs.set(eKey, { era, mediaType: r.media_type })
+    }
+  }
+
+  const yearBucketPromises = Array.from(yearFormatPairs.values()).map(
+    async ({ year, mediaType }) => {
+      const res = await supabase
+        .from('posts')
+        .select(`
+          id,
+          media_id,
+          media_type,
+          caption,
+          permalink,
+          posted_at,
+          post_archive_state!inner ( metadata_status, human_review_status )
+        `)
+        .eq('post_archive_state.metadata_status',     'imported')
+        .eq('post_archive_state.human_review_status', 'pending')
+        .eq('media_type', mediaType)
+        .gte('posted_at', isoYearStart(year))
+        .lt('posted_at',  isoYearStart(year + 1))
+        .order('posted_at', { ascending: false })
+        .order('id',        { ascending: true })
+        .limit(BASELINE_PER_YEAR_BUCKET_LIMIT)
+      if (res.error) {
+        throw new Error(
+          `archive review baseline year bucket (${year}/${mediaType}) query failed: ${res.error.message}`
+        )
+      }
+      return (res.data ?? []) as unknown as GatedRow[]
+    },
+  )
+
+  const eraBucketPromises = Array.from(eraFormatPairs.values()).map(
+    async ({ era, mediaType }) => {
+      const range = ERA_YEAR_RANGE[era]
+      const res = await supabase
+        .from('posts')
+        .select(`
+          id,
+          media_id,
+          media_type,
+          caption,
+          permalink,
+          posted_at,
+          post_archive_state!inner ( metadata_status, human_review_status )
+        `)
+        .eq('post_archive_state.metadata_status',     'imported')
+        .eq('post_archive_state.human_review_status', 'pending')
+        .eq('media_type', mediaType)
+        .gte('posted_at', isoYearStart(range.startYear))
+        .lt('posted_at',  isoYearStart(range.endYearExclusive))
+        .order('posted_at', { ascending: false })
+        .order('id',        { ascending: true })
+        .limit(BASELINE_PER_ERA_BUCKET_LIMIT)
+      if (res.error) {
+        throw new Error(
+          `archive review baseline era bucket (${era}/${mediaType}) query failed: ${res.error.message}`
+        )
+      }
+      return (res.data ?? []) as unknown as GatedRow[]
+    },
+  )
+
+  const bucketResults = await Promise.all([
+    ...yearBucketPromises,
+    ...eraBucketPromises,
+  ])
+
+  const baselineById = new Map<string, GatedRow>()
+  for (const rows of bucketResults) {
+    for (const row of rows) {
+      if (!baselineById.has(row.id)) baselineById.set(row.id, row)
+    }
+  }
+  // Always fold `gated` into the baseline pool — those rows are
+  // archive-eligible by construction and may sit outside any single
+  // bucket's LIMIT if the bucket is large.
+  for (const r of gated) {
+    if (!baselineById.has(r.id)) baselineById.set(r.id, r)
+  }
+
+  const baselineUniverse: GatedRow[] = Array.from(baselineById.values())
+
   // ----- Latest metrics per post (best-effort, chunked) ----------------
-  // A single `.in('post_id', ids)` over the full 2 000-post window blew
-  // past PostgREST's URL limit and crashed the page in production
-  // ("archive review metrics query failed: Bad Request"). We now split
-  // the ids into chunks and degrade gracefully if a chunk fails — the
-  // page still renders, with metrics shown as `—` for posts whose chunk
-  // could not be fetched.
-  const postIds = gated.map((r) => r.id)
+  // A single `.in('post_id', ids)` over the full window blew past
+  // PostgREST's URL limit and crashed the page in production (PR #77).
+  // We chunk the union of (gated ∪ baselineUniverse) and degrade
+  // gracefully if a chunk fails — the page still renders, with metrics
+  // shown as `—` for posts whose chunk could not be fetched.
+  const metricPostIdsSet = new Set<string>()
+  for (const r of gated)            metricPostIdsSet.add(r.id)
+  for (const r of baselineUniverse) metricPostIdsSet.add(r.id)
+  const metricPostIds = Array.from(metricPostIdsSet)
+
   const latestMetrics = new Map<string, LatestMetric>()
-  for (let i = 0; i < postIds.length; i += METRICS_CHUNK_SIZE) {
-    const chunk = postIds.slice(i, i + METRICS_CHUNK_SIZE)
+  for (let i = 0; i < metricPostIds.length; i += METRICS_CHUNK_SIZE) {
+    const chunk = metricPostIds.slice(i, i + METRICS_CHUNK_SIZE)
     const metricsRes = await supabase
       .from('post_metrics_daily')
-      .select('post_id, date, likes, comments')
+      .select('post_id, date, likes, comments, saves, shares, profile_visits')
       .in('post_id', chunk)
       .order('date', { ascending: false })
     if (metricsRes.error) {
@@ -358,13 +729,19 @@ export async function getArchiveReviewQueue(
       // Rows are date-desc; first one wins per post_id.
       if (!latestMetrics.has(row.post_id)) {
         latestMetrics.set(row.post_id, {
-          date:     row.date,
-          likes:    row.likes ?? null,
-          comments: row.comments ?? null,
+          date:           row.date,
+          likes:          row.likes          ?? null,
+          comments:       row.comments       ?? null,
+          saves:          row.saves          ?? null,
+          shares:         row.shares         ?? null,
+          profile_visits: row.profile_visits ?? null,
         })
       }
     }
   }
+
+  // ----- Era-normalized baselines (built from baselineUniverse) --------
+  const baselines = buildBaselines(baselineUniverse, latestMetrics)
 
   // ----- Representative-sample buckets ---------------------------------
   // For each (media_type, year-month) bucket, the N most-recent posts get
@@ -419,6 +796,18 @@ export async function getArchiveReviewQueue(
       reasons.push('representative_sample')
     }
 
+    // Era-normalized index (additive to the existing priority score).
+    const year = yearOfIso(row.posted_at)
+    const era  = year !== null ? eraOfYear(year) : null
+    let eraNormalizedIndex: number | null = null
+    if (year !== null && era !== null) {
+      const means = pickBaselineMeans(baselines, year, era, row.media_type)
+      eraNormalizedIndex = computeEraNormalizedIndex(metric, era, means)
+      if (eraNormalizedIndex !== null && eraNormalizedIndex >= ERA_OUTPERFORMER_THRESHOLD) {
+        reasons.push('era_outperformer')
+      }
+    }
+
     return {
       postId:                   row.id,
       mediaId:                  row.media_id,
@@ -436,6 +825,8 @@ export async function getArchiveReviewQueue(
       },
       score,
       reasons,
+      era,
+      eraNormalizedIndex,
     }
   })
 
@@ -461,6 +852,20 @@ export async function getArchiveReviewQueue(
   } else if (sort === 'date_asc') {
     scored.sort((a, b) => {
       if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? -1 : 1
+      return a.postId < b.postId ? -1 : 1
+    })
+  } else if (sort === 'era_normalized') {
+    // Era-normalized index, descending. Posts without a usable index
+    // (no comparable baseline cell, or every weighted metric is
+    // unavailable) fall to the bottom and there sort by date desc — we
+    // don't drop them, so a null-metric post is still discoverable.
+    scored.sort((a, b) => {
+      const ai = a.eraNormalizedIndex
+      const bi = b.eraNormalizedIndex
+      if (ai === null && bi !== null) return 1
+      if (ai !== null && bi === null) return -1
+      if (ai !== null && bi !== null && ai !== bi) return bi - ai
+      if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? 1 : -1
       return a.postId < b.postId ? -1 : 1
     })
   } else {

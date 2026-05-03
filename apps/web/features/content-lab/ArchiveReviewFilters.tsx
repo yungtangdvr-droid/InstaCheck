@@ -19,10 +19,11 @@ const MEDIA_TYPE_LABELS: Record<ArchiveReviewMediaType, string> = {
 }
 
 const SORT_LABELS: Record<ArchiveReviewSort, string> = {
-  priority:  'Priorité',
-  date_desc: 'Date ↓',
-  date_asc:  'Date ↑',
-  metrics:   'Engagement (fenêtre)',
+  priority:       'Priorité',
+  date_desc:      'Date ↓',
+  date_asc:       'Date ↑',
+  metrics:        'Engagement (fenêtre)',
+  era_normalized: 'Index vs période comparable',
 }
 
 const SORT_OPTIONS: ArchiveReviewSort[] = [
@@ -30,6 +31,7 @@ const SORT_OPTIONS: ArchiveReviewSort[] = [
   'date_desc',
   'date_asc',
   'metrics',
+  'era_normalized',
 ]
 
 const CAPTION_OPTIONS: { value: ArchiveReviewCaptionFilter; label: string }[] = [
