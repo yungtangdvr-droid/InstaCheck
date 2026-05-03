@@ -17,6 +17,13 @@ export const ARCHIVE_REVIEW_CANDIDATE_WINDOW = 2000
 // Diversity bonus: top-N most-recent posts per (media_type, year-month).
 const REPRESENTATIVE_SAMPLE_PER_BUCKET = 3
 
+// Maximum number of post ids per `.in('post_id', ...)` query against
+// post_metrics_daily. The candidate window is up to 2 000 ids, which a
+// single PostgREST request rejects with 400 Bad Request once the URL
+// grows past its server-side limit. 200 ids per chunk keeps each query
+// comfortably under that limit while still completing in ~10 round trips.
+const METRICS_CHUNK_SIZE = 200
+
 const RECENT_90D_MS  = 90  * 24 * 60 * 60 * 1000
 const RECENT_365D_MS = 365 * 24 * 60 * 60 * 1000
 
@@ -325,17 +332,27 @@ export async function getArchiveReviewQueue(
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
   const windowed = filteredEligibleTotal > gated.length
 
-  // ----- Latest metrics per post (best-effort) -------------------------
+  // ----- Latest metrics per post (best-effort, chunked) ----------------
+  // A single `.in('post_id', ids)` over the full 2 000-post window blew
+  // past PostgREST's URL limit and crashed the page in production
+  // ("archive review metrics query failed: Bad Request"). We now split
+  // the ids into chunks and degrade gracefully if a chunk fails — the
+  // page still renders, with metrics shown as `—` for posts whose chunk
+  // could not be fetched.
   const postIds = gated.map((r) => r.id)
   const latestMetrics = new Map<string, LatestMetric>()
-  if (postIds.length > 0) {
+  for (let i = 0; i < postIds.length; i += METRICS_CHUNK_SIZE) {
+    const chunk = postIds.slice(i, i + METRICS_CHUNK_SIZE)
     const metricsRes = await supabase
       .from('post_metrics_daily')
       .select('post_id, date, likes, comments')
-      .in('post_id', postIds)
+      .in('post_id', chunk)
       .order('date', { ascending: false })
     if (metricsRes.error) {
-      throw new Error(`archive review metrics query failed: ${metricsRes.error.message}`)
+      console.error(
+        `[archive-review] metrics chunk ${i / METRICS_CHUNK_SIZE} failed (${chunk.length} ids): ${metricsRes.error.message}`
+      )
+      continue
     }
     for (const row of metricsRes.data ?? []) {
       // Rows are date-desc; first one wins per post_id.
