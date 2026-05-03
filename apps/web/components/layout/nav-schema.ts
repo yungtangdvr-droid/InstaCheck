@@ -1,0 +1,106 @@
+import {
+  BarChart3,
+  Briefcase,
+  FlaskConical,
+  Layers,
+  LineChart,
+  Radio,
+  type LucideIcon,
+} from 'lucide-react'
+
+export type NavItem = {
+  label: string
+  href: string
+}
+
+export type NavGroup = {
+  id: string
+  label: string
+  icon: LucideIcon
+  items: NavItem[]
+}
+
+// Routes here are kept in sync with apps/web/app/(dashboard)/. Dynamic routes
+// (e.g. /analytics/post/[id]) are intentionally excluded — they are reached
+// from tables/cards inside their parent pages.
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    icon: LineChart,
+    items: [
+      { label: 'Analytics', href: '/analytics' },
+    ],
+  },
+  {
+    id: 'performance',
+    label: 'Performance',
+    icon: BarChart3,
+    items: [
+      { label: 'Posts', href: '/analytics/posts' },
+      { label: 'Formats', href: '/analytics/formats' },
+      { label: 'Benchmark', href: '/analytics/benchmark' },
+      { label: 'Audience', href: '/audience' },
+    ],
+  },
+  {
+    id: 'content-lab',
+    label: 'Content Lab',
+    icon: FlaskConical,
+    items: [
+      { label: 'Content Lab', href: '/content-lab' },
+      { label: 'Radar', href: '/content-lab/radar' },
+      { label: 'Themes', href: '/content-lab/themes' },
+      { label: 'Taxonomy', href: '/content-lab/taxonomy' },
+      { label: 'Archive', href: '/content-lab/archive' },
+      { label: 'Archive Review', href: '/content-lab/archive/review' },
+    ],
+  },
+  {
+    id: 'business',
+    label: 'Business',
+    icon: Briefcase,
+    items: [
+      { label: 'CRM', href: '/crm' },
+      { label: 'Contacts', href: '/crm/contacts' },
+      { label: 'Deals', href: '/deals' },
+    ],
+  },
+  {
+    id: 'tracking',
+    label: 'Tracking',
+    icon: Layers,
+    items: [
+      { label: 'Assets / Decks', href: '/assets' },
+      { label: 'Attribution', href: '/attribution' },
+      { label: 'Attribution Rules', href: '/attribution/rules' },
+    ],
+  },
+  {
+    id: 'signals-ops',
+    label: 'Signals & Ops',
+    icon: Radio,
+    items: [
+      { label: 'Brand Watch', href: '/brand-watch' },
+      { label: 'Automations', href: '/automations' },
+    ],
+  },
+]
+
+export function isItemActive(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+export function findActiveGroupId(pathname: string): string | null {
+  let bestId: string | null = null
+  let bestLen = -1
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (isItemActive(pathname, item.href) && item.href.length > bestLen) {
+        bestId = group.id
+        bestLen = item.href.length
+      }
+    }
+  }
+  return bestId
+}
