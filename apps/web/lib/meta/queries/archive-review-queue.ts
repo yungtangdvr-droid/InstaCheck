@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 
-// Read-only helper that builds the Archive Prioritization Queue V1.
-// Gating + sort + pagination happen here. Scoring is deterministic
-// (no AI, no embeddings) and runs server-side over the gated set.
+// Read-only helper that builds the Archive Prioritization Queue V1.1.
+// Gating + filters + sort + pagination happen here. Scoring is deterministic
+// (no AI, no embeddings) and runs server-side over the gated/filtered set.
 
 export const ARCHIVE_REVIEW_DEFAULT_PAGE_SIZE = 25
 
@@ -27,10 +27,34 @@ export type ArchiveReviewReason =
   | 'recent_365d'
   | 'representative_sample'
 
+export type ArchiveReviewMediaType = Database['public']['Enums']['media_type']
+
+export const ARCHIVE_REVIEW_MEDIA_TYPES: ArchiveReviewMediaType[] = [
+  'IMAGE',
+  'VIDEO',
+  'CAROUSEL_ALBUM',
+]
+
+export type ArchiveReviewCaptionFilter = 'all' | 'with' | 'without'
+export type ArchiveReviewMetricsFilter = 'all' | 'with' | 'without'
+export type ArchiveReviewSort =
+  | 'priority'
+  | 'date_desc'
+  | 'date_asc'
+  | 'metrics'
+
+export type ArchiveReviewFilters = {
+  year?:      number | null
+  mediaType?: ArchiveReviewMediaType | null
+  caption?:   ArchiveReviewCaptionFilter
+  metrics?:   ArchiveReviewMetricsFilter
+  sort?:      ArchiveReviewSort
+}
+
 export type ArchiveReviewItem = {
   postId:                   string
   mediaId:                  string
-  mediaType:                Database['public']['Enums']['media_type']
+  mediaType:                ArchiveReviewMediaType
   permalink:                string
   caption:                  string | null
   postedAt:                 string
@@ -47,11 +71,18 @@ export type ArchiveReviewItem = {
 }
 
 export type ArchiveReviewKpis = {
-  eligibleTotal:         number
-  candidateWindow:       number
-  candidateWindowLimit:  number
-  captionPresentShare:   number
-  withMetricsShare:      number
+  eligibleTotal:           number
+  filteredEligibleTotal:   number
+  candidateWindow:         number
+  candidateWindowLimit:    number
+  resultCount:             number
+  captionPresentShare:     number
+  withMetricsShare:        number
+}
+
+export type ArchiveReviewFacets = {
+  years:      number[]
+  mediaTypes: ArchiveReviewMediaType[]
 }
 
 export type ArchiveReviewQueue = {
@@ -61,7 +92,9 @@ export type ArchiveReviewQueue = {
   pageSize:              number
   windowed:              boolean
   candidateWindowLimit:  number
+  filtersApplied:        boolean
   kpis:                  ArchiveReviewKpis
+  facets:                ArchiveReviewFacets
 }
 
 type Db = SupabaseClient<Database>
@@ -69,7 +102,7 @@ type Db = SupabaseClient<Database>
 type GatedRow = {
   id:         string
   media_id:   string
-  media_type: Database['public']['Enums']['media_type']
+  media_type: ArchiveReviewMediaType
   caption:    string | null
   permalink:  string
   posted_at:  string
@@ -97,15 +130,123 @@ function yearMonthKey(isoDate: string): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
+function isoYearStart(year: number): string {
+  return `${String(year).padStart(4, '0')}-01-01T00:00:00.000Z`
+}
+
+function isYearActive(filters: ArchiveReviewFilters): boolean {
+  return typeof filters.year === 'number' && Number.isFinite(filters.year)
+}
+
+function hasReducingFilter(filters: ArchiveReviewFilters): boolean {
+  if (isYearActive(filters)) return true
+  if (filters.mediaType) return true
+  if (filters.caption && filters.caption !== 'all') return true
+  return false
+}
+
+// Apply the base gate + the SQL-pushable filters (year, mediaType, caption).
+// Returns the same builder so callers can attach `.select`, `.order`, etc.
+function applyGateAndSqlFilters<T>(
+  builder: T,
+  filters: ArchiveReviewFilters
+): T {
+  // The Supabase JS builder is fluent — calls return `this`. We type-erase
+  // to keep the helper short; the final `select`/`order` calls re-establish
+  // the proper return type.
+  let b = builder as unknown as {
+    eq:  (col: string, val: unknown) => typeof b
+    gte: (col: string, val: unknown) => typeof b
+    lt:  (col: string, val: unknown) => typeof b
+    not: (col: string, op: string, val: unknown) => typeof b
+    neq: (col: string, val: unknown) => typeof b
+    or:  (cond: string) => typeof b
+  }
+
+  b = b
+    .eq('post_archive_state.metadata_status',     'imported')
+    .eq('post_archive_state.human_review_status', 'pending')
+
+  if (isYearActive(filters)) {
+    const y = filters.year as number
+    b = b.gte('posted_at', isoYearStart(y)).lt('posted_at', isoYearStart(y + 1))
+  }
+
+  if (filters.mediaType) {
+    b = b.eq('media_type', filters.mediaType)
+  }
+
+  if (filters.caption === 'with') {
+    b = b.not('caption', 'is', null).neq('caption', '')
+  } else if (filters.caption === 'without') {
+    b = b.or('caption.is.null,caption.eq.')
+  }
+
+  return b as unknown as T
+}
+
+async function loadYearFacet(supabase: Db): Promise<number[]> {
+  // Lightweight: read the earliest and latest posted_at of the *unfiltered*
+  // gated pool, then expand to a year range. Two single-row queries — never
+  // a full scan of the 28k archive.
+  const oldestRes = await supabase
+    .from('posts')
+    .select('posted_at, post_archive_state!inner(metadata_status, human_review_status)')
+    .eq('post_archive_state.metadata_status',     'imported')
+    .eq('post_archive_state.human_review_status', 'pending')
+    .order('posted_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (oldestRes.error) {
+    throw new Error(`archive review oldest query failed: ${oldestRes.error.message}`)
+  }
+
+  const newestRes = await supabase
+    .from('posts')
+    .select('posted_at, post_archive_state!inner(metadata_status, human_review_status)')
+    .eq('post_archive_state.metadata_status',     'imported')
+    .eq('post_archive_state.human_review_status', 'pending')
+    .order('posted_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (newestRes.error) {
+    throw new Error(`archive review newest query failed: ${newestRes.error.message}`)
+  }
+
+  const oldest = oldestRes.data?.posted_at ?? null
+  const newest = newestRes.data?.posted_at ?? null
+  if (!oldest || !newest) return []
+
+  const yMin = new Date(oldest).getUTCFullYear()
+  const yMax = new Date(newest).getUTCFullYear()
+  if (!Number.isFinite(yMin) || !Number.isFinite(yMax) || yMax < yMin) return []
+
+  const years: number[] = []
+  for (let y = yMax; y >= yMin; y -= 1) years.push(y)
+  return years
+}
+
 export async function getArchiveReviewQueue(
   supabase: Db,
-  opts: { page?: number; pageSize?: number } = {}
+  opts: {
+    page?:     number
+    pageSize?: number
+  } & ArchiveReviewFilters = {}
 ): Promise<ArchiveReviewQueue> {
   const pageSize = Math.max(1, Math.min(opts.pageSize ?? ARCHIVE_REVIEW_DEFAULT_PAGE_SIZE, 100))
   const page     = Math.max(1, opts.page ?? 1)
 
-  // ----- Gated total (single-tenant, exact count) ----------------------
-  const totalRes = await supabase
+  const filters: ArchiveReviewFilters = {
+    year:      opts.year      ?? null,
+    mediaType: opts.mediaType ?? null,
+    caption:   opts.caption   ?? 'all',
+    metrics:   opts.metrics   ?? 'all',
+    sort:      opts.sort      ?? 'priority',
+  }
+  const sort = filters.sort ?? 'priority'
+
+  // ----- Eligible total (base gate, no filters) ------------------------
+  const baseTotalRes = await supabase
     .from('posts')
     .select('id, post_archive_state!inner(metadata_status, human_review_status)', {
       head:  true,
@@ -113,10 +254,10 @@ export async function getArchiveReviewQueue(
     })
     .eq('post_archive_state.metadata_status',     'imported')
     .eq('post_archive_state.human_review_status', 'pending')
-  if (totalRes.error) {
-    throw new Error(`archive review total count failed: ${totalRes.error.message}`)
+  if (baseTotalRes.error) {
+    throw new Error(`archive review total count failed: ${baseTotalRes.error.message}`)
   }
-  const eligibleTotal = totalRes.count ?? 0
+  const eligibleTotal = baseTotalRes.count ?? 0
 
   if (eligibleTotal === 0) {
     return {
@@ -126,18 +267,42 @@ export async function getArchiveReviewQueue(
       pageSize,
       windowed:             false,
       candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+      filtersApplied:       hasReducingFilter(filters) || filters.metrics !== 'all',
       kpis: {
-        eligibleTotal:        0,
-        candidateWindow:      0,
-        candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
-        captionPresentShare:  0,
-        withMetricsShare:     0,
+        eligibleTotal:         0,
+        filteredEligibleTotal: 0,
+        candidateWindow:       0,
+        candidateWindowLimit:  ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+        resultCount:           0,
+        captionPresentShare:   0,
+        withMetricsShare:      0,
       },
+      facets: { years: [], mediaTypes: ARCHIVE_REVIEW_MEDIA_TYPES },
     }
   }
 
-  // ----- Gated candidate pool ------------------------------------------
-  const gatedRes = await supabase
+  // ----- Year facet (cheap, derived from oldest/newest) ----------------
+  const years = await loadYearFacet(supabase)
+
+  // ----- Filtered eligible count (only when an SQL filter is active) ---
+  let filteredEligibleTotal = eligibleTotal
+  if (hasReducingFilter(filters)) {
+    let countQ = supabase
+      .from('posts')
+      .select('id, post_archive_state!inner(metadata_status, human_review_status)', {
+        head:  true,
+        count: 'exact',
+      })
+    countQ = applyGateAndSqlFilters(countQ, filters)
+    const countRes = await countQ
+    if (countRes.error) {
+      throw new Error(`archive review filtered count failed: ${countRes.error.message}`)
+    }
+    filteredEligibleTotal = countRes.count ?? 0
+  }
+
+  // ----- Gated + filtered candidate pool -------------------------------
+  let gatedQ = supabase
     .from('posts')
     .select(`
       id,
@@ -148,8 +313,9 @@ export async function getArchiveReviewQueue(
       posted_at,
       post_archive_state!inner ( metadata_status, human_review_status )
     `)
-    .eq('post_archive_state.metadata_status',     'imported')
-    .eq('post_archive_state.human_review_status', 'pending')
+  gatedQ = applyGateAndSqlFilters(gatedQ, filters)
+
+  const gatedRes = await gatedQ
     .order('posted_at', { ascending: false })
     .order('id',        { ascending: true })
     .limit(ARCHIVE_REVIEW_CANDIDATE_WINDOW)
@@ -157,7 +323,7 @@ export async function getArchiveReviewQueue(
     throw new Error(`archive review gated query failed: ${gatedRes.error.message}`)
   }
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
-  const windowed = eligibleTotal > gated.length
+  const windowed = filteredEligibleTotal > gated.length
 
   // ----- Latest metrics per post (best-effort) -------------------------
   const postIds = gated.map((r) => r.id)
@@ -202,7 +368,7 @@ export async function getArchiveReviewQueue(
   let captionPresentCount = 0
   let withMetricsCount    = 0
 
-  const scored: ArchiveReviewItem[] = gated.map((row) => {
+  let scored: ArchiveReviewItem[] = gated.map((row) => {
     const metric = latestMetrics.get(row.id) ?? null
     const reasons: ArchiveReviewReason[] = []
     let score = 0
@@ -256,18 +422,48 @@ export async function getArchiveReviewQueue(
     }
   })
 
-  // Sort: score desc, posted_at desc, id asc — deterministic across renders.
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score
-    if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? 1 : -1
-    return a.postId < b.postId ? -1 : 1
-  })
+  // ----- In-memory metrics filter --------------------------------------
+  if (filters.metrics === 'with') {
+    scored = scored.filter((it) => it.metrics.available)
+  } else if (filters.metrics === 'without') {
+    scored = scored.filter((it) => !it.metrics.available)
+  }
+
+  // ----- Sort ----------------------------------------------------------
+  if (sort === 'priority') {
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? 1 : -1
+      return a.postId < b.postId ? -1 : 1
+    })
+  } else if (sort === 'date_desc') {
+    scored.sort((a, b) => {
+      if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? 1 : -1
+      return a.postId < b.postId ? -1 : 1
+    })
+  } else if (sort === 'date_asc') {
+    scored.sort((a, b) => {
+      if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? -1 : 1
+      return a.postId < b.postId ? -1 : 1
+    })
+  } else {
+    // sort === 'metrics' — engagement within available metrics
+    scored.sort((a, b) => {
+      const ea = (a.metrics.likes ?? 0) + (a.metrics.comments ?? 0)
+      const eb = (b.metrics.likes ?? 0) + (b.metrics.comments ?? 0)
+      if (eb !== ea) return eb - ea
+      if (a.postedAt !== b.postedAt) return a.postedAt < b.postedAt ? 1 : -1
+      return a.postId < b.postId ? -1 : 1
+    })
+  }
 
   // ----- Pagination over the scored pool -------------------------------
   const startIdx = (page - 1) * pageSize
   const items    = scored.slice(startIdx, startIdx + pageSize)
 
   const denom = gated.length || 1
+  const filtersApplied = hasReducingFilter(filters) || filters.metrics !== 'all'
+
   return {
     items,
     total:                scored.length,
@@ -275,12 +471,16 @@ export async function getArchiveReviewQueue(
     pageSize,
     windowed,
     candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+    filtersApplied,
     kpis: {
       eligibleTotal,
-      candidateWindow:      scored.length,
+      filteredEligibleTotal,
+      candidateWindow:      gated.length,
       candidateWindowLimit: ARCHIVE_REVIEW_CANDIDATE_WINDOW,
+      resultCount:          scored.length,
       captionPresentShare:  captionPresentCount / denom,
       withMetricsShare:     withMetricsCount    / denom,
     },
+    facets: { years, mediaTypes: ARCHIVE_REVIEW_MEDIA_TYPES },
   }
 }
