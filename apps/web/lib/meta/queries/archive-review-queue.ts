@@ -17,14 +17,15 @@ export const ARCHIVE_REVIEW_CANDIDATE_WINDOW = 2000
 // Diversity bonus: top-N most-recent posts per (media_type, year-month).
 const REPRESENTATIVE_SAMPLE_PER_BUCKET = 3
 
+// Maximum number of post ids per `.in('post_id', ...)` query against
+// post_metrics_daily. The candidate window is up to 2 000 ids, which a
+// single PostgREST request rejects with 400 Bad Request once the URL
+// grows past its server-side limit. 200 ids per chunk keeps each query
+// comfortably under that limit while still completing in ~10 round trips.
+const METRICS_CHUNK_SIZE = 200
+
 const RECENT_90D_MS  = 90  * 24 * 60 * 60 * 1000
 const RECENT_365D_MS = 365 * 24 * 60 * 60 * 1000
-
-// Era-normalized index (Archive Review only) — bounded URL chunk size for
-// the post_metrics_daily fetch. The candidate window plus the baseline
-// universe can both reach 2 000 ids; a single `.in(post_id, [...])` call
-// at that size produces a PostgREST URL that exceeds typical limits.
-const METRICS_QUERY_CHUNK_SIZE = 200
 
 // Minimum sample size for a (year, media_type) or (era, media_type)
 // baseline cell to be considered usable for a per-metric ratio.
@@ -699,24 +700,30 @@ export async function getArchiveReviewQueue(
 
   const baselineUniverse: GatedRow[] = Array.from(baselineById.values())
 
-  // ----- Latest metrics per post (chunked, best-effort) ----------------
-  // Fetch the latest snapshot for the union of (gated ∪ baselineUniverse).
-  // PostgREST has practical URL limits, so we chunk the `.in(...)` call.
+  // ----- Latest metrics per post (best-effort, chunked) ----------------
+  // A single `.in('post_id', ids)` over the full window blew past
+  // PostgREST's URL limit and crashed the page in production (PR #77).
+  // We chunk the union of (gated ∪ baselineUniverse) and degrade
+  // gracefully if a chunk fails — the page still renders, with metrics
+  // shown as `—` for posts whose chunk could not be fetched.
   const metricPostIdsSet = new Set<string>()
   for (const r of gated)            metricPostIdsSet.add(r.id)
   for (const r of baselineUniverse) metricPostIdsSet.add(r.id)
   const metricPostIds = Array.from(metricPostIdsSet)
 
   const latestMetrics = new Map<string, LatestMetric>()
-  for (let i = 0; i < metricPostIds.length; i += METRICS_QUERY_CHUNK_SIZE) {
-    const chunk = metricPostIds.slice(i, i + METRICS_QUERY_CHUNK_SIZE)
+  for (let i = 0; i < metricPostIds.length; i += METRICS_CHUNK_SIZE) {
+    const chunk = metricPostIds.slice(i, i + METRICS_CHUNK_SIZE)
     const metricsRes = await supabase
       .from('post_metrics_daily')
       .select('post_id, date, likes, comments, saves, shares, profile_visits')
       .in('post_id', chunk)
       .order('date', { ascending: false })
     if (metricsRes.error) {
-      throw new Error(`archive review metrics query failed: ${metricsRes.error.message}`)
+      console.error(
+        `[archive-review] metrics chunk ${i / METRICS_CHUNK_SIZE} failed (${chunk.length} ids): ${metricsRes.error.message}`
+      )
+      continue
     }
     for (const row of metricsRes.data ?? []) {
       // Rows are date-desc; first one wins per post_id.
