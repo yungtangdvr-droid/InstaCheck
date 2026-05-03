@@ -9,12 +9,24 @@ import {
   MAX_TIME_BUDGET_MS,
 } from '@/lib/meta/archive-backfill'
 
-// Manually-callable, Bearer-authenticated archive backfill endpoint.
-// Reuses the same N8N_API_KEY env var as /api/meta/sync — no new env
-// var is provisioned for V1. Not registered in any cron config.
+// Bearer-authenticated archive backfill endpoint. Designed to be called
+// either manually or by an n8n cron (see infrastructure/n8n/
+// archive-backfill-cron.json). Reuses the same N8N_API_KEY env var as
+// /api/meta/sync — no new env var.
+//
+// automation_runs status mapping:
+//   - real work happened with no errors          → 'success'
+//   - real work happened with errors / threw     → 'failed'
+//   - already_running short-circuit              → 'skipped'
+//   - terminal 'complete' short-circuit          → NOT logged (avoid
+//                                                   cron tick spam)
+//   - stale lock recovered                       → extra 'failed' entry
+//                                                   logged before main entry
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
+
+const AUTOMATION_NAME = 'meta.archive.backfill'
 
 function parseNumber(raw: string | null | undefined): number | undefined {
   if (raw == null) return undefined
@@ -69,8 +81,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const supabase       = createClient<Database>(supabaseUrl, supabaseKey)
-  const automationName = 'meta.archive.backfill'
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
 
   try {
     const result = await runArchiveMediaBackfill(
@@ -78,31 +89,57 @@ export async function POST(request: NextRequest) {
       { pageBudget, timeBudgetMs }
     )
 
-    await supabase.from('automation_runs').insert({
-      automation_name: automationName,
-      status:          result.errorThisRun ? 'failed' : 'success',
-      result_summary:  JSON.stringify({
-        pageBudget,
-        timeBudgetMs,
-        result,
-      }),
-    })
+    if (result.staleCleared) {
+      await safeLog(supabase, 'failed', JSON.stringify({
+        recovery: 'stale_lock_cleared',
+        threshold: 'ran_at older than STALE_RUNNING_THRESHOLD_MS',
+      }))
+    }
+
+    if (result.stoppedReason === 'already_running') {
+      await safeLog(supabase, 'skipped', JSON.stringify({
+        reason: 'already_running',
+        cursor: result.cursor,
+      }))
+    } else if (
+      result.stoppedReason === 'end_of_archive' &&
+      !result.startedThisRun
+    ) {
+      // Terminal complete short-circuit. Do NOT log — scheduled ticks
+      // would otherwise spam automation_runs forever.
+    } else {
+      await safeLog(
+        supabase,
+        result.errorThisRun ? 'failed' : 'success',
+        JSON.stringify({
+          pageBudget,
+          timeBudgetMs,
+          result,
+        })
+      )
+    }
 
     return Response.json({ ok: true, result })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[POST /api/meta/archive/backfill]', message)
-
-    try {
-      await supabase.from('automation_runs').insert({
-        automation_name: automationName,
-        status:          'failed',
-        result_summary:  message,
-      })
-    } catch {
-      // swallow logging failure
-    }
-
+    await safeLog(supabase, 'failed', message)
     return Response.json({ error: message }, { status: 500 })
+  }
+}
+
+async function safeLog(
+  supabase:       ReturnType<typeof createClient<Database>>,
+  status:         Database['public']['Enums']['automation_status'],
+  resultSummary:  string
+): Promise<void> {
+  try {
+    await supabase.from('automation_runs').insert({
+      automation_name: AUTOMATION_NAME,
+      status,
+      result_summary:  resultSummary,
+    })
+  } catch {
+    // swallow logging failure — do not let the audit trail kill the run
   }
 }

@@ -5,6 +5,7 @@ import { KpiTile } from '@/components/ui/kpi-tile'
 import {
   getArchiveStatusCounts,
   getArchiveCursor,
+  type ArchiveUiState,
 } from '@/lib/meta/queries/archive-status'
 
 // Read-only surface for the Archive Pattern Library V1 backfill.
@@ -105,11 +106,14 @@ export default async function ArchiveStatusPage() {
           description="État du job meta.media.archive_backfill (table ingestion_cursors)."
         />
         {cursor ? (
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <div className="space-y-3">
+            <UiStateBadge state={cursor.uiState} />
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="min-w-full text-sm">
               <tbody className="divide-y divide-border">
                 <CursorRow label="Job"                  value={cursor.jobName} />
-                <CursorRow label="Statut"               value={cursor.status} />
+                <CursorRow label="État (UI)"            value={cursor.uiState} />
+                <CursorRow label="Statut (DB)"          value={cursor.status} />
                 <CursorRow label="Curseur Meta (after)" value={cursor.cursor ?? '—'} mono />
                 <CursorRow label="Dernier media_id"     value={cursor.lastProcessedMediaId ?? '—'} mono />
                 <CursorRow label="Fetched (cumul.)"     value={NF.format(cursor.fetchedCount)} />
@@ -122,6 +126,7 @@ export default async function ArchiveStatusPage() {
                 <CursorRow label="Dernière erreur"      value={cursor.lastError ?? '—'} />
               </tbody>
             </table>
+            </div>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -160,6 +165,54 @@ function CursorRow({
         {value}
       </td>
     </tr>
+  )
+}
+
+const UI_STATE_META: Record<
+  ArchiveUiState,
+  { label: string; hint: string; className: string }
+> = {
+  idle: {
+    label:     'Idle',
+    hint:      'Prêt à démarrer au prochain tick scheduler.',
+    className: 'bg-muted text-muted-foreground border border-border',
+  },
+  running: {
+    label:     'Running',
+    hint:      'Un run est en cours et a battu un heartbeat récemment.',
+    className: 'bg-blue-500/10 text-blue-700 border border-blue-500/30 dark:text-blue-300',
+  },
+  stale: {
+    label:     'Stale',
+    hint:      'Marqué running mais sans heartbeat depuis > 5 min — sera libéré au prochain run.',
+    className: 'bg-amber-500/10 text-amber-700 border border-amber-500/30 dark:text-amber-300',
+  },
+  complete: {
+    label:     'Complete',
+    hint:      'Backfill terminé. Les ticks scheduler suivants ne logguent plus rien.',
+    className: 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 dark:text-emerald-300',
+  },
+  error: {
+    label:     'Error',
+    hint:      'Le dernier run a échoué. Le prochain tick re-prendra la suite.',
+    className: 'bg-red-500/10 text-red-700 border border-red-500/30 dark:text-red-300',
+  },
+}
+
+function UiStateBadge({ state }: { state: ArchiveUiState }) {
+  const meta = UI_STATE_META[state]
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span
+        className={
+          'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-wide ' +
+          meta.className
+        }
+      >
+        {meta.label}
+      </span>
+      <span className="text-sm text-muted-foreground">{meta.hint}</span>
+    </div>
   )
 }
 
