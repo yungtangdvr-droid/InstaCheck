@@ -38,6 +38,13 @@ const INDEX_DISPLAY_CAP = 250
 // Reason chip threshold: post outperforms its comparable archive cell.
 const ERA_OUTPERFORMER_THRESHOLD = 125
 
+// Per (era, media_type) bucket, the maximum number of archive-eligible
+// posts pulled to hydrate the baseline. Each era spans up to two
+// calendar years, so 500 is more than enough to satisfy the
+// ERA_MIN_SAMPLE = 5 gate at both year and era granularity for any
+// media_type that is materially represented in the archive.
+const BASELINE_PER_BUCKET_LIMIT = 500
+
 export type ArchiveReviewReason =
   | 'caption_present'
   | 'metrics_available'
@@ -212,6 +219,17 @@ function eraOfYear(year: number): TArchiveEra {
   if (year <= 2022) return '2021_2022'
   if (year <= 2024) return '2023_2024'
   return '2025_plus'
+}
+
+// Closed-open year range that defines the era for SQL predicates.
+// `pre_2019` starts at 2000 (Instagram launched in 2010, this is just a
+// safe lower bound). `2025_plus` runs to year 9999 to stay open-ended.
+const ERA_YEAR_RANGE: Record<TArchiveEra, { startYear: number; endYearExclusive: number }> = {
+  pre_2019:    { startYear: 2000, endYearExclusive: 2019 },
+  '2019_2020': { startYear: 2019, endYearExclusive: 2021 },
+  '2021_2022': { startYear: 2021, endYearExclusive: 2023 },
+  '2023_2024': { startYear: 2023, endYearExclusive: 2025 },
+  '2025_plus': { startYear: 2025, endYearExclusive: 9999 },
 }
 
 function yearOfIso(iso: string): number | null {
@@ -548,19 +566,37 @@ export async function getArchiveReviewQueue(
   const gated = (gatedRes.data ?? []) as unknown as GatedRow[]
   const windowed = filteredEligibleTotal > gated.length
 
-  // ----- Stable baseline universe --------------------------------------
-  // Per archive-review v1.1 amendment: era-normalized baselines must NOT
-  // shift when the user toggles year / mediaType / caption / metrics
-  // filters. We re-fetch the candidate window with the base archive
-  // gate only — except when the user has no reducing filters AND no
-  // metrics filter, in which case `gated` already IS the unfiltered
-  // window and we reuse it to save a round trip.
-  const userHasAnyFilter =
-    hasReducingFilter(filters) || (filters.metrics ?? 'all') !== 'all'
+  // ----- Stable baseline universe (stratified by era × media_type) ----
+  // Era-normalized baselines must NOT shift when the user toggles
+  // year / mediaType / caption / metrics filters. They must also work
+  // for old eras (pre_2019, 2019_2020), which are typically absent from
+  // a global "most-recent N" window on a large archive.
+  //
+  // Strategy: collect the distinct (era, media_type) pairs present in
+  // `gated`, then hydrate each pair by fetching up to
+  // BASELINE_PER_BUCKET_LIMIT archive-eligible posts whose `posted_at`
+  // falls inside that era's year range AND whose media_type matches.
+  // The base archive gate applies; user filters are intentionally NOT
+  // applied. A 2018 IMAGE post is therefore baselined against eligible
+  // 2018 IMAGE posts, not against the global most-recent window.
+  const eraFormatPairs = new Map<
+    string,
+    { era: TArchiveEra; mediaType: ArchiveReviewMediaType }
+  >()
+  for (const r of gated) {
+    const y = yearOfIso(r.posted_at)
+    if (y === null) continue
+    const era = eraOfYear(y)
+    const key = `${era}__${r.media_type}`
+    if (!eraFormatPairs.has(key)) {
+      eraFormatPairs.set(key, { era, mediaType: r.media_type })
+    }
+  }
 
-  let baselineUniverse: GatedRow[]
-  if (userHasAnyFilter) {
-    const baseRes = await supabase
+  const baselineById = new Map<string, GatedRow>()
+  for (const { era, mediaType } of eraFormatPairs.values()) {
+    const range = ERA_YEAR_RANGE[era]
+    const bucketRes = await supabase
       .from('posts')
       .select(`
         id,
@@ -573,16 +609,30 @@ export async function getArchiveReviewQueue(
       `)
       .eq('post_archive_state.metadata_status',     'imported')
       .eq('post_archive_state.human_review_status', 'pending')
+      .eq('media_type', mediaType)
+      .gte('posted_at', isoYearStart(range.startYear))
+      .lt('posted_at',  isoYearStart(range.endYearExclusive))
       .order('posted_at', { ascending: false })
       .order('id',        { ascending: true })
-      .limit(ARCHIVE_REVIEW_CANDIDATE_WINDOW)
-    if (baseRes.error) {
-      throw new Error(`archive review baseline universe query failed: ${baseRes.error.message}`)
+      .limit(BASELINE_PER_BUCKET_LIMIT)
+    if (bucketRes.error) {
+      throw new Error(
+        `archive review baseline bucket (${era}/${mediaType}) query failed: ${bucketRes.error.message}`
+      )
     }
-    baselineUniverse = (baseRes.data ?? []) as unknown as GatedRow[]
-  } else {
-    baselineUniverse = gated
+    for (const row of (bucketRes.data ?? []) as unknown as GatedRow[]) {
+      if (!baselineById.has(row.id)) baselineById.set(row.id, row)
+    }
   }
+
+  // Always fold `gated` into the baseline pool — those rows are
+  // archive-eligible by construction and may not be inside the per-era
+  // limit if the bucket is large.
+  for (const r of gated) {
+    if (!baselineById.has(r.id)) baselineById.set(r.id, r)
+  }
+
+  const baselineUniverse: GatedRow[] = Array.from(baselineById.values())
 
   // ----- Latest metrics per post (chunked, best-effort) ----------------
   // Fetch the latest snapshot for the union of (gated ∪ baselineUniverse).
