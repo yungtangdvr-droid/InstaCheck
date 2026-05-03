@@ -33,7 +33,7 @@ const PCT = new Intl.NumberFormat('fr-FR', {
 const MEDIA_TYPES_SET = new Set<ArchiveReviewMediaType>(ARCHIVE_REVIEW_MEDIA_TYPES)
 const CAPTION_VALUES: ReadonlyArray<ArchiveReviewCaptionFilter> = ['all', 'with', 'without']
 const METRICS_VALUES: ReadonlyArray<ArchiveReviewMetricsFilter> = ['all', 'with', 'without']
-const SORT_VALUES:    ReadonlyArray<ArchiveReviewSort>          = ['priority', 'date_desc', 'date_asc', 'metrics']
+const SORT_VALUES:    ReadonlyArray<ArchiveReviewSort>          = ['priority', 'date_desc', 'date_asc', 'metrics', 'era_normalized']
 
 const MEDIA_TYPE_LABELS: Record<ArchiveReviewMediaType, string> = {
   IMAGE:          'Image',
@@ -51,10 +51,11 @@ const METRICS_LABELS: Record<ArchiveReviewMetricsFilter, string> = {
   without: 'Sans métriques',
 }
 const SORT_LABELS: Record<ArchiveReviewSort, string> = {
-  priority:  'Priorité',
-  date_desc: 'Date ↓',
-  date_asc:  'Date ↑',
-  metrics:   'Engagement (fenêtre)',
+  priority:       'Priorité',
+  date_desc:      'Date ↓',
+  date_asc:       'Date ↑',
+  metrics:        'Engagement (fenêtre)',
+  era_normalized: 'Index vs période comparable',
 }
 
 type RawSearchParams = {
@@ -256,7 +257,9 @@ export default async function ArchiveReviewPage({
                 ? 'Tri : posté du plus récent au plus ancien.'
                 : state.sort === 'date_asc'
                   ? 'Tri : posté du plus ancien au plus récent.'
-                  : 'Tri : score décroissant, puis posté le plus récent. Les chips « Pourquoi prioritisé » détaillent les bonus appliqués.'
+                  : state.sort === 'era_normalized'
+                    ? "Tri : index vs période comparable (même année + même format si ≥ 5 posts, sinon même époque + même format). 100 = baseline, 125 = +25 %. Les posts sans baseline comparable tombent en bas."
+                    : 'Tri : score décroissant, puis posté le plus récent. Les chips « Pourquoi prioritisé » détaillent les bonus appliqués.'
           }
         />
 
