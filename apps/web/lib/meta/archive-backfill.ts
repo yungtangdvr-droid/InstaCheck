@@ -98,7 +98,7 @@ function shouldRetryMetaError(err: unknown): boolean {
   return true
 }
 
-type SupabaseClient = ReturnType<typeof createClient<Database>>
+export type SupabaseClient = ReturnType<typeof createClient<Database>>
 
 export async function runArchiveMediaBackfill(
   config: {
@@ -469,7 +469,7 @@ function buildResult(args: {
   }
 }
 
-type IGMediaItem = {
+export type IGMediaItem = {
   id:         string
   media_type: MediaType
   caption?:   string
@@ -477,7 +477,13 @@ type IGMediaItem = {
   timestamp:  string
 }
 
-async function upsertMediaAndPost(
+// Exported so the windowed archive worker
+// (`archive-backfill-windowed.ts`) can reuse the exact same upsert
+// shape without forking a third copy. Body and return type are
+// intentionally unchanged: the legacy cursor worker's counters and
+// behavior must remain identical. See REFACTOR NOTE at the top of
+// this file.
+export async function upsertMediaAndPost(
   supabase: SupabaseClient,
   media:    IGMediaItem,
   igUserId: string,
