@@ -1818,6 +1818,20 @@ export type Database = {
       }
     }
     Views: {
+      v_archive_coverage_year_format: {
+        Row: {
+          count_comments: number | null
+          count_likes: number | null
+          count_profile_visits: number | null
+          count_saves: number | null
+          count_shares: number | null
+          media_type: Database["public"]["Enums"]["media_type"] | null
+          posts_total: number | null
+          posts_with_metrics: number | null
+          year: number | null
+        }
+        Relationships: []
+      }
       v_archive_baseline_era_format: {
         Row: {
           count_comments: number | null

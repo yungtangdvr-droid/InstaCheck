@@ -160,6 +160,12 @@ export default async function ArchiveReviewPage({
               ← État d'indexation
             </Link>
             <Link
+              href="/content-lab/archive/coverage"
+              className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+            >
+              Couverture →
+            </Link>
+            <Link
               href="/content-lab/taxonomy"
               className="text-xs font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
             >
