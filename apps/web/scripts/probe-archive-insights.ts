@@ -60,6 +60,13 @@ const DEFAULT_YEARS      = ['2025', '2024', '2023', '2022', '2021', '2020']
 
 const INTER_CALL_SLEEP_MS = 250
 
+// PostgREST encodes `.in('post_id', ids)` as `post_id=in.(uuid1,uuid2,...)`
+// in the URL. With ~500 UUIDs the query string crosses ~20 KB, which the
+// pooler / undici can reject with a vague `TypeError: fetch failed` and no
+// useful `error.cause`. Chunk the lookup to stay well under any URL-length
+// limit. 100 keeps each request ~4 KB.
+const METRICS_LOOKUP_CHUNK_SIZE = 100
+
 type Cli = {
   years:    number[]
   perYear:  number
@@ -210,12 +217,42 @@ async function selectSample(
   if (!yearPosts || yearPosts.length === 0) return []
 
   const ids = yearPosts.map((p) => p.id)
-  const { data: metricsRows, error: metricsErr } = await supabase
-    .from('post_metrics_daily')
-    .select('post_id')
-    .in('post_id', ids)
-  if (metricsErr) throw new Error(`post_metrics_daily query year=${year}: ${metricsErr.message}`)
-  const withMetrics = new Set((metricsRows ?? []).map((r) => r.post_id))
+  const withMetrics = new Set<string>()
+  for (let chunkIndex = 0; chunkIndex * METRICS_LOOKUP_CHUNK_SIZE < ids.length; chunkIndex++) {
+    const start = chunkIndex * METRICS_LOOKUP_CHUNK_SIZE
+    const chunk = ids.slice(start, start + METRICS_LOOKUP_CHUNK_SIZE)
+    try {
+      const { data: metricsRows, error: metricsErr } = await supabase
+        .from('post_metrics_daily')
+        .select('post_id')
+        .in('post_id', chunk)
+      if (metricsErr) {
+        throw new Error(metricsErr.message)
+      }
+      for (const r of metricsRows ?? []) withMetrics.add(r.post_id)
+    } catch (err) {
+      // PostgREST URL-length / pooler / network failures often surface as
+      // `TypeError: fetch failed` with the real reason hidden in
+      // `error.cause`. Surface both, plus chunk identity, so the operator
+      // can act on the failure without guessing.
+      const message = safeMessage(err)
+      const causeMessage = err instanceof Error && err.cause
+        ? safeMessage(err.cause)
+        : null
+      throw new Error(
+        JSON.stringify({
+          phase:        'post_metrics_daily_lookup',
+          year,
+          chunk_index:  chunkIndex,
+          chunk_size:   chunk.length,
+          chunk_count:  Math.ceil(ids.length / METRICS_LOOKUP_CHUNK_SIZE),
+          total_ids:    ids.length,
+          message:      truncate(message),
+          ...(causeMessage ? { cause: truncate(causeMessage) } : {}),
+        })
+      )
+    }
+  }
 
   const candidates = yearPosts.filter((p) => !withMetrics.has(p.id))
 
