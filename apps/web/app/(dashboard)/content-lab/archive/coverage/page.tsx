@@ -132,7 +132,7 @@ export default async function ArchiveCoveragePage() {
       <section className="space-y-3">
         <SectionHeader
           title="Posts avec métrique > 0 (toutes années)"
-          description="Nombre de posts importés dont la dernière ligne post_metrics_daily a une valeur strictement positive pour la métrique. Une métrique restée à 0 (valeur par défaut) n'est pas comptée."
+          description="Proxy de captation : nombre de posts importés dont la dernière ligne post_metrics_daily a une valeur strictement positive pour la métrique. Les colonnes sont NOT NULL DEFAULT 0 dans le schéma, donc une vraie valeur 0 et une métrique non captée sont indistinguables — ce compteur n'est donc pas une mesure stricte de disponibilité de la métrique."
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {COVERAGE_METRIC_KEYS.map((k) => (
@@ -153,7 +153,7 @@ export default async function ArchiveCoveragePage() {
       <section className="space-y-3">
         <SectionHeader
           title="Couverture par année × format"
-          description="Une ligne par année. Les chiffres présentés sont posts_with_metrics / posts_total, suivis du pourcentage. Les comptes par métrique agrègent toutes les media_types de l'année."
+          description="Une ligne par année. Les chiffres présentés sont posts_with_metrics / posts_total, suivis du pourcentage. Les comptes par métrique (latest > 0) agrègent toutes les media_types de l'année et restent un proxy — voir section précédente."
         />
         {!hasData ? (
           <EmptyState
