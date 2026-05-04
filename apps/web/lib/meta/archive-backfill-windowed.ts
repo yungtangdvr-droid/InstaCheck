@@ -114,6 +114,13 @@ function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
 
+// Single source of truth for the `ingestion_cursors.job_name` value
+// of a window. The window LABEL alone (e.g. `2022-03-01..2022-03-31`)
+// is NEVER a valid value for `job_name`; it must always be prefixed.
+function windowJobName(label: string): string {
+  return `${JOB_PREFIX}:${label}`
+}
+
 // Last day of (year, month) where month is 1-based.
 function lastDayOfMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate()
@@ -483,7 +490,7 @@ export async function runWindowedArchiveBackfill(
           last_error:     lastError,
           payload:        payload as unknown as Database['public']['Tables']['ingestion_cursors']['Update']['payload'],
         })
-        .eq('job_name', target.label)
+        .eq('job_name', windowJobName(target.label))
       if (updErr) throw new Error(`ingestion_cursors update failed: ${updErr.message}`)
 
       after = nextAfter
@@ -514,7 +521,7 @@ export async function runWindowedArchiveBackfill(
         ran_at:      new Date().toISOString(),
         payload:     payload as unknown as Database['public']['Tables']['ingestion_cursors']['Update']['payload'],
       })
-      .eq('job_name', target.label)
+      .eq('job_name', windowJobName(target.label))
 
     const fresh = await loadCursorRow(supabase, target.label)
     return buildResult({
@@ -545,7 +552,7 @@ export async function runWindowedArchiveBackfill(
         finished_at: finishedAt,
         ran_at:      new Date().toISOString(),
       })
-      .eq('job_name', target.label)
+      .eq('job_name', windowJobName(target.label))
     if (error) throw new Error(`ingestion_cursors finalize failed: ${error.message}`)
   }
 
@@ -641,11 +648,10 @@ async function loadCursorRow(
   supabase: SupabaseClient,
   label:    string
 ): Promise<CursorRow | null> {
-  const jobName = `${JOB_PREFIX}:${label}`
   const { data, error } = await supabase
     .from('ingestion_cursors')
     .select('*')
-    .eq('job_name', jobName)
+    .eq('job_name', windowJobName(label))
     .maybeSingle()
   if (error) throw new Error(`ingestion_cursors load failed: ${error.message}`)
   return data
@@ -657,11 +663,10 @@ async function ensureCursorRow(
 ): Promise<CursorRow> {
   const existing = await loadCursorRow(supabase, target.label)
   if (existing) return existing
-  const jobName = `${JOB_PREFIX}:${target.label}`
   const { data, error } = await supabase
     .from('ingestion_cursors')
     .insert({
-      job_name: jobName,
+      job_name: windowJobName(target.label),
       status:   'idle',
       payload:  {
         label:     target.label,
@@ -752,14 +757,13 @@ async function clearStaleRunning(
 ): Promise<boolean> {
   const cutoffIso  = new Date(Date.now() - STALE_RUNNING_THRESHOLD_MS).toISOString()
   const breadcrumb = `stale lock cleared at ${new Date().toISOString()}`
-  const jobName    = `${JOB_PREFIX}:${label}`
   const { data, error } = await supabase
     .from('ingestion_cursors')
     .update({
       status:     'error',
       last_error: breadcrumb,
     })
-    .eq('job_name', jobName)
+    .eq('job_name', windowJobName(label))
     .eq('status', 'running')
     .lt('ran_at', cutoffIso)
     .select('id')
@@ -776,8 +780,7 @@ async function acquireLock(
   label:          string,
   preservedStart: string | null
 ): Promise<CursorRow | null> {
-  const nowIso  = new Date().toISOString()
-  const jobName = `${JOB_PREFIX}:${label}`
+  const nowIso = new Date().toISOString()
   const { data, error } = await supabase
     .from('ingestion_cursors')
     .update({
@@ -786,7 +789,7 @@ async function acquireLock(
       started_at: preservedStart ?? nowIso,
       last_error: null,
     })
-    .eq('job_name', jobName)
+    .eq('job_name', windowJobName(label))
     .in('status', ['idle', 'paused'])
     .select('*')
     .maybeSingle()
@@ -800,7 +803,6 @@ async function markWindowErrored(
   message:  string,
   payload:  WindowPayload
 ): Promise<void> {
-  const jobName = `${JOB_PREFIX}:${label}`
   await supabase
     .from('ingestion_cursors')
     .update({
@@ -809,7 +811,7 @@ async function markWindowErrored(
       ran_at:      new Date().toISOString(),
       payload:     payload as unknown as Database['public']['Tables']['ingestion_cursors']['Update']['payload'],
     })
-    .eq('job_name', jobName)
+    .eq('job_name', windowJobName(label))
 }
 
 async function fetchExistingMediaIds(
