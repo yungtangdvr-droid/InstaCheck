@@ -88,6 +88,33 @@ export async function fetchAllMedia(
   return limit !== undefined ? allMedia.slice(0, limit) : allMedia
 }
 
+// Read-only helper used by the archive insights probe. Fetches
+// only the basic media fields that Meta returns directly on the
+// `/{media-id}` endpoint, including `like_count` and
+// `comments_count` — which the archive sync path intentionally
+// does not request today. NOT wired into `syncMedia` or the live
+// `fetchMediaPage` field set; behavior of the production sync
+// path is unchanged.
+export type IGMediaBasicFields = {
+  id:             string
+  media_type:     string
+  timestamp:      string
+  permalink:      string
+  like_count?:    number
+  comments_count?: number
+}
+
+export async function fetchMediaBasicFields(
+  mediaId:     string,
+  accessToken: string
+): Promise<IGMediaBasicFields> {
+  return graphGet<IGMediaBasicFields>(
+    `/${mediaId}`,
+    { fields: 'id,media_type,timestamp,permalink,like_count,comments_count' },
+    accessToken
+  )
+}
+
 export async function fetchMediaInsights(
   mediaId: string,
   mediaType: string,
