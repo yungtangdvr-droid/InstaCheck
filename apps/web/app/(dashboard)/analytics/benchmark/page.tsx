@@ -45,6 +45,7 @@ export default async function BenchmarkPage() {
         }
         title="Benchmark — diagnostics"
         description="Comptes benchmark sondés via l'API Meta officielle (Business Discovery). Lecture seule — aucun score, aucun percentile, aucune sync planifiée."
+        actions={<SyncBenchmarkAction />}
       />
 
       {isEmpty ? (
@@ -76,6 +77,29 @@ export default async function BenchmarkPage() {
         </>
       )}
     </div>
+  )
+}
+
+// No HTTP/server-action benchmark sync exists in this codebase — the only
+// supported entry point is the local `pnpm probe:benchmark` CLI script. This
+// hotfix surfaces a visible-but-disabled action so the missing UI affordance
+// is no longer invisible. Wiring an actual sync button needs its own scoped
+// branch (a /api/benchmark/sync route + auth + rate limiting).
+function SyncBenchmarkAction() {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-disabled="true"
+      title="Sync benchmark indisponible depuis l'UI — utilise la CLI : pnpm probe:benchmark -- --username=<handle> --persist --cohort=<cohorte>"
+      className="inline-flex h-9 cursor-not-allowed items-center gap-2 rounded-md border border-border bg-muted px-3 text-xs font-medium text-muted-foreground opacity-70"
+    >
+      <span aria-hidden>↻</span>
+      Synchroniser benchmark
+      <span className="ml-1 rounded bg-background px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+        CLI uniquement
+      </span>
+    </button>
   )
 }
 
@@ -275,14 +299,10 @@ function AccountRow({ row }: { row: TBenchmarkAccountRow }) {
         <RepostsCell availability={row.repostsAvailability} />
       </td>
       <td className="px-4 py-3 text-[11px] text-muted-foreground">
-        {row.latestSnapshotDate
-          ? `Snapshot ${row.latestSnapshotDate}`
-          : 'Pas de snapshot'}
-        {row.latestSyncedAt && (
-          <p className="text-muted-foreground">
-            Sync {formatDateTime(row.latestSyncedAt)}
-          </p>
-        )}
+        <LastPollCell
+          snapshotDate={row.latestSnapshotDate}
+          syncedAt={row.latestSyncedAt}
+        />
       </td>
     </tr>
   )
@@ -295,15 +315,20 @@ function CohortBadge({ cohort }: { cohort: TBenchmarkAccountRow['cohort'] }) {
     cohort === 'adjacent_culture' ? 'info'    :
                                     'info'
 
+  const label = cohortLabelFr(cohort)
+  // Tooltip carries the full label plus the aspirational caveat. The badge
+  // itself is constrained with `whitespace-nowrap` + `max-w` so longer cohort
+  // names ("Culture adjacente") cannot wrap or push the table layout.
+  const title =
+    cohort === 'aspirational'
+      ? `${label} — exclu des calculs de percentile peer`
+      : label
+
   return (
-    <span
-      title={
-        cohort === 'aspirational'
-          ? 'Aspirationnel — exclu des calculs de percentile peer'
-          : undefined
-      }
-    >
-      <VerdictBadge tone={tone}>{cohortLabelFr(cohort)}</VerdictBadge>
+    <span title={title} aria-label={title}>
+      <VerdictBadge tone={tone} className="whitespace-nowrap">
+        {label}
+      </VerdictBadge>
     </span>
   )
 }
@@ -357,6 +382,43 @@ function RepostsCell({
   // Reposts is always persisted as null per benchmark doctrine, even when the
   // field is reported as available. Show an em dash to reflect that.
   return <span className="text-muted-foreground">—</span>
+}
+
+function LastPollCell({
+  snapshotDate,
+  syncedAt,
+}: {
+  snapshotDate: string | null
+  syncedAt:     string | null
+}) {
+  // Compact visible text, full detail in title. The previous layout rendered
+  // "Snapshot YYYY-MM-DD" + "Sync DD/MM/YYYY HH:MM" on two uncontrolled lines,
+  // which broke alignment and overflowed on narrow viewports.
+  const visible = snapshotDate ?? (syncedAt ? formatShortDate(syncedAt) : '—')
+  const titleParts = [
+    snapshotDate ? `Snapshot ${snapshotDate}` : 'Pas de snapshot',
+    syncedAt     ? `Sync ${formatDateTime(syncedAt)}` : null,
+  ].filter(Boolean) as string[]
+  const title = titleParts.join(' · ')
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className="block whitespace-nowrap tabular-nums"
+    >
+      {visible}
+    </span>
+  )
+}
+
+function formatShortDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('fr-FR', {
+    day:   '2-digit',
+    month: '2-digit',
+    year:  '2-digit',
+  })
 }
 
 function formatBigNumber(
