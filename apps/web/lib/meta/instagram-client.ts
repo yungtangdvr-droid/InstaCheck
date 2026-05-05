@@ -69,6 +69,36 @@ export async function fetchMediaPage(
   )
 }
 
+// Date-windowed variant of `fetchMediaPage`. Used by the windowed
+// archive backfill worker to walk older media in `since`/`until`
+// slices, working around the deep-cursor wall observed at total ~9,850
+// (Meta error code 1). Same field set as `fetchMediaPage` so the
+// `raw_instagram_media.raw_json` shape stays identical across paths.
+export async function fetchMediaPageWindowed(
+  igUserId:    string,
+  accessToken: string,
+  args: {
+    sinceSec: number
+    untilSec: number
+    after?:   string
+    limit?:   number
+  }
+): Promise<{ data: IGMediaFields[]; paging?: { cursors?: { after?: string }; next?: string } }> {
+  const params: Record<string, string> = {
+    fields: 'id,media_type,caption,permalink,timestamp,thumbnail_url,media_url',
+    limit:  String(args.limit ?? 50),
+    since:  String(args.sinceSec),
+    until:  String(args.untilSec),
+  }
+  if (args.after) params['after'] = args.after
+
+  return graphGet(
+    `/${igUserId}/media`,
+    params,
+    accessToken
+  )
+}
+
 export async function fetchAllMedia(
   igUserId: string,
   accessToken: string,
