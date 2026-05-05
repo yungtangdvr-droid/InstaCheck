@@ -27,6 +27,17 @@ const SIGNAL_GLYPH: Record<TDistributionSignal, string> = {
   profileVisits: '@',
 }
 
+// Short, table-safe variant of DISTRIBUTION_LABEL_FR. The full sentence
+// ("Très au-dessus de ta baseline") overflows the score column on /analytics,
+// so the badge renders this compact form and keeps the full label in `title`.
+const DISTRIBUTION_LABEL_SHORT_FR: Record<TDistributionLabel, string> = {
+  'faible':       'Très bas',
+  'moyen':        'Bas',
+  'bon':          'Normal',
+  'tres-fort':    'Au-dessus',
+  'exceptionnel': 'Très haut',
+}
+
 type Props = {
   posts: TTopPost[]
   // Optional read-only signal from post_content_analysis.primary_theme,
@@ -114,10 +125,11 @@ function CirculationBadge({
   return (
     <span
       title={tooltip}
-      className={`inline-flex h-6 items-center gap-1 rounded border px-1.5 text-[11px] font-medium ${cls}`}
+      aria-label={tooltip}
+      className={`inline-flex h-6 max-w-full items-center gap-1 whitespace-nowrap rounded border px-1.5 text-[11px] font-medium ${cls}`}
     >
       <span className="tabular-nums">{score}</span>
-      <span className="text-[10px] opacity-80">{DISTRIBUTION_LABEL_FR[label]}</span>
+      <span className="text-[10px] opacity-80">{DISTRIBUTION_LABEL_SHORT_FR[label]}</span>
       {dominantSignal && (
         <span className="text-[10px] opacity-70" aria-hidden>{SIGNAL_GLYPH[dominantSignal]}</span>
       )}
