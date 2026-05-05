@@ -80,15 +80,45 @@ export type SyncInsightsBatchResult = {
   errors:  string[]
 }
 
+const DEFAULT_INSIGHTS_DAYS  = 90
+const DEFAULT_INSIGHTS_LIMIT = 200
+
+// Bound the live insights loop to a fresh window so the archive
+// (metadata-only backfill, see lib/meta/archive-backfill.ts) cannot
+// starve recently-published posts of their daily refresh. Meta's
+// /{media-id}/insights endpoint only returns useful values for
+// recent media anyway; older content is covered by the archive path.
+function resolveInsightsDays(): number {
+  const raw = process.env.META_SYNC_INSIGHTS_DAYS
+  if (!raw) return DEFAULT_INSIGHTS_DAYS
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INSIGHTS_DAYS
+}
+
+function resolveInsightsLimit(): number {
+  const raw = process.env.META_SYNC_INSIGHTS_LIMIT
+  if (!raw) return DEFAULT_INSIGHTS_LIMIT
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INSIGHTS_LIMIT
+}
+
 export async function syncInsightsForAllPosts(
   supabase:     ReturnType<typeof createClient<Database>>,
   accountRowId: string,
   accessToken:  string
 ): Promise<SyncInsightsBatchResult> {
+  const days     = resolveInsightsDays()
+  const limit    = resolveInsightsLimit()
+  const cutoffMs = Date.now() - days * 86_400_000
+  const sinceIso = new Date(cutoffMs).toISOString()
+
   const { data: posts, error } = await supabase
     .from('posts')
-    .select('id, media_id, media_type')
+    .select('id, media_id, media_type, posted_at')
     .eq('account_id', accountRowId)
+    .gte('posted_at', sinceIso)
+    .order('posted_at', { ascending: false, nullsFirst: false })
+    .limit(limit)
 
   if (error) throw new Error(`posts select: ${error.message}`)
   if (!posts?.length) return { results: [], errors: [] }
