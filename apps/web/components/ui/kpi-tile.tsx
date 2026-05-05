@@ -43,12 +43,12 @@ function KpiTile({
     <div
       data-slot="kpi-tile"
       className={cn(
-        "flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card p-4 text-card-foreground",
+        "flex min-w-0 flex-col gap-2 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-glass)] p-5 text-card-foreground backdrop-blur-xl shadow-[var(--shadow-soft)]",
         className
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           {label}
         </p>
         {icon ? (
@@ -58,7 +58,7 @@ function KpiTile({
         ) : null}
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold leading-none tabular-nums">
+        <span className="text-[1.75rem] font-semibold leading-none tracking-[-0.02em] tabular-nums">
           {value}
         </span>
         {unit ? (

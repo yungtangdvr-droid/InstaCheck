@@ -18,6 +18,9 @@ export type NavGroup = {
   label: string
   icon: LucideIcon
   items: NavItem[]
+  // Routes remain reachable by URL when hidden; they are simply not rendered
+  // in the sidebar. Used to conceal frozen modules during the refocus phase.
+  hidden?: boolean
 }
 
 // Routes here are kept in sync with apps/web/app/(dashboard)/. Dynamic routes
@@ -60,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'business',
     label: 'Business',
     icon: Briefcase,
+    hidden: true,
     items: [
       { label: 'CRM', href: '/crm' },
       { label: 'Contacts', href: '/crm/contacts' },
@@ -70,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'tracking',
     label: 'Tracking',
     icon: Layers,
+    hidden: true,
     items: [
       { label: 'Assets / Decks', href: '/assets' },
       { label: 'Attribution', href: '/attribution' },
@@ -80,12 +85,15 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'signals-ops',
     label: 'Signals & Ops',
     icon: Radio,
+    hidden: true,
     items: [
       { label: 'Brand Watch', href: '/brand-watch' },
       { label: 'Automations', href: '/automations' },
     ],
   },
 ]
+
+export const VISIBLE_NAV_GROUPS: NavGroup[] = NAV_GROUPS.filter((g) => !g.hidden)
 
 export function isItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
