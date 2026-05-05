@@ -9,7 +9,7 @@ function Card({ className, ...props }: DivProps) {
     <div
       data-slot="card"
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground shadow-xs",
+        "rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-glass)] text-card-foreground backdrop-blur-xl shadow-[var(--shadow-soft)]",
         className
       )}
       {...props}
@@ -21,7 +21,7 @@ function CardHeader({ className, ...props }: DivProps) {
   return (
     <div
       data-slot="card-header"
-      className={cn("flex flex-col gap-1.5 px-5 pt-5 pb-3", className)}
+      className={cn("flex flex-col gap-1.5 px-6 pt-6 pb-3", className)}
       {...props}
     />
   )
@@ -35,7 +35,7 @@ function CardTitle({
     <h3
       data-slot="card-title"
       className={cn(
-        "text-base font-semibold leading-none tracking-tight",
+        "text-base font-semibold leading-tight tracking-[-0.01em]",
         className
       )}
       {...props}
@@ -50,7 +50,7 @@ function CardDescription({
   return (
     <p
       data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-[0.9375rem] text-muted-foreground", className)}
       {...props}
     />
   )
@@ -60,7 +60,7 @@ function CardContent({ className, ...props }: DivProps) {
   return (
     <div
       data-slot="card-content"
-      className={cn("px-5 pb-5", className)}
+      className={cn("px-6 pb-6", className)}
       {...props}
     />
   )
@@ -71,7 +71,7 @@ function CardFooter({ className, ...props }: DivProps) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center border-t border-border px-5 py-3",
+        "flex items-center border-t border-[color:var(--surface-border)] px-6 py-4",
         className
       )}
       {...props}

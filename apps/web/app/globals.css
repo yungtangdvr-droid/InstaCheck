@@ -56,6 +56,12 @@
   --color-danger-foreground: var(--danger-foreground);
   --color-danger-soft: var(--danger-soft);
   --color-accent-chart: var(--accent-chart);
+  --color-surface-glass: var(--surface-glass);
+  --color-surface-glass-strong: var(--surface-glass-strong);
+  --color-surface-border: var(--surface-border);
+  --color-surface-highlight: var(--surface-highlight);
+  --shadow-soft: var(--shadow-soft);
+  --shadow-float: var(--shadow-float);
 }
 
 :root {
@@ -101,6 +107,14 @@
   --danger-foreground: oklch(0.985 0 0);
   --danger-soft: oklch(0.6 0.22 27 / 14%);
   --accent-chart: oklch(0.62 0.18 268);
+
+  /* Liquid Glass surface tokens (light) */
+  --surface-glass: oklch(1 0 0 / 70%);
+  --surface-glass-strong: oklch(1 0 0 / 85%);
+  --surface-border: oklch(0 0 0 / 8%);
+  --surface-highlight: oklch(1 0 0 / 80%);
+  --shadow-soft: 0 1px 0 oklch(1 0 0 / 60%) inset, 0 6px 24px -12px oklch(0 0 0 / 18%);
+  --shadow-float: 0 1px 0 oklch(1 0 0 / 70%) inset, 0 24px 48px -24px oklch(0 0 0 / 22%);
 }
 
 .dark {
@@ -145,17 +159,41 @@
   --danger-foreground: oklch(0.145 0 0);
   --danger-soft: oklch(0.68 0.2 25 / 16%);
   --accent-chart: oklch(0.7 0.17 268);
+
+  /* Liquid Glass surface tokens (dark) */
+  --surface-glass: oklch(1 0 0 / 6%);
+  --surface-glass-strong: oklch(1 0 0 / 9%);
+  --surface-border: oklch(1 0 0 / 8%);
+  --surface-highlight: oklch(1 0 0 / 14%);
+  --shadow-soft: 0 1px 0 oklch(1 0 0 / 6%) inset, 0 8px 28px -16px oklch(0 0 0 / 60%);
+  --shadow-float: 0 1px 0 oklch(1 0 0 / 8%) inset, 0 28px 56px -28px oklch(0 0 0 / 70%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    font-family:
+      var(--font-geist-sans, ui-sans-serif),
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Text",
+      "Segoe UI",
+      system-ui,
+      sans-serif;
+    font-feature-settings: "ss01", "cv11";
+  }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(1100px 700px at 8% -8%, oklch(0.62 0.18 268 / 18%), transparent 60%),
+      radial-gradient(900px 600px at 92% 0%, oklch(0.7 0.17 320 / 12%), transparent 60%),
+      radial-gradient(900px 700px at 50% 110%, oklch(0.65 0.16 200 / 12%), transparent 60%);
+    background-attachment: fixed;
   }
-  html {
-    @apply font-sans;
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
   }
   :focus-visible {
     outline: 2px solid var(--ring);
