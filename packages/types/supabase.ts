@@ -1868,6 +1868,73 @@ export type Database = {
         }
         Relationships: []
       }
+      v_post_intelligence_features: {
+        Row: {
+          archive_coverage_pct: number | null
+          archive_coverage_posts_total: number | null
+          archive_coverage_posts_with_metrics: number | null
+          archive_era_mean_saves: number | null
+          archive_era_mean_shares: number | null
+          archive_era_sample_size: number | null
+          archive_year_mean_saves: number | null
+          archive_year_mean_shares: number | null
+          archive_year_sample_size: number | null
+          baseline_saves: number | null
+          baseline_score: number | null
+          baseline_shares: number | null
+          content_analysis_confidence: number | null
+          content_analysis_status:
+            | Database["public"]["Enums"]["content_analysis_status"]
+            | null
+          days_since_posted: number | null
+          era: string | null
+          era_index_saves: number | null
+          era_index_shares: number | null
+          format_pattern: string | null
+          format_sample_size: number | null
+          humor_type: string | null
+          in_last_7d: boolean | null
+          in_last_30d: boolean | null
+          in_last_90d: boolean | null
+          media_type: string | null
+          niche_level: string | null
+          performance_score: number | null
+          post_id: string | null
+          posted_at: string | null
+          primary_theme: string | null
+          replication_potential: string | null
+          saves_multiplier: number | null
+          score_delta: number | null
+          shares_multiplier: number | null
+          total_saves: number | null
+          total_shares: number | null
+          year: number | null
+        }
+        Relationships: []
+      }
+      v_post_intelligence_candidates: {
+        Row: {
+          archive_coverage_pct: number | null
+          archive_year_sample_size: number | null
+          days_since_posted: number | null
+          era_index_saves: number | null
+          era_index_shares: number | null
+          format_pattern: string | null
+          format_sample_size: number | null
+          media_type: string | null
+          performance_score: number | null
+          post_id: string | null
+          posted_at: string | null
+          primary_theme: string | null
+          reason_code: string | null
+          replication_potential: string | null
+          saves_multiplier: number | null
+          score_delta: number | null
+          shares_multiplier: number | null
+          type: Database["public"]["Enums"]["content_recommendation_type"] | null
+        }
+        Relationships: []
+      }
       v_mart_benchmark_peer_percentile: {
         Row: {
           account_count: number | null
