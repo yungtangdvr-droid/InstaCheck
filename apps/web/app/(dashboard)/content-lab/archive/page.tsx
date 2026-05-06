@@ -9,6 +9,8 @@ import {
   getArchiveCursor,
   type ArchiveUiState,
 } from '@/lib/meta/queries/archive-status'
+import { getDataHealthSnapshot } from '@/lib/meta/queries/data-health'
+import { DataHealthBlock } from '@/components/archive/DataHealthBlock'
 
 // Read-only surface for the Archive Pattern Library V1 backfill.
 // Renders counters and the cursor row state. No buttons, no forms —
@@ -21,9 +23,10 @@ const NF = new Intl.NumberFormat('fr-FR')
 export default async function ArchiveStatusPage() {
   const supabase = await createServerSupabaseClient()
 
-  const [counts, cursor] = await Promise.all([
+  const [counts, cursor, dataHealth] = await Promise.all([
     getArchiveStatusCounts(supabase),
     getArchiveCursor(supabase),
+    getDataHealthSnapshot(supabase),
   ])
 
   const indexedShare =
@@ -60,6 +63,8 @@ export default async function ArchiveStatusPage() {
           </>
         }
       />
+
+      <DataHealthBlock snapshot={dataHealth} />
 
       <section className="space-y-3">
         <SectionHeader
