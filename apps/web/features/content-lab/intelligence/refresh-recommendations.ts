@@ -6,9 +6,12 @@ import { isReasonCode } from './reason-codes'
 
 type Supabase = SupabaseClient<Database>
 
+type TSignalStrength = Database['public']['Enums']['content_recommendation_signal_strength']
+
 // Hard cap on candidate rows fetched in one refresh. The candidate view is
-// already filtered by score / sample / coverage gates, so volume is small in
-// practice; the cap exists only as a safety net.
+// already filtered by score / sample / coverage / confidence gates (V2 added a
+// confidence >= 50 hard gate in migration 0019), so volume is small in practice;
+// the cap exists only as a safety net.
 const CANDIDATE_FETCH_CAP = 500
 
 export type TRefreshSummary = {
@@ -16,6 +19,23 @@ export type TRefreshSummary = {
   inserted:          number
   skippedDuplicate:  number
   skippedInvalid:    number
+}
+
+const VALID_SIGNAL_STRENGTHS: ReadonlySet<TSignalStrength> = new Set([
+  'weak',
+  'moderate',
+  'strong',
+])
+
+function isSignalStrength(v: unknown): v is TSignalStrength {
+  return typeof v === 'string' && VALID_SIGNAL_STRENGTHS.has(v as TSignalStrength)
+}
+
+function clampConfidence(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  if (n < 0)   return 0
+  if (n > 100) return 100
+  return Math.round(n)
 }
 
 /**
@@ -50,7 +70,7 @@ export async function refreshContentRecommendations(
 
   const { data: candidates, error } = await supabase
     .from('v_post_intelligence_candidates')
-    .select('post_id, type, reason_code, media_type, performance_score, score_delta, saves_multiplier, shares_multiplier, era_index_saves, era_index_shares, primary_theme, format_pattern, days_since_posted')
+    .select('post_id, type, reason_code, media_type, performance_score, score_delta, saves_multiplier, shares_multiplier, era_index_saves, era_index_shares, primary_theme, format_pattern, days_since_posted, confidence, signal_strength')
     .limit(CANDIDATE_FETCH_CAP)
 
   if (error) {
@@ -115,12 +135,27 @@ export async function refreshContentRecommendations(
       daysSincePosted:   c.days_since_posted == null ? null : Number(c.days_since_posted),
     }
 
+    // The candidate view enforces confidence >= 50 in SQL (migration 0019).
+    // We re-clamp defensively here so an unexpectedly missing value never
+    // produces a CHECK violation against
+    // content_recommendations_auto_has_quality_chk in migration 0020.
+    const confidence: number =
+      c.confidence == null ? 0 : clampConfidence(Number(c.confidence))
+    const signalStrength: TSignalStrength = isSignalStrength(c.signal_strength)
+      ? c.signal_strength
+      : confidence >= 75 ? 'strong'
+      : confidence >= 50 ? 'moderate'
+      : 'weak'
+
     toInsert.push({
-      post_id:     c.post_id,
-      type:        c.type as ContentRecommendationType,
-      reason:      buildReason(ctx),
-      source:      'auto',
-      reason_code: c.reason_code,
+      post_id:         c.post_id,
+      type:            c.type as ContentRecommendationType,
+      reason:          buildReason(ctx),
+      source:          'auto',
+      reason_code:     c.reason_code,
+      confidence,
+      signal_strength: signalStrength,
+      generated_at:    new Date().toISOString(),
     })
     // Add to the in-memory key set so a second candidate row with the same
     // identity inside this batch (rare but possible) cannot duplicate-insert.
