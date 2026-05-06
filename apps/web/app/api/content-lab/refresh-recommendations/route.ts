@@ -1,9 +1,10 @@
 // Authenticated POST route the n8n `scoring-refresh` workflow calls after
 // the dbt run. Reads v_post_intelligence_candidates, generates French
 // sentences via build-reason.ts, and INSERTs new content_recommendations
-// rows when no identical (post_id, type, reason) row exists in the last
-// DEDUPE_DAYS days. Never deletes, never updates existing rows. Mirrors
-// the auth + automation_runs logging pattern of /api/webhooks/n8n.
+// rows when no auto row already exists for the (post_id, type, reason_code)
+// triple. Never deletes, never updates existing rows. Manual rows are
+// untouched. Mirrors the auth + automation_runs logging pattern of
+// /api/webhooks/n8n.
 
 import { type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ ok: true, ...summary })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown_error'
-    console.error('[POST /api/content/refresh-recommendations]', message)
+    console.error('[POST /api/content-lab/refresh-recommendations]', message)
     await logAutomationRun(
       supabase,
       AUTOMATION_NAME,

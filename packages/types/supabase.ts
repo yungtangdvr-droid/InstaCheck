@@ -524,6 +524,8 @@ export type Database = {
           id: string
           post_id: string
           reason: string
+          reason_code: string | null
+          source: Database["public"]["Enums"]["content_recommendation_source"]
           type: Database["public"]["Enums"]["content_recommendation_type"]
         }
         Insert: {
@@ -531,6 +533,8 @@ export type Database = {
           id?: string
           post_id: string
           reason: string
+          reason_code?: string | null
+          source?: Database["public"]["Enums"]["content_recommendation_source"]
           type: Database["public"]["Enums"]["content_recommendation_type"]
         }
         Update: {
@@ -538,6 +542,8 @@ export type Database = {
           id?: string
           post_id?: string
           reason?: string
+          reason_code?: string | null
+          source?: Database["public"]["Enums"]["content_recommendation_source"]
           type?: Database["public"]["Enums"]["content_recommendation_type"]
         }
         Relationships: [
@@ -2109,6 +2115,7 @@ export type Database = {
       brand_status: "cold" | "warm" | "intro" | "active"
       company_type: "brand" | "agency"
       content_analysis_status: "pending" | "completed" | "failed" | "skipped"
+      content_recommendation_source: "manual" | "auto"
       content_recommendation_type: "replicate" | "adapt" | "drop"
       deal_stage:
         | "target_identified"
@@ -2290,6 +2297,7 @@ export const Constants = {
       brand_status: ["cold", "warm", "intro", "active"],
       company_type: ["brand", "agency"],
       content_analysis_status: ["pending", "completed", "failed", "skipped"],
+      content_recommendation_source: ["manual", "auto"],
       content_recommendation_type: ["replicate", "adapt", "drop"],
       deal_stage: [
         "target_identified",

@@ -11,12 +11,6 @@ type Supabase = SupabaseClient<Database>
 // practice; the cap exists only as a safety net.
 const CANDIDATE_FETCH_CAP = 500
 
-// Dedupe horizon. The writer skips inserting a row when an existing
-// `content_recommendations` row with the same (post_id, type, reason) was
-// created within the last DEDUPE_DAYS days. This is the only mechanism used
-// to prevent duplicates — there is no DELETE, no UPDATE.
-const DEDUPE_DAYS = 14
-
 export type TRefreshSummary = {
   candidatesFetched: number
   inserted:          number
@@ -25,12 +19,24 @@ export type TRefreshSummary = {
 }
 
 /**
- * Read v_post_intelligence_candidates, build a French sentence per row,
- * and INSERT into content_recommendations only when no identical row
- * (same post_id, same type, same reason) exists within the last
- * DEDUPE_DAYS days. Never deletes, never updates existing rows. Manual
- * recommendations from `upsertRecommendation` are untouched because their
- * reason text differs from the deterministic auto-generated sentences.
+ * Read v_post_intelligence_candidates, build a French sentence per row, and
+ * INSERT into content_recommendations only when no auto row already exists
+ * for the (post_id, type, reason_code) triple.
+ *
+ * Idempotency strategy
+ * --------------------
+ * The dedupe identity is `(source='auto', post_id, type, reason_code)`,
+ * NOT the formatted reason text. Reason text is sensitive to multiplier
+ * drift as the archive backfill lands new metrics — using it as a key
+ * would re-emit a row every cron run for the same logical signal.
+ *
+ * Manual rows (`source='manual'`, written by the existing
+ * `upsertRecommendation` server action) are entirely outside this index:
+ * they are read past, never updated, never deleted. Migration 0018 adds
+ * a partial unique index that enforces this in the database as a final
+ * safety net even if two workers race.
+ *
+ * Never deletes, never updates existing rows.
  */
 export async function refreshContentRecommendations(
   supabase: Supabase,
@@ -55,16 +61,16 @@ export async function refreshContentRecommendations(
   summary.candidatesFetched = rows.length
   if (rows.length === 0) return summary
 
-  const since = new Date(Date.now() - DEDUPE_DAYS * 24 * 3600 * 1000).toISOString()
   const postIds = Array.from(new Set(rows.map(r => r.post_id).filter((p): p is string => !!p)))
 
-  // Pull every recent recommendation row for the affected posts in one round
-  // trip. `(post_id, type, reason)` is the dedupe key built locally below.
+  // One round trip to fetch every existing AUTO recommendation across the
+  // affected posts. We never compare against manual rows — manual entries
+  // remain authoritative regardless of what the candidate view emits.
   const { data: existingRows, error: existingErr } = await supabase
     .from('content_recommendations')
-    .select('post_id, type, reason, created_at')
+    .select('post_id, type, reason_code, source')
     .in('post_id', postIds)
-    .gte('created_at', since)
+    .eq('source', 'auto')
 
   if (existingErr) {
     throw new Error(`content_recommendations dedupe read failed: ${existingErr.message}`)
@@ -72,7 +78,8 @@ export async function refreshContentRecommendations(
 
   const existingKeys = new Set<string>()
   for (const r of existingRows ?? []) {
-    existingKeys.add(`${r.post_id}::${r.type}::${r.reason}`)
+    if (!r.reason_code) continue
+    existingKeys.add(`${r.post_id}::${r.type}::${r.reason_code}`)
   }
 
   type Insert = Database['public']['Tables']['content_recommendations']['Insert']
@@ -85,6 +92,12 @@ export async function refreshContentRecommendations(
     }
     if (!isReasonCode(c.reason_code)) {
       summary.skippedInvalid += 1
+      continue
+    }
+
+    const dedupeKey = `${c.post_id}::${c.type}::${c.reason_code}`
+    if (existingKeys.has(dedupeKey)) {
+      summary.skippedDuplicate += 1
       continue
     }
 
@@ -102,23 +115,16 @@ export async function refreshContentRecommendations(
       daysSincePosted:   c.days_since_posted == null ? null : Number(c.days_since_posted),
     }
 
-    const reason = buildReason(ctx)
-    const key    = `${c.post_id}::${c.type}::${reason}`
-
-    if (existingKeys.has(key)) {
-      summary.skippedDuplicate += 1
-      continue
-    }
-
     toInsert.push({
-      post_id: c.post_id,
-      type:    c.type as ContentRecommendationType,
-      reason,
+      post_id:     c.post_id,
+      type:        c.type as ContentRecommendationType,
+      reason:      buildReason(ctx),
+      source:      'auto',
+      reason_code: c.reason_code,
     })
     // Add to the in-memory key set so a second candidate row with the same
-    // generated sentence inside this batch (rare but possible) does not
-    // produce a duplicate insert.
-    existingKeys.add(key)
+    // identity inside this batch (rare but possible) cannot duplicate-insert.
+    existingKeys.add(dedupeKey)
   }
 
   if (toInsert.length === 0) return summary
@@ -128,6 +134,14 @@ export async function refreshContentRecommendations(
     .insert(toInsert)
 
   if (insertErr) {
+    // 23505 = unique_violation. The partial unique index from migration 0018
+    // enforces (source='auto', post_id, type, reason_code) at the DB level;
+    // a race between two cron runs would land here. Treat as a soft skip
+    // rather than a hard failure so the route still returns a useful summary.
+    if (insertErr.code === '23505') {
+      summary.skippedDuplicate += toInsert.length
+      return summary
+    }
     throw new Error(`content_recommendations insert failed: ${insertErr.message}`)
   }
 

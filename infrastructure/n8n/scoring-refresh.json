@@ -56,7 +56,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CREATOR_HUB_URL }}/api/content/refresh-recommendations",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/content-lab/refresh-recommendations",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -73,7 +73,7 @@
         }
       },
       "id": "http-refresh-recos",
-      "name": "POST /api/content/refresh-recommendations",
+      "name": "POST /api/content-lab/refresh-recommendations",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [900, 300]
@@ -87,7 +87,7 @@
       "main": [[{ "node": "POST /api/webhooks/n8n", "type": "main", "index": 0 }]]
     },
     "POST /api/webhooks/n8n": {
-      "main": [[{ "node": "POST /api/content/refresh-recommendations", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "POST /api/content-lab/refresh-recommendations", "type": "main", "index": 0 }]]
     }
   },
   "settings": {

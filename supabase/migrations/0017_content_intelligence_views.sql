@@ -219,7 +219,8 @@ grant select on public.v_post_intelligence_features to authenticated, service_ro
 --   in_last_90d
 --   AND performance_score <= 30 AND score_delta <= -15
 --   AND format_sample_size >= 5
---   AND days_since_posted <= 60   -- only flag fresh underperformers
+--   AND days_since_posted BETWEEN 30 AND 90  -- mature enough to judge,
+--                                            -- still recent enough to act on
 --
 -- Each row exposes the columns the TS reason builder consumes —
 -- it does NOT generate the French sentence in SQL. This keeps the
@@ -328,6 +329,10 @@ where f.in_last_90d = true
   and f.performance_score   <= 30
   and f.score_delta         <= -15
   and f.format_sample_size  >= 5
-  and f.days_since_posted   <= 60;
+  -- Post must be mature enough that low metrics are not just "too fresh"
+  -- (Instagram engagement keeps accumulating for ~3-4 weeks). Capped at 90
+  -- days so we never re-litigate ancient archive posts; this also keeps the
+  -- bound consistent with the in_last_90d gate above.
+  and f.days_since_posted between 30 and 90;
 
 grant select on public.v_post_intelligence_candidates to authenticated, service_role;
