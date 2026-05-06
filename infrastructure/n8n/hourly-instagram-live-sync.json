@@ -1,5 +1,5 @@
 {
-  "name": "archive-backfill-cron",
+  "name": "hourly-instagram-live-sync",
   "nodes": [
     {
       "parameters": {
@@ -7,13 +7,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "22 */6 * * *"
+              "expression": "7 * * * *"
             }
           ]
         }
       },
       "id": "cron-trigger",
-      "name": "CRON :22 every 6h",
+      "name": "CRON :07 every hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [240, 300]
@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CREATOR_HUB_URL }}/api/meta/archive/backfill?pageBudget=3",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/meta/sync",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -38,7 +38,7 @@
           ]
         },
         "options": {
-          "timeout": 120000,
+          "timeout": 300000,
           "response": {
             "response": {
               "fullResponse": true
@@ -46,11 +46,15 @@
           }
         }
       },
-      "id": "http-archive-backfill",
-      "name": "POST /api/meta/archive/backfill (every 6h)",
+      "id": "http-sync",
+      "name": "POST /api/meta/sync",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [460, 300]
+      "position": [460, 300],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 60000,
+      "continueOnFail": false
     },
     {
       "parameters": {
@@ -72,14 +76,14 @@
         }
       },
       "id": "check-success",
-      "name": "Backfill OK ?",
+      "name": "Sync OK ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [680, 300]
     },
     {
       "parameters": {
-        "jsCode": "const result = $input.first().json.body.result;\nconst summary = [\n  `✅ Archive backfill tick`,\n  `Status: ${result.status}`,\n  `Stopped: ${result.stoppedReason}`,\n  `Pages: ${result.pagesThisRun}`,\n  `Fetched: ${result.fetchedThisRun} | Upserted: ${result.upsertedThisRun} | Skipped: ${result.skippedThisRun}`,\n  `Stale cleared: ${result.staleCleared}`,\n  `Cumulative upserted: ${result.totals.upsertedCount}`\n].join('\\n');\n\nreturn [{ json: { summary, result } }];"
+        "jsCode": "const result = $input.first().json.body.result;\nconst summary = [\n  `✅ Hourly Instagram live sync OK`,\n  `Compte: @${result.account.username}`,\n  `Médias: ${result.media.total} (${result.media.created} créés, ${result.media.updated} mis à jour)`,\n  `Insights: ${result.insights.length} médias traités`,\n  `Durée: ${(result.durationMs / 1000).toFixed(1)}s`\n].join('\\n');\n\nreturn [{ json: { summary, result } }];"
       },
       "id": "format-success",
       "name": "Format success",
@@ -89,7 +93,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const statusCode = $input.first().json.statusCode;\nconst error = $input.first().json.body?.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Archive backfill failed: ${error}` } }];"
+        "jsCode": "const statusCode = $input.first().json.statusCode;\nconst error = $input.first().json.body?.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Hourly Instagram live sync failed: ${error}` } }];"
       },
       "id": "format-error",
       "name": "Format error",
@@ -99,17 +103,17 @@
     }
   ],
   "connections": {
-    "CRON :22 every 6h": {
+    "CRON :07 every hour": {
       "main": [
-        [{ "node": "POST /api/meta/archive/backfill (every 6h)", "type": "main", "index": 0 }]
+        [{ "node": "POST /api/meta/sync", "type": "main", "index": 0 }]
       ]
     },
-    "POST /api/meta/archive/backfill (every 6h)": {
+    "POST /api/meta/sync": {
       "main": [
-        [{ "node": "Backfill OK ?", "type": "main", "index": 0 }]
+        [{ "node": "Sync OK ?", "type": "main", "index": 0 }]
       ]
     },
-    "Backfill OK ?": {
+    "Sync OK ?": {
       "main": [
         [{ "node": "Format success", "type": "main", "index": 0 }],
         [{ "node": "Format error",   "type": "main", "index": 0 }]
@@ -126,14 +130,14 @@
   "meta": {
     "templateCredsSetupCompleted": false,
     "instanceId": "creator-hub",
-    "notes": "Conservative tick (pageBudget=3) for the metadata-only archive backfill. Uses N8N_API_KEY shared with /api/meta/sync. Endpoint is idempotent and self-locking. Cadence is intentionally conservative — every 6 hours at :22 — so that the hourly live sync (hourly-instagram-live-sync.json @ :07) and the archive backfill never share a minute and the archive cannot starve fresh/live insights. This workflow is import-only and remains INACTIVE until enabled manually in n8n. Do NOT increase cadence in this branch; if more throughput is needed, raise pageBudget rather than frequency."
+    "notes": "Hourly live Instagram sync. Calls POST /api/meta/sync; that route runs the bounded live sync only (recent media via META_SYNC_MEDIA_LIMIT, insights window via META_SYNC_INSIGHTS_DAYS). It does NOT touch archive cursors — archive backfill stays in archive-backfill-cron.json. Cron is :07 every hour to stagger off any archive workflow that fires on round minutes. The app is the cockpit; this workflow is infrastructure only — no body parameters are sent because the route does not honor any. Reuses N8N_API_KEY shared with /api/meta/sync. Import-only and remains INACTIVE until enabled manually in n8n. Replaces daily-instagram-sync.json (renamed to .deprecated.json)."
   },
   "tags": [
-    { "name": "instagram",        "createdAt": "2026-05-02" },
-    { "name": "archive-backfill", "createdAt": "2026-05-02" }
+    { "name": "instagram",  "createdAt": "2026-05-06" },
+    { "name": "live-sync",  "createdAt": "2026-05-06" }
   ],
   "triggerCount": 1,
-  "updatedAt": "2026-05-02T00:00:00.000Z",
+  "updatedAt": "2026-05-06T00:00:00.000Z",
   "versionId": "1",
   "active": false
 }
