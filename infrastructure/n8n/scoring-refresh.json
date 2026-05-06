@@ -52,6 +52,31 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/content-lab/refresh-recommendations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization",  "value": "=Bearer {{ $env.N8N_API_KEY }}" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"triggeredAt\": \"{{ $now.toISO() }}\"\n}",
+        "options": {
+          "timeout": 60000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "http-refresh-recos",
+      "name": "POST /api/content-lab/refresh-recommendations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300]
     }
   ],
   "connections": {
@@ -60,6 +85,9 @@
     },
     "dbt run + reapply v_mart_* views": {
       "main": [[{ "node": "POST /api/webhooks/n8n", "type": "main", "index": 0 }]]
+    },
+    "POST /api/webhooks/n8n": {
+      "main": [[{ "node": "POST /api/content-lab/refresh-recommendations", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
