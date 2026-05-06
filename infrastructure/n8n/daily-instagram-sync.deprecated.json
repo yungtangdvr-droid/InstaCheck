@@ -125,10 +125,15 @@
   "staticData": null,
   "meta": {
     "templateCredsSetupCompleted": false,
-    "instanceId": "creator-hub"
+    "instanceId": "creator-hub",
+    "notes": "DEPRECATED. Replaced by hourly-instagram-live-sync.json (cron :07 every hour). Kept on disk for history and rollback only — do NOT import this file alongside the hourly workflow, both share the automation_name 'daily-instagram-sync' in automation_runs and would double-log. IMPORTANT: renaming this file in the repo does NOT deactivate any workflow already imported into n8n; if a 'daily-instagram-sync' workflow exists in the n8n instance, the operator must disable or delete it manually before activating the hourly workflow."
   },
-  "tags": [{ "name": "instagram", "createdAt": "2026-04-20" }],
+  "tags": [
+    { "name": "instagram",  "createdAt": "2026-04-20" },
+    { "name": "deprecated", "createdAt": "2026-05-06" }
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-04-20T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "1",
+  "active": false
 }
