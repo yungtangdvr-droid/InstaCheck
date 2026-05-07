@@ -520,29 +520,38 @@ export type Database = {
       }
       content_recommendations: {
         Row: {
+          confidence: number | null
           created_at: string
+          generated_at: string | null
           id: string
           post_id: string
           reason: string
           reason_code: string | null
+          signal_strength: Database["public"]["Enums"]["content_recommendation_signal_strength"] | null
           source: Database["public"]["Enums"]["content_recommendation_source"]
           type: Database["public"]["Enums"]["content_recommendation_type"]
         }
         Insert: {
+          confidence?: number | null
           created_at?: string
+          generated_at?: string | null
           id?: string
           post_id: string
           reason: string
           reason_code?: string | null
+          signal_strength?: Database["public"]["Enums"]["content_recommendation_signal_strength"] | null
           source?: Database["public"]["Enums"]["content_recommendation_source"]
           type: Database["public"]["Enums"]["content_recommendation_type"]
         }
         Update: {
+          confidence?: number | null
           created_at?: string
+          generated_at?: string | null
           id?: string
           post_id?: string
           reason?: string
           reason_code?: string | null
+          signal_strength?: Database["public"]["Enums"]["content_recommendation_signal_strength"] | null
           source?: Database["public"]["Enums"]["content_recommendation_source"]
           type?: Database["public"]["Enums"]["content_recommendation_type"]
         }
@@ -1922,6 +1931,7 @@ export type Database = {
         Row: {
           archive_coverage_pct: number | null
           archive_year_sample_size: number | null
+          confidence: number | null
           days_since_posted: number | null
           era_index_saves: number | null
           era_index_shares: number | null
@@ -1937,6 +1947,7 @@ export type Database = {
           saves_multiplier: number | null
           score_delta: number | null
           shares_multiplier: number | null
+          signal_strength: string | null
           type: Database["public"]["Enums"]["content_recommendation_type"] | null
         }
         Relationships: []
@@ -2115,6 +2126,7 @@ export type Database = {
       brand_status: "cold" | "warm" | "intro" | "active"
       company_type: "brand" | "agency"
       content_analysis_status: "pending" | "completed" | "failed" | "skipped"
+      content_recommendation_signal_strength: "weak" | "moderate" | "strong"
       content_recommendation_source: "manual" | "auto"
       content_recommendation_type: "replicate" | "adapt" | "drop"
       deal_stage:
@@ -2297,6 +2309,7 @@ export const Constants = {
       brand_status: ["cold", "warm", "intro", "active"],
       company_type: ["brand", "agency"],
       content_analysis_status: ["pending", "completed", "failed", "skipped"],
+      content_recommendation_signal_strength: ["weak", "moderate", "strong"],
       content_recommendation_source: ["manual", "auto"],
       content_recommendation_type: ["replicate", "adapt", "drop"],
       deal_stage: [
