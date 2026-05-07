@@ -1,7 +1,28 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Machine-to-machine endpoints that authenticate themselves with
+// Authorization: Bearer N8N_API_KEY (or webhook signatures). They must
+// NOT be redirected to /login by the supabase session check, otherwise
+// n8n cron ticks see a 307 instead of reaching the route handler.
+const MACHINE_API_ROUTES: ReadonlySet<string> = new Set([
+  '/api/meta/sync',
+  '/api/meta/sync-now',
+  '/api/meta/archive/backfill',
+  '/api/meta/archive/backfill-windowed',
+  '/api/meta/archive/metrics-backfill',
+])
+
+function isMachineApiRoute(pathname: string): boolean {
+  if (pathname.startsWith('/api/webhooks/')) return true
+  return MACHINE_API_ROUTES.has(pathname)
+}
+
 export async function middleware(request: NextRequest) {
+  if (isMachineApiRoute(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
