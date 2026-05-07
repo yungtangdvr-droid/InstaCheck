@@ -1,0 +1,139 @@
+{
+  "name": "archive-metrics-backfill-cron",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "12,42 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON :12 and :42 every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/meta/archive/metrics-backfill?pageBudget=50&timeBudgetMs=60000",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "http-archive-metrics-backfill",
+      "name": "POST /api/meta/archive/metrics-backfill (every 30m)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true
+          },
+          "conditions": [
+            {
+              "id": "check-ok",
+              "leftValue": "={{ $json.body.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Metrics backfill OK ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json.body.result;\nconst classCounts = result.classCounts || {};\nconst classSummary = Object.entries(classCounts)\n  .map(([k, v]) => `${k}=${v}`)\n  .join(' ');\nconst summary = [\n  `✅ Archive metrics backfill tick`,\n  `Status: ${result.status}`,\n  `Stopped: ${result.stoppedReason}`,\n  `DryRun: ${result.dryRun}`,\n  `Processed: ${result.processedThisRun} | Synced: ${result.syncedThisRun} | Skipped: ${result.skippedThisRun} | Error: ${result.errorThisRun}`,\n  `Candidates scanned: ${result.candidatesScanned}`,\n  `Class counts: ${classSummary}`,\n  `Stale cleared: ${result.staleCleared}`,\n  `Cumulative synced (fetched_count): ${result.totals.fetchedCount}`,\n  `Cumulative skipped (upserted_count): ${result.totals.upsertedCount}`\n].join('\\n');\n\nreturn [{ json: { summary, result } }];"
+      },
+      "id": "format-success",
+      "name": "Format success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const statusCode = $input.first().json.statusCode;\nconst error = $input.first().json.body?.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Archive metrics backfill failed: ${error}` } }];"
+      },
+      "id": "format-error",
+      "name": "Format error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "CRON :12 and :42 every hour": {
+      "main": [
+        [{ "node": "POST /api/meta/archive/metrics-backfill (every 30m)", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST /api/meta/archive/metrics-backfill (every 30m)": {
+      "main": [
+        [{ "node": "Metrics backfill OK ?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Metrics backfill OK ?": {
+      "main": [
+        [{ "node": "Format success", "type": "main", "index": 0 }],
+        [{ "node": "Format error",   "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "creator-hub",
+    "notes": "Conservative tick (pageBudget=50, timeBudgetMs=60000) for the historical /insights backfill. Endpoint is /api/meta/archive/metrics-backfill. Distinct from the metadata-only archive backfill (archive-backfill-cron.json @ :22 every 6h) — both jobs use independent ingestion_cursors rows and independent automation_runs names. Cadence is every 30 minutes at :12 and :42 to stay clear of the live sync (:07 in hourly-instagram-live-sync.json) and the metadata backfill (:22 in archive-backfill-cron.json). Workflow imports as INACTIVE; activate manually only after a successful manual dryRun call. Token reuses N8N_API_KEY shared with /api/meta/sync."
+  },
+  "tags": [
+    { "name": "instagram",                "createdAt": "2026-05-07" },
+    { "name": "archive-metrics-backfill", "createdAt": "2026-05-07" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-07T00:00:00.000Z",
+  "versionId": "1",
+  "active": false
+}
