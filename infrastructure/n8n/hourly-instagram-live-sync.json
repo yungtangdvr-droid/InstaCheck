@@ -100,6 +100,82 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/content/analyze-new-cron",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "http-analyze",
+      "name": "POST /api/content/analyze-new-cron",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 200],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 60000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/content-lab/refresh-recommendations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "http-refresh-reco",
+      "name": "POST /api/content-lab/refresh-recommendations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 200],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000,
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -118,6 +194,16 @@
         [{ "node": "Format success", "type": "main", "index": 0 }],
         [{ "node": "Format error",   "type": "main", "index": 0 }]
       ]
+    },
+    "Format success": {
+      "main": [
+        [{ "node": "POST /api/content/analyze-new-cron", "type": "main", "index": 0 }]
+      ]
+    },
+    "POST /api/content/analyze-new-cron": {
+      "main": [
+        [{ "node": "POST /api/content-lab/refresh-recommendations", "type": "main", "index": 0 }]
+      ]
     }
   },
   "settings": {
@@ -130,7 +216,7 @@
   "meta": {
     "templateCredsSetupCompleted": false,
     "instanceId": "creator-hub",
-    "notes": "Hourly live Instagram sync. Calls POST /api/meta/sync; that route runs the bounded live sync only (recent media via META_SYNC_MEDIA_LIMIT, insights window via META_SYNC_INSIGHTS_DAYS). It does NOT touch archive cursors — archive backfill stays in archive-backfill-cron.json. Cron is :07 every hour to stagger off any archive workflow that fires on round minutes. The app is the cockpit; this workflow is infrastructure only — no body parameters are sent because the route does not honor any. Reuses N8N_API_KEY shared with /api/meta/sync. Import-only and remains INACTIVE until enabled manually in n8n. Replaces daily-instagram-sync.json (renamed to .deprecated.json)."
+    "notes": "Hourly live Instagram sync. Calls POST /api/meta/sync; that route runs the bounded live sync only (recent media via META_SYNC_MEDIA_LIMIT, insights window via META_SYNC_INSIGHTS_DAYS). It does NOT touch archive cursors — archive backfill stays in archive-backfill-cron.json. Cron is :07 every hour to stagger off any archive workflow that fires on round minutes. After a successful sync, the workflow chains: (1) Format success (existing summary, kept unchanged), then (2) POST /api/content/analyze-new-cron to run a small Gemini batch (limit ≤ CONTENT_ANALYSIS_CRON_BATCH_LIMIT, hard-capped at 10) on newly synced posts via the existing runAnalysisBatch({ kind: 'new-only' }) helper — never touches the archive, then (3) POST /api/content-lab/refresh-recommendations to refresh Content Intelligence rows. Both new POST nodes use continueOnFail:true so a Gemini outage or recommendations error never makes the Instagram sync look failed. Reuses N8N_API_KEY shared with /api/meta/sync. Import-only and remains INACTIVE until enabled manually in n8n. Replaces daily-instagram-sync.json (renamed to .deprecated.json)."
   },
   "tags": [
     { "name": "instagram",  "createdAt": "2026-05-06" },
