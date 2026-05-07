@@ -200,15 +200,22 @@ export async function runArchiveMetricsBackfill(
   const classCounts: ArchiveMetricsBackfillResult['classCounts'] = {}
 
   try {
-    // Single eligibility scan per tick. We pull a window large enough
-    // to comfortably yield `pageBudget` un-synced candidates, then
-    // anti-join `post_metrics_daily` and `post_archive_state` in JS.
-    // Oldest-first: the gap is overwhelmingly historical, and recent
-    // posts already have metrics from the hourly live sync.
-    const candidates = await selectCandidates(supabase, pageBudget)
+    // Bounded scanning eligibility loop. Walks `posts` in
+    // `(posted_at, id)` keyset windows, oldest-first, anti-joining
+    // each window against `post_metrics_daily` and against
+    // `post_archive_state.metrics_status IN ('synced','skipped')`.
+    // Returns up to `pageBudget` candidates; only flags `exhausted`
+    // when scanning has genuinely reached the tail of the table, NOT
+    // when the first window happens to be fully terminal. This is
+    // what prevents the cursor from prematurely flipping to
+    // `complete` after the oldest few hundred posts get processed.
+    // Oldest-first because the gap is overwhelmingly historical, and
+    // recent posts already have metrics from the hourly live sync.
+    const selection = await selectCandidates(supabase, pageBudget)
+    const candidates = selection.candidates
     candidatesScanned = candidates.length
 
-    if (candidates.length === 0) {
+    if (candidates.length === 0 && selection.exhausted) {
       reachedEndOfBacklog = true
       stoppedReason = 'end_of_backlog'
     }
@@ -500,64 +507,143 @@ async function upsertArchiveState(
   if (error) throw new Error(`post_archive_state upsert ${postId}: ${error.message}`)
 }
 
-// Eligibility selection. Returns up to `pageBudget` posts, oldest
-// first, that have NO `post_metrics_daily` row AND whose
-// `post_archive_state.metrics_status` is not terminal
-// (`synced` / `skipped`). Posts with no archive_state row at all
-// are eligible.
+// Per-window scan size. Tuned so each window's anti-join lookups
+// stay cheap (5 chunks of 100 IDs, twice = 10 round trips) while
+// still making meaningful per-window progress.
+const SCAN_WINDOW_SIZE = 500
+
+// Hard ceiling on number of windows scanned per call. With
+// SCAN_WINDOW_SIZE=500 this caps a single eligibility scan at
+// 25,000 posts — more than the current backlog, so in practice the
+// loop always exits via real exhaustion (partial window or empty
+// result), not via this safety cap. Kept as a defense against an
+// unexpectedly huge `posts` table.
+const MAX_SCAN_WINDOWS = 50
+
+type SelectionResult = {
+  candidates: CandidatePost[]
+  exhausted:  boolean
+}
+
+// Eligibility selection. Walks `posts` in `(posted_at ASC, id ASC)`
+// keyset windows. For each window, anti-joins against
+// `post_metrics_daily` (post already has metrics) and against
+// `post_archive_state.metrics_status IN ('synced','skipped')` (post
+// is in a terminal status). Continues to the next window until
+// either `pageBudget` candidates have been collected or the scan
+// has genuinely reached the end of the table.
+//
+// `exhausted` is the critical signal: it is true ONLY when the
+// scan has walked past the last row of `posts`. A first window
+// that happens to be fully terminal (because we've already
+// processed the oldest N posts) does NOT set `exhausted` — the
+// loop continues to subsequent windows. The caller flips the
+// cursor to `complete` only when `candidates.length === 0 &&
+// exhausted === true`, so the worker cannot prematurely terminate
+// while later posts still need metrics.
 async function selectCandidates(
   supabase:   SupabaseClient,
   pageBudget: number,
-): Promise<CandidatePost[]> {
-  // Pull a generous candidate window. With ~16k missing-metrics posts
-  // and pageBudget defaulting to 50, a 5x window is enough to keep
-  // selection cheap on every tick. Order by oldest-first because
-  // (a) the gap is historical, and (b) recent posts already have
-  // metrics from the live sync.
-  const candidateLimit = Math.min(pageBudget * 5, 1000)
-  const { data: posts, error: postsErr } = await supabase
-    .from('posts')
-    .select('id, media_id, media_type, posted_at')
-    .order('posted_at', { ascending: true, nullsFirst: false })
-    .limit(candidateLimit)
-  if (postsErr) throw new Error(`posts select: ${postsErr.message}`)
-  if (!posts || posts.length === 0) return []
-
-  const ids = posts.map((p) => p.id)
-
-  const haveMetrics  = await chunkedIdSet(ids, async (chunk) => {
-    const { data, error } = await supabase
-      .from('post_metrics_daily')
-      .select('post_id')
-      .in('post_id', chunk)
-    if (error) throw new Error(`post_metrics_daily lookup: ${error.message}`)
-    return (data ?? []).map((r) => r.post_id).filter((v): v is string => typeof v === 'string')
-  })
-
-  const terminalStateIds = await chunkedIdSet(ids, async (chunk) => {
-    const { data, error } = await supabase
-      .from('post_archive_state')
-      .select('post_id, metrics_status')
-      .in('post_id', chunk)
-      .in('metrics_status', ['synced', 'skipped'])
-    if (error) throw new Error(`post_archive_state lookup: ${error.message}`)
-    return (data ?? []).map((r) => r.post_id)
-  })
-
+): Promise<SelectionResult> {
   const filtered: CandidatePost[] = []
-  for (const p of posts) {
-    if (haveMetrics.has(p.id)) continue
-    if (terminalStateIds.has(p.id)) continue
-    filtered.push({
-      postId:    p.id,
-      mediaId:   p.media_id,
-      mediaType: p.media_type ?? null,
-      postedAt:  p.posted_at,
+  const seenIds  = new Set<string>()
+
+  // Compound keyset cursor on (posted_at, id). We use `posted_at`
+  // for the SQL filter (`.gte`) and `id` for the in-JS de-dup of
+  // boundary rows shared between adjacent windows. This keeps
+  // correctness even when many posts share the same `posted_at`
+  // second, without requiring a PostgREST `.or(and(...))` clause.
+  let cursorPostedAt: string | null = null
+  let exhausted = false
+
+  for (let windowIdx = 0; windowIdx < MAX_SCAN_WINDOWS; windowIdx++) {
+    let q = supabase
+      .from('posts')
+      .select('id, media_id, media_type, posted_at')
+      .order('posted_at', { ascending: true, nullsFirst: false })
+      .order('id',        { ascending: true })
+      .limit(SCAN_WINDOW_SIZE)
+    if (cursorPostedAt !== null) {
+      // gte (not gt) so rows tying on posted_at with the previous
+      // window's tail are not skipped. seenIds dedups them in JS.
+      q = q.gte('posted_at', cursorPostedAt)
+    }
+
+    const { data: posts, error } = await q
+    if (error) throw new Error(`posts select: ${error.message}`)
+    if (!posts || posts.length === 0) {
+      exhausted = true
+      break
+    }
+
+    const fresh = posts.filter((p) => !seenIds.has(p.id))
+    if (fresh.length === 0) {
+      // Boundary loop — the entire window is rows already seen at
+      // the previous window's tie boundary. Nothing new to scan.
+      exhausted = true
+      break
+    }
+    for (const p of fresh) seenIds.add(p.id)
+
+    const ids = fresh.map((p) => p.id)
+    const haveMetrics = await chunkedIdSet(ids, async (chunk) => {
+      const { data, error } = await supabase
+        .from('post_metrics_daily')
+        .select('post_id')
+        .in('post_id', chunk)
+      if (error) throw new Error(`post_metrics_daily lookup: ${error.message}`)
+      return (data ?? [])
+        .map((r) => r.post_id)
+        .filter((v): v is string => typeof v === 'string')
     })
-    if (filtered.length >= pageBudget) break
+    const terminalStateIds = await chunkedIdSet(ids, async (chunk) => {
+      const { data, error } = await supabase
+        .from('post_archive_state')
+        .select('post_id, metrics_status')
+        .in('post_id', chunk)
+        .in('metrics_status', ['synced', 'skipped'])
+      if (error) throw new Error(`post_archive_state lookup: ${error.message}`)
+      return (data ?? []).map((r) => r.post_id)
+    })
+
+    for (const p of fresh) {
+      if (haveMetrics.has(p.id)) continue
+      if (terminalStateIds.has(p.id)) continue
+      filtered.push({
+        postId:    p.id,
+        mediaId:   p.media_id,
+        mediaType: p.media_type ?? null,
+        postedAt:  p.posted_at,
+      })
+      if (filtered.length >= pageBudget) break
+    }
+
+    if (filtered.length >= pageBudget) {
+      // Budget filled — leave `exhausted=false` so the caller
+      // keeps the cursor in `idle` for the next tick.
+      break
+    }
+
+    if (posts.length < SCAN_WINDOW_SIZE) {
+      // Partial window: PostgREST returned fewer rows than the
+      // page size, so there is nothing past this window. Genuine
+      // end-of-table.
+      exhausted = true
+      break
+    }
+
+    const lastPost = posts[posts.length - 1]!
+    if (!lastPost.posted_at) {
+      // We are inside the null-posted_at tail (NULLS LAST). The
+      // keyset cursor cannot advance past nulls; treat as
+      // exhausted so we don't loop forever.
+      exhausted = true
+      break
+    }
+    cursorPostedAt = lastPost.posted_at
   }
 
-  return filtered
+  return { candidates: filtered, exhausted }
 }
 
 async function chunkedIdSet(
