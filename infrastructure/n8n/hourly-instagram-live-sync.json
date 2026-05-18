@@ -54,7 +54,7 @@
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 60000,
-      "continueOnFail": false
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -65,7 +65,7 @@
           "conditions": [
             {
               "id": "check-ok",
-              "leftValue": "={{ $json.body.ok }}",
+              "leftValue": "={{ $json.body?.ok === true }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -93,7 +93,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const statusCode = $input.first().json.statusCode;\nconst error = $input.first().json.body?.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Hourly Instagram live sync failed: ${error}` } }];"
+        "jsCode": "const item = $input.first().json;\n// Two failure shapes reach here: (1) an HTTP error caught by continueOnFail\n// on the sync node — { error: '...' }, no body/statusCode; (2) a 2xx whose\n// body.ok is not true. Read both so the summary is always legible.\nconst statusCode = item.statusCode ?? null;\nconst error = item.body?.error ?? item.error ?? 'Unknown error';\nreturn [{ json: { error, statusCode, summary: `❌ Hourly Instagram live sync failed: ${error}` } }];"
       },
       "id": "format-error",
       "name": "Format error",

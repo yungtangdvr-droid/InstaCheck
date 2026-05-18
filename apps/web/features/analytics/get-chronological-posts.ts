@@ -34,7 +34,10 @@ export type TChronologicalPost = {
   caption:          string | null
   permalink:        string | null
   postedAt:         string | null
-  reach:            number
+  // Null when Meta has not yet returned a reach insight for the post
+  // (common on very recent posts where saves/shares arrive first).
+  // Distinct from a real 0 so the UI can render "—" instead of "0".
+  reach:            number | null
   saves:            number
   shares:           number
   // Same circulation score the rest of the app uses, so the chronological
@@ -105,17 +108,21 @@ export async function getChronologicalPosts(
   const formatRateMedians = computeFormatRateMedians(data)
 
   const result: TChronologicalPost[] = data.map((r) => {
-    const reach    = Number(r.total_reach    ?? 0)
+    // Preserve null reach (Meta hasn't returned the insight yet) so the
+    // feed can distinguish "unknown" from a real 0. The scored metrics
+    // stay coerced — they remain coalesced in v_mart_post_performance and
+    // feed the unchanged scoring formula.
+    const reach    = r.total_reach == null ? null : Number(r.total_reach)
     const saves    = Number(r.total_saves    ?? 0)
     const shares   = Number(r.total_shares   ?? 0)
     const comments = Number(r.total_comments ?? 0)
     const likes    = Number(r.total_likes    ?? 0)
     const pv       = r.total_profile_visits == null ? null : Number(r.total_profile_visits)
 
-    // Reach == 0 means the post hasn't accrued distribution data yet (just
-    // synced, or zero reach reported). Skip the score so the UI can render
-    // a neutral "—" rather than a 0/100 that reads as poor performance.
-    const eng = reach > 0
+    // No reach (null = unknown, or a real 0) means the post hasn't accrued
+    // distribution data yet. Skip the score so the UI can render a neutral
+    // "—" rather than a 0/100 that reads as poor performance.
+    const eng = reach != null && reach > 0
       ? computeDistributionScore({
           reach,
           shares,

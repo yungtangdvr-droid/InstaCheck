@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
 
     await supabase.from('automation_runs').insert({
       automation_name: automationName,
-      status:          result.errors.length === 0 ? 'success' : 'failed',
+      // Reaching this point means account + media synced — those steps
+      // throw on failure and divert to the catch path below. Anything in
+      // result.errors is therefore a non-fatal insight/demographics
+      // partial: it is preserved in result_summary.errors and surfaced as
+      // a partial-error banner, not as a failed Meta sync.
+      status:          'success',
       result_summary:  JSON.stringify({
         account:      result.account,
         media:        result.media,
