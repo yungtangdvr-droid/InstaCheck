@@ -156,7 +156,11 @@ export function ChronologicalPostsTable({ posts }: { posts: TChronologicalPost[]
                 )}
               </td>
               <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                {post.reach.toLocaleString('fr-FR')}
+                {post.reach == null ? (
+                  <span title="Reach pas encore renvoyé par Meta">—</span>
+                ) : (
+                  post.reach.toLocaleString('fr-FR')
+                )}
               </td>
               <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                 {post.saves.toLocaleString('fr-FR')}

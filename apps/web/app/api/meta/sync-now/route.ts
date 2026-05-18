@@ -70,7 +70,11 @@ export async function POST(_request: NextRequest) {
 
     await supabase.from('automation_runs').insert({
       automation_name: AUTOMATION_NAME,
-      status:          result.errors.length === 0 ? 'success' : 'failed',
+      // Reaching this point means account + media synced — those steps
+      // throw on failure and divert to the catch path below. Anything in
+      // result.errors is a non-fatal insight/demographics partial, not a
+      // failed Meta sync.
+      status:          'success',
       result_summary:  JSON.stringify({
         account:      result.account,
         media:        result.media,
@@ -83,7 +87,9 @@ export async function POST(_request: NextRequest) {
     })
 
     return Response.json({
-      ok:         result.errors.length === 0,
+      // The Meta sync succeeded (account + media). Partial insight errors
+      // are returned in `errors` for display but do not flip `ok`.
+      ok:         true,
       result: {
         account:      result.account,
         media:        result.media,
