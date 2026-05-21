@@ -21,10 +21,15 @@ import { analyzeWithFallback, type FallbackResult } from './analyze-with-fallbac
 
 // Hard-coded provider for skipped (Meta/media) rows where no provider
 // was actually consulted. Completed/failed rows persist the *actual*
-// provider used (`'gemini' | 'openai'`) via the orchestrator's result.
+// provider used (`'gemini' | 'openai' | 'mistral'`) via the orchestrator's
+// result.
 export const SKIPPED_PROVIDER       = 'gemini'
 export const DEFAULT_MODEL          = 'gemini-2.5-flash'
 export const DEFAULT_OPENAI_MODEL   = 'gpt-4o-mini'
+// Cost-conscious multimodal default for the third fallback. Operators
+// can override with `MISTRAL_MODEL` if their account doesn't have access
+// (e.g. switch to `mistral-medium-2508` or `mistral-large-2512`).
+export const DEFAULT_MISTRAL_MODEL  = 'mistral-small-2506'
 export const POST_DELAY_MS          = 600 // gentle pacing between provider calls
 
 type Supabase = SupabaseClient<Database>
@@ -56,15 +61,16 @@ export type SelectionMode =
     }
 
 export type AnalysisCtx = {
-  geminiKey:               string
-  geminiModel:             string
-  metaToken:               string
-  // Fallback config. `openaiKey` may be null when the fallback is disabled
-  // or no key is configured — the orchestrator treats both as "do not call
-  // OpenAI" and returns the Gemini result as-is.
-  openaiKey:               string | null
-  openaiModel:             string
-  openaiFallbackEnabled:   boolean
+  geminiKey:    string
+  geminiModel:  string
+  metaToken:    string
+  // Fallback config. A `null` key for either provider means "skip this
+  // hop in the chain" — the orchestrator only contacts a provider when
+  // its key is non-null and non-empty.
+  openaiKey:    string | null
+  openaiModel:  string
+  mistralKey:   string | null
+  mistralModel: string
 }
 
 export type RunAnalysisOptions = {
@@ -311,9 +317,10 @@ async function processPost(
     mediaType: refresh.data.mediaType,
     caption:   post.caption,
     fallback: {
-      enabled:     ctx.openaiFallbackEnabled,
-      openaiKey:   ctx.openaiKey,
-      openaiModel: ctx.openaiModel,
+      openaiKey:    ctx.openaiKey,
+      openaiModel:  ctx.openaiModel,
+      mistralKey:   ctx.mistralKey,
+      mistralModel: ctx.mistralModel,
     },
   })
 

@@ -14,7 +14,9 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import {
+  DEFAULT_MISTRAL_MODEL,
   DEFAULT_MODEL,
+  DEFAULT_OPENAI_MODEL,
   runAnalysisBatch,
 } from '@/lib/content-analysis/run-analysis-batch'
 import { PROMPT_VERSION } from '@/lib/gemini/prompt'
@@ -64,6 +66,13 @@ export async function POST(_request: NextRequest) {
   const geminiModel  = process.env.GEMINI_MODEL ?? DEFAULT_MODEL
   const metaToken    = process.env.META_ACCESS_TOKEN
   const enabled      = process.env.CONTENT_ANALYSIS_ENABLED === 'true'
+  // Provider fallback chain (presence of key = enabled). Gemini → OpenAI
+  // → Mistral. Each subsequent hop is silently skipped when its key is
+  // absent so single-provider operators keep their old behavior.
+  const openaiKey    = process.env.OPENAI_API_KEY ?? null
+  const openaiModel  = process.env.OPENAI_CONTENT_ANALYSIS_MODEL ?? DEFAULT_OPENAI_MODEL
+  const mistralKey   = process.env.MISTRAL_API_KEY ?? null
+  const mistralModel = process.env.MISTRAL_MODEL ?? DEFAULT_MISTRAL_MODEL
 
   if (!enabled) {
     // Soft no-op: surfaced to the UI as a non-error so the sync flow can
@@ -110,15 +119,13 @@ export async function POST(_request: NextRequest) {
       selection: { kind: 'new-only' },
       limit,
       ctx: {
-        geminiKey:             geminiKey!,
+        geminiKey:    geminiKey!,
         geminiModel,
-        metaToken:             metaToken!,
-        // OpenAI fallback intentionally disabled on the UI route in this
-        // PR — the manual UI path stays Gemini-only until we expose the
-        // fallback in the route's response/automation_runs summary.
-        openaiKey:             null,
-        openaiModel:           '',
-        openaiFallbackEnabled: false,
+        metaToken:    metaToken!,
+        openaiKey,
+        openaiModel,
+        mistralKey,
+        mistralModel,
       },
     })
 
