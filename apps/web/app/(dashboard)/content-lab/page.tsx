@@ -60,6 +60,12 @@ export default async function ContentLabPage() {
               Creative patterns →
             </Link>
             <Link
+              href="/content-lab/ideas"
+              className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+            >
+              Idées à tester →
+            </Link>
+            <Link
               href="/content-lab/archive"
               className="inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
             >

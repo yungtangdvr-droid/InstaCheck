@@ -457,6 +457,44 @@ export type TCreativePatternExample = {
   rankInPattern:    number
 }
 
+// --- Pattern → Idea Generator (V1) ---
+// Read-only types: ideas are computed on-demand from v_creative_pattern_stats
+// + v_creative_pattern_examples. No table, no persistence, deterministic.
+
+export type TPatternIdeaAction = 'test' | 'adapt' | 'revisit'
+
+export type TPatternIdeaEvidence = {
+  sampleSize:           number
+  postsLast90d:         number
+  bayesAdjustedScore:   number
+  meanSavesMultiplier:  number | null
+  meanSharesMultiplier: number | null
+  shareAboveBaseline:   number
+  signalStrength:       TPatternSignalStrength
+}
+
+export type TPatternIdeaExample = {
+  postId:           string
+  permalink:        string | null
+  captionSnippet:   string | null
+  performanceScore: number
+  savesMultiplier:  number | null
+  sharesMultiplier: number | null
+}
+
+export type TPatternIdea = {
+  sourcePatternKey: string
+  headline:         string
+  suggestedAngle:   string
+  suggestedFormat:  string
+  suggestedTone:    string
+  whyItMightWork:   string
+  riskCaveat:       string
+  suggestedAction:  TPatternIdeaAction
+  evidence:         TPatternIdeaEvidence
+  examples:         TPatternIdeaExample[]
+}
+
 // --- n8n webhook payloads ---
 
 export type N8nSyncTriggerPayload = {
