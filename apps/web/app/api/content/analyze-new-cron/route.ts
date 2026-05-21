@@ -23,7 +23,9 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@creator-hub/types/supabase'
 import { logAutomationRun } from '@/features/automations/queries'
 import {
+  DEFAULT_MISTRAL_MODEL,
   DEFAULT_MODEL,
+  DEFAULT_OPENAI_MODEL,
   runAnalysisBatch,
 } from '@/lib/content-analysis/run-analysis-batch'
 import { PROMPT_VERSION } from '@/lib/gemini/prompt'
@@ -66,6 +68,12 @@ export async function POST(request: NextRequest) {
   const geminiModel  = process.env.GEMINI_MODEL ?? DEFAULT_MODEL
   const metaToken    = process.env.META_ACCESS_TOKEN
   const enabled      = process.env.CONTENT_ANALYSIS_ENABLED === 'true'
+  // Same provider fallback chain as the UI route. Presence of each key
+  // enables the corresponding hop.
+  const openaiKey    = process.env.OPENAI_API_KEY ?? null
+  const openaiModel  = process.env.OPENAI_CONTENT_ANALYSIS_MODEL ?? DEFAULT_OPENAI_MODEL
+  const mistralKey   = process.env.MISTRAL_API_KEY ?? null
+  const mistralModel = process.env.MISTRAL_MODEL ?? DEFAULT_MISTRAL_MODEL
 
   if (!enabled) {
     if (supabaseUrl && supabaseKey) {
@@ -126,12 +134,13 @@ export async function POST(request: NextRequest) {
       selection: { kind: 'new-only' },
       limit,
       ctx: {
-        geminiKey:             geminiKey!,
+        geminiKey:    geminiKey!,
         geminiModel,
-        metaToken:             metaToken!,
-        openaiKey:             null,
-        openaiModel:           '',
-        openaiFallbackEnabled: false,
+        metaToken:    metaToken!,
+        openaiKey,
+        openaiModel,
+        mistralKey,
+        mistralModel,
       },
     })
 

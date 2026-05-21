@@ -43,6 +43,7 @@ import type { Database } from '@creator-hub/types/supabase'
 import { PROMPT_VERSION } from '../../lib/gemini/prompt'
 import {
   ALL_REANALYZE_STATUSES,
+  DEFAULT_MISTRAL_MODEL,
   DEFAULT_MODEL,
   DEFAULT_OPENAI_MODEL,
   countCandidates,
@@ -118,6 +119,8 @@ function readEnvOrFail(): {
   openaiFallbackEnabled:   boolean
   openaiKey:               string | null
   openaiModel:             string
+  mistralKey:              string | null
+  mistralModel:            string
 } | { error: string } {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -126,13 +129,18 @@ function readEnvOrFail(): {
   const metaToken   = process.env.META_ACCESS_TOKEN
   const enabled     = process.env.CONTENT_ANALYSIS_ENABLED === 'true'
 
-  // OpenAI fallback is opt-in. When disabled (default), OPENAI_API_KEY is
-  // not required and the run path stays Gemini-only — behavior identical
-  // to before this change.
+  // OpenAI fallback for the CLI keeps its explicit opt-in flag so existing
+  // backfill runs stay Gemini-only by default. The UI/cron routes use the
+  // simpler "key present = enabled" rule.
   const openaiFallbackEnabled =
     process.env.CONTENT_ANALYSIS_OPENAI_FALLBACK_ENABLED === 'true'
   const openaiKeyRaw = process.env.OPENAI_API_KEY
   const openaiModel  = process.env.OPENAI_CONTENT_ANALYSIS_MODEL ?? DEFAULT_OPENAI_MODEL
+
+  // Mistral fallback: key presence is the only gate. Operators who don't
+  // want it simply leave MISTRAL_API_KEY unset.
+  const mistralKeyRaw = process.env.MISTRAL_API_KEY
+  const mistralModel  = process.env.MISTRAL_MODEL ?? DEFAULT_MISTRAL_MODEL
 
   const missing: string[] = []
   if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
@@ -152,6 +160,8 @@ function readEnvOrFail(): {
     openaiFallbackEnabled,
     openaiKey:   openaiFallbackEnabled ? openaiKeyRaw! : null,
     openaiModel,
+    mistralKey:  mistralKeyRaw ?? null,
+    mistralModel,
   }
 }
 
@@ -263,12 +273,13 @@ async function main() {
       limit,
       dryRun: cli.dryRun,
       ctx: {
-        geminiKey:             env.geminiKey,
-        geminiModel:           env.geminiModel,
-        metaToken:             env.metaToken,
-        openaiKey:             env.openaiKey,
-        openaiModel:           env.openaiModel,
-        openaiFallbackEnabled: env.openaiFallbackEnabled,
+        geminiKey:    env.geminiKey,
+        geminiModel:  env.geminiModel,
+        metaToken:    env.metaToken,
+        openaiKey:    env.openaiKey,
+        openaiModel:  env.openaiModel,
+        mistralKey:   env.mistralKey,
+        mistralModel: env.mistralModel,
       },
     })
   } catch (err) {
@@ -306,30 +317,35 @@ async function main() {
     }
   }
 
-  // Count outcomes that used the OpenAI fallback. The orchestrator
-  // surfaces the actual provider via the `provider=...` reason string on
-  // completed outcomes; failed/skipped outcomes carry their own reasons
-  // and do not contribute to the fallback tally.
-  const fallbackUsed = result.outcomes.filter(
+  // Count outcomes per fallback hop. The orchestrator surfaces the actual
+  // provider via the `provider=...` reason string on completed outcomes;
+  // failed/skipped outcomes carry their own reasons and do not contribute
+  // to the fallback tallies.
+  const openaiFallbackUsed = result.outcomes.filter(
     (o) => o.status === 'completed' && o.reason === 'provider=openai',
+  ).length
+  const mistralFallbackUsed = result.outcomes.filter(
+    (o) => o.status === 'completed' && o.reason === 'provider=mistral',
   ).length
 
   const summary = {
-    processed:            result.processed,
-    completed:            result.completed,
-    failed:               result.failed,
-    skipped:              result.skipped,
-    model:                result.model,
-    promptVer:            result.promptVersion,
-    currentPromptVersion: PROMPT_VERSION,
+    processed:             result.processed,
+    completed:             result.completed,
+    failed:                result.failed,
+    skipped:               result.skipped,
+    model:                 result.model,
+    promptVer:             result.promptVersion,
+    currentPromptVersion:  PROMPT_VERSION,
     limit,
-    reanalyze:            cli.reanalyze,
-    reanalyzeStatus:      cli.reanalyze ? cli.reanalyzeStatus : null,
-    outdatedOnly:         cli.outdatedOnly,
-    allTime:              cli.allTime,
-    durationMs:           result.durationMs,
+    reanalyze:             cli.reanalyze,
+    reanalyzeStatus:       cli.reanalyze ? cli.reanalyzeStatus : null,
+    outdatedOnly:          cli.outdatedOnly,
+    allTime:               cli.allTime,
+    durationMs:            result.durationMs,
     openaiFallbackEnabled: env.openaiFallbackEnabled,
-    openaiFallbackUsed:    fallbackUsed,
+    openaiFallbackUsed,
+    mistralFallbackEnabled: env.mistralKey !== null,
+    mistralFallbackUsed,
   }
   console.log(JSON.stringify({ ok: true, ...summary }, null, 2))
 
