@@ -2092,6 +2092,58 @@ export type Database = {
         }
         Relationships: []
       }
+      v_post_pattern_assignment: {
+        Row: {
+          format_pattern: string | null
+          humor_type: string | null
+          language: string | null
+          media_type: string | null
+          niche_level: string | null
+          pattern_key: string | null
+          pattern_key_lite: string | null
+          post_id: string | null
+          primary_theme: string | null
+          replication_potential: string | null
+        }
+        Relationships: []
+      }
+      v_creative_pattern_stats: {
+        Row: {
+          bayes_adjusted_score: number | null
+          bayes_shrinkage_k: number | null
+          format_pattern: string | null
+          humor_type: string | null
+          mean_performance_score: number | null
+          mean_saves_multiplier: number | null
+          mean_score_delta: number | null
+          mean_shares_multiplier: number | null
+          media_type: string | null
+          pattern_confidence: number | null
+          pattern_key: string | null
+          pattern_key_lite: string | null
+          posts_last_90d: number | null
+          primary_theme: string | null
+          recommendation: string | null
+          sample_size: number | null
+          share_above_baseline: number | null
+          signal_strength: string | null
+        }
+        Relationships: []
+      }
+      v_creative_pattern_examples: {
+        Row: {
+          media_type: string | null
+          pattern_key: string | null
+          performance_score: number | null
+          post_id: string | null
+          posted_at: string | null
+          rank_in_pattern: number | null
+          saves_multiplier: number | null
+          score_delta: number | null
+          shares_multiplier: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

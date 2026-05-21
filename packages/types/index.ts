@@ -413,6 +413,50 @@ export interface ContentRecommendation {
   }
 }
 
+// --- Creative Pattern Mining (V1) ---
+// Read-only types backed by supabase views from migration 0022:
+//   v_post_pattern_assignment  → TPatternAssignment
+//   v_creative_pattern_stats   → TCreativePattern
+//   v_creative_pattern_examples → TCreativePatternExample
+// No new table; the migration is purely additive.
+
+export type TPatternRecommendation = ContentRecommendationType
+export type TPatternSignalStrength = 'strong' | 'moderate' | 'weak'
+
+export type TCreativePattern = {
+  patternKey:           string
+  patternKeyLite:       string
+  mediaType:            string
+  primaryTheme:         string
+  formatPattern:        string
+  humorType:            string
+  sampleSize:           number
+  postsLast90d:         number
+  meanPerformanceScore: number
+  meanScoreDelta:       number
+  meanSavesMultiplier:  number | null
+  meanSharesMultiplier: number | null
+  shareAboveBaseline:   number
+  bayesAdjustedScore:   number
+  bayesShrinkageK:      number
+  patternConfidence:    number
+  signalStrength:       TPatternSignalStrength
+  // null when sample_size < 4 — surfaced by the UI as "insufficient evidence".
+  recommendation:       TPatternRecommendation | null
+}
+
+export type TCreativePatternExample = {
+  patternKey:       string
+  postId:           string
+  postedAt:         string | null
+  mediaType:        string | null
+  performanceScore: number
+  scoreDelta:       number | null
+  savesMultiplier:  number | null
+  sharesMultiplier: number | null
+  rankInPattern:    number
+}
+
 // --- n8n webhook payloads ---
 
 export type N8nSyncTriggerPayload = {
