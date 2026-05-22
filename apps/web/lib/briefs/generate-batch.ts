@@ -15,7 +15,6 @@ import {
 } from '@/lib/radar/taste-profile'
 
 import { BRIEF_PROMPT_VERSION } from './brief-prompt'
-import { detectBannedPhrases, formatBannedPhraseHits } from './banned-phrases'
 import {
   analyzeBriefWithFallback,
   type BriefFallbackResult,
@@ -29,6 +28,7 @@ import {
   pickBriefCandidates,
   type BriefCandidateSignal,
 } from './select-candidates'
+import { evaluateBriefQuality } from './quality-guard'
 
 type Supabase = SupabaseClient<Database>
 
@@ -194,8 +194,11 @@ async function processCandidate(
     }
   }
 
-  const hits = detectBannedPhrases(result.data as unknown as Record<string, unknown>)
-  const qualityError = hits.length > 0 ? formatBannedPhraseHits(hits) : null
+  const quality = evaluateBriefQuality(
+    result.data as unknown as Record<string, unknown>,
+    result.raw as Record<string, unknown> | null,
+  )
+  const qualityError = quality.passed ? null : quality.message
 
   const row = await insertBrief(supabase, buildCompletedInsert(cand, result, qualityError))
 
@@ -227,9 +230,13 @@ export async function runBriefBatch(
   const limit = Math.max(1, Math.min(options.limit, BRIEF_HARD_CAP))
   const start = Date.now()
 
-  const candidates = await pickBriefCandidates(supabase, { limit, explicitItemId })
+  const picked = await pickBriefCandidates(supabase, { limit, explicitItemId })
+  const candidates = picked.candidates
 
   if (candidates.length === 0) {
+    const reason: string = explicitItemId
+      ? (picked.explicitReason ?? 'missing_radar_item')
+      : 'no_eligible_candidates'
     return {
       outcomes:       [],
       candidates:     [],
@@ -239,9 +246,7 @@ export async function runBriefBatch(
       qualityGuard:   0,
       providerCounts: { gemini: 0, openai: 0 },
       promptVersion:  BRIEF_PROMPT_VERSION,
-      noOpReason:     explicitItemId
-        ? 'explicit_item_skipped_or_unknown'
-        : 'no_eligible_candidates',
+      noOpReason:     reason,
       durationMs:     Date.now() - start,
     }
   }

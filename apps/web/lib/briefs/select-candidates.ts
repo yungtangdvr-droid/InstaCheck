@@ -57,6 +57,20 @@ export interface PickBriefCandidatesArgs {
   explicitItemId?: string | null
 }
 
+export type ExplicitNoOpReason =
+  | 'missing_radar_item'
+  | 'unsafe_signal'
+  | 'already_has_recent_brief'
+  | 'missing_required_signal_text'
+
+export interface PickBriefResult {
+  candidates:     BriefCandidateSignal[]
+  // Only set when `explicitItemId` was provided and the item did not
+  // produce a candidate. Distinct, machine-readable reason that the UI
+  // can map to a French message — never `explicit_item_skipped_or_unknown`.
+  explicitReason: ExplicitNoOpReason | null
+}
+
 interface RawCandidateRow {
   id:                  string
   source_id:           string
@@ -102,13 +116,15 @@ function isUnsafeForBrief(score: ScoreRow | undefined): boolean {
 export async function pickBriefCandidates(
   supabase: SupabaseClient<Database>,
   args:     PickBriefCandidatesArgs,
-): Promise<BriefCandidateSignal[]> {
+): Promise<PickBriefResult> {
   const radar  = asRadarClient(supabase)
   const limit  = Math.max(1, Math.min(args.limit, 10))
 
   // Explicit single-item path used by the radar card "Generate brief"
-  // button. Bypasses bucket selection but still respects duplicate +
-  // unsafe filters.
+  // button. Bypasses the composite floor and the saved-vs-recent bucket
+  // logic, but still enforces safety and duplicate filters. Returns a
+  // typed reason instead of an empty array so the UI can show a
+  // human-readable message.
   if (args.explicitItemId) {
     const { data, error } = await radar
       .from('radar_items')
@@ -116,8 +132,25 @@ export async function pickBriefCandidates(
       .eq('id', args.explicitItemId)
       .maybeSingle()
     if (error) throw new Error(`brief_candidate_lookup_failed: ${error.message}`)
-    if (!data) return []
-    return finalize(supabase, [data], 1)
+    if (!data) return { candidates: [], explicitReason: 'missing_radar_item' }
+
+    const titleOk   = typeof data.title   === 'string' && data.title.trim().length   > 0
+    const urlOk     = typeof data.url     === 'string' && data.url.trim().length     > 0
+    const summaryOk = typeof data.summary === 'string' && data.summary.trim().length > 0
+    if (!titleOk || (!urlOk && !summaryOk)) {
+      return { candidates: [], explicitReason: 'missing_required_signal_text' }
+    }
+
+    // Reuse `finalize` but disable the composite floor for the explicit
+    // path. Safety + duplicate filters still apply.
+    const candidates = await finalize(supabase, [data], 1, { requireComposite: false })
+    if (candidates.length > 0) return { candidates, explicitReason: null }
+
+    // finalize() returned 0 → infer why (unsafe vs duplicate) by
+    // re-querying the score + brief lookup. This is cheap (already
+    // cached patterns in Supabase) and keeps the reason precise.
+    const reason = await diagnoseExplicitSkip(supabase, data.id)
+    return { candidates: [], explicitReason: reason }
   }
 
   // Bucket 1: saved within 30d, most recent first.
@@ -153,15 +186,51 @@ export async function pickBriefCandidates(
   for (const row of (recentRes.data ?? []) as RawCandidateRow[]) {
     if (!seen.has(row.id)) { merged.push(row); seen.add(row.id) }
   }
-  if (merged.length === 0) return []
+  if (merged.length === 0) return { candidates: [], explicitReason: null }
 
-  return finalize(supabase, merged, limit)
+  const candidates = await finalize(supabase, merged, limit, { requireComposite: true })
+  return { candidates, explicitReason: null }
+}
+
+async function diagnoseExplicitSkip(
+  supabase: SupabaseClient<Database>,
+  radarItemId: string,
+): Promise<ExplicitNoOpReason> {
+  const radar = asRadarClient(supabase)
+
+  const existing = await fetchActiveBriefsBySourceIds(
+    supabase,
+    [radarItemId],
+    DUPLICATE_WINDOW_HOURS,
+  )
+  if (existing.has(radarItemId)) return 'already_has_recent_brief'
+
+  const { data: score } = await radar
+    .from('radar_item_scores')
+    .select(
+      'radar_item_id,status,composite,primary_theme,cultural_references,controversy_level,misinformation_risk,tragedy_context,sensitivity_context',
+    )
+    .eq('radar_item_id', radarItemId)
+    .maybeSingle()
+  if (score && isUnsafeForBrief(score as ScoreRow)) return 'unsafe_signal'
+
+  // Default conservatively if we can't determine more precisely — the
+  // most common remaining cause at this point is signal text we cannot
+  // brief from. Never emit `explicit_item_skipped_or_unknown`.
+  return 'missing_required_signal_text'
+}
+
+interface FinalizeOptions {
+  // When false, allow non-saved items even if composite is missing or
+  // below MIN_RECENT_COMPOSITE — used by the explicit single-item path.
+  requireComposite: boolean
 }
 
 async function finalize(
   supabase: SupabaseClient<Database>,
   rows:     RawCandidateRow[],
   limit:    number,
+  opts:     FinalizeOptions = { requireComposite: true },
 ): Promise<BriefCandidateSignal[]> {
   const radar = asRadarClient(supabase)
   const ids   = rows.map((r) => r.id)
@@ -194,7 +263,7 @@ async function finalize(
     if (existingBriefs.has(r.id)) continue
     const score = scoresById.get(r.id)
     if (isUnsafeForBrief(score)) continue
-    if (r.decision !== 'saved') {
+    if (r.decision !== 'saved' && opts.requireComposite) {
       if (!score || score.status !== 'completed') continue
       const c = score.composite
       if (c == null || c < MIN_RECENT_COMPOSITE) continue

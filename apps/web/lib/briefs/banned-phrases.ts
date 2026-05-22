@@ -1,14 +1,20 @@
-// Quality guard for Meme Briefs.
+// Quality guard for Meme Briefs — banned phrase detection.
 //
 // Flags briefs that drift into the corporate / growth-hacker register.
 // When triggered, the brief is still persisted (so the operator can
 // inspect what the model produced) but its `error_message` is set so
 // downstream consumers can treat it as a low-quality output.
+//
+// v1.1: expanded banned vocabulary (genre labels like
+// "luxury absurdity", strategy verbs like "make a meme about") and
+// integrated into the broader `evaluateBriefQuality` in `quality-guard.ts`.
 
 const BANNED_PHRASES: readonly string[] = [
+  // generic growth-hacker register
   'create relatable content',
   'engage your audience',
   'engage with your audience',
+  'engagement with your audience',
   'leverage this trend',
   'leverage the trend',
   'try a similar format',
@@ -17,13 +23,34 @@ const BANNED_PHRASES: readonly string[] = [
   'authentic content',
   'resonates with audiences',
   'resonates with your audience',
+  'resonate with your audience',
   'drive engagement',
   'boost engagement',
   'reach a wider audience',
   'tap into this trend',
   'go viral',
   'maximize reach',
+  'maximise reach',
   'optimize for engagement',
+  'optimise for engagement',
+  'relatable content',
+  'content strategy',
+  // strategy verbs / non-meme directives
+  'make a meme about',
+  'create a meme about',
+  'create content around',
+  'create content about',
+  'post about',
+  'do a post about',
+  // generic genre labels
+  'luxury absurdity',
+  'political satire',
+  'everyday humor',
+  'everyday humour',
+  'modern relatable humor',
+  'modern relatable humour',
+  'relatable humor',
+  'relatable humour',
 ] as const
 
 const BRIEF_TEXT_FIELDS = [

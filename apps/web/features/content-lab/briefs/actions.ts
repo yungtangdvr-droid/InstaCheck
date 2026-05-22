@@ -43,7 +43,7 @@ export async function setBriefStatus(
 // brief generation so RLS doesn't bite mid-batch.
 export async function generateBriefForRadarItem(
   radarItemId: string,
-): Promise<ActionResult<{ briefId: string | null }>> {
+): Promise<ActionResult<{ briefId: string | null; status?: string }>> {
   if (!radarItemId) return { data: null, error: 'missing_radar_item_id' }
 
   const authClient = await createServerSupabaseClient()
@@ -54,16 +54,25 @@ export async function generateBriefForRadarItem(
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const geminiKey   = process.env.GEMINI_API_KEY
   const geminiModel = process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL
-  const openaiFallbackEnabled =
-    process.env.CONTENT_ANALYSIS_OPENAI_FALLBACK_ENABLED === 'true'
   const openaiKeyRaw = process.env.OPENAI_API_KEY
   const openaiModel  = process.env.OPENAI_CONTENT_ANALYSIS_MODEL ?? DEFAULT_OPENAI_MODEL
+
+  // Hotfix v1.1: enable OpenAI fallback automatically whenever an
+  // OPENAI_API_KEY is present. The legacy
+  // `CONTENT_ANALYSIS_OPENAI_FALLBACK_ENABLED=true` env still works
+  // (and we honor it when explicitly set), but we no longer require it
+  // for the UI path — operator feedback was that Gemini "high demand"
+  // errors were leaking to the UI even when an OpenAI key existed.
+  const explicitToggle = process.env.CONTENT_ANALYSIS_OPENAI_FALLBACK_ENABLED
+  const openaiFallbackEnabled =
+    explicitToggle === 'false'
+      ? false
+      : (explicitToggle === 'true' || (typeof openaiKeyRaw === 'string' && openaiKeyRaw.length > 0))
 
   const missing: string[] = []
   if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL')
   if (!supabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
   if (!geminiKey)   missing.push('GEMINI_API_KEY')
-  if (openaiFallbackEnabled && !openaiKeyRaw) missing.push('OPENAI_API_KEY')
   if (missing.length > 0) return { data: null, error: `missing_env:${missing.join(',')}` }
 
   const supabase = createClient<Database>(supabaseUrl!, supabaseKey!)
@@ -85,12 +94,19 @@ export async function generateBriefForRadarItem(
     revalidatePath('/content-lab/briefs')
     const first = result.outcomes[0]
     if (!first) {
-      return { data: null, error: result.noOpReason ?? 'no_outcome' }
+      return { data: null, error: result.noOpReason ?? 'missing_radar_item' }
     }
     if (first.status === 'failed') {
-      return { data: null, error: first.error ?? 'generation_failed' }
+      // Stitch provider attempts but never leak raw secrets. The
+      // analyze-* helpers truncate their error payloads already; we
+      // truncate again defensively here.
+      const detail = (first.error ?? 'provider_error').slice(0, 240)
+      return { data: null, error: `provider_error:${detail}` }
     }
-    return { data: { briefId: first.briefId }, error: null }
+    return {
+      data:  { briefId: first.briefId, status: first.status },
+      error: null,
+    }
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'generation_failed' }
   }
