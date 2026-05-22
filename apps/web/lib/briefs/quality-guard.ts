@@ -1,4 +1,4 @@
-// Meme Brief — quality guard (v1.1).
+// Meme Brief — quality guard (v1.2).
 //
 // Combines banned-phrase detection with a positive "meme-native
 // minimum" check. The result is informational: the brief is still
@@ -6,11 +6,11 @@
 // `error_message` carries the verdict so the UI can render a
 // "Quality guard" badge and skip surfacing the brief as ready-to-ship.
 //
-// Why positive checks: v1 only filtered the corporate register out.
-// v1.1 adds floors — a visual template must be named, an observable
-// behavior must be present, the meme compression must not be abstract
-// strategy talk. These are coarse heuristics, not a verdict; they fire
-// only when the model clearly drifted off the meme rails.
+// v1.2: `observable_behavior` is now a top-level field. The guard
+// reads it there first, falling back to `meme_grammar.observable_behavior`
+// for backward compatibility with v1.1 outputs that may still be in
+// flight. Same applies to the failure-mode field (`why_it_might_fail`
+// top-level, `meme_grammar.why_might_fail` legacy).
 
 import { detectBannedPhrases, formatBannedPhraseHits } from './banned-phrases'
 
@@ -188,9 +188,10 @@ export function evaluateBriefQuality(
     }
   }
 
-  // meme_grammar — look at the validated path first (data.meme_grammar
-  // populated by Zod) and fall back to raw if needed. Missing
-  // observable_behavior is the strongest "this is not a meme" signal.
+  // meme_grammar — diagnosis object (v1.2:
+  // content/form/stance/template_type/implied_viewer/remixability/why_now).
+  // Used for the missing-diagnosis flag only; observable behavior is
+  // now a top-level field.
   const grammar =
     (data.meme_grammar && typeof data.meme_grammar === 'object'
       ? (data.meme_grammar as Record<string, unknown>)
@@ -198,20 +199,24 @@ export function evaluateBriefQuality(
         ? (raw.meme_grammar as Record<string, unknown>)
         : null)
 
-  if (grammar) {
-    const observable = lower(grammar.observable_behavior)
-    if (observable.length === 0 || observable.split(/\s+/).filter(Boolean).length < 3) {
-      flags.push({
-        code:    'no_observable_behavior',
-        field:   'meme_grammar.observable_behavior',
-        message: 'no concrete observable behavior named',
-      })
-    }
-  } else {
+  if (!grammar) {
     flags.push({
       code:    'meme_grammar_missing',
       field:   'meme_grammar',
       message: 'meme_grammar diagnosis missing',
+    })
+  }
+
+  // observable_behavior — load-bearing in v1.2. Read top-level first,
+  // then fall back to `meme_grammar.observable_behavior` for v1.1 shape.
+  const observableTop = lower(data.observable_behavior)
+  const observableLegacy = grammar ? lower(grammar.observable_behavior) : ''
+  const observable = observableTop || observableLegacy
+  if (observable.length === 0 || observable.split(/\s+/).filter(Boolean).length < 3) {
+    flags.push({
+      code:    'no_observable_behavior',
+      field:   'observable_behavior',
+      message: 'no concrete observable behavior named',
     })
   }
 

@@ -1,4 +1,4 @@
-// Offline QA for the Meme Brief V1.1 hotfix.
+// Offline QA for the Meme Brief V1.2 prompt/schema patch.
 //
 // Smoke-tests the pieces that don't need Supabase or AI providers:
 //   1. quality guard rejects generic/strategy outputs and accepts a
@@ -25,40 +25,44 @@ function assert(name: string, pass: boolean, detail?: string) {
 // ---------- 1. Quality guard ----------
 
 const GENERIC_BRIEF = {
-  cultural_tension:   'People relate to this trend.',
-  underlying_feeling: 'A feeling of connection.',
-  contradiction:      'Yes and no.',
-  meme_compression:   'Make a meme about modern life.',
-  visual_direction:   'A nice image with a caption.',
-  caption_seed:       'Engage your audience with authentic content',
-  why_it_is_memeable: 'It is relatable and engaging for the audience.',
+  cultural_tension:    'People relate to this trend.',
+  underlying_feeling:  'A feeling of connection.',
+  contradiction:       'Yes and no.',
+  observable_behavior: 'people',
+  meme_compression:    'Make a meme about modern life.',
+  visual_direction:    'A nice image with a caption.',
+  caption_seed:        'Engage your audience with authentic content',
+  why_it_is_memeable:  'It is relatable and engaging for the audience.',
+  why_it_might_fail:   'It might not engage.',
   meme_grammar: {
-    template_type:       'meme',
-    stance:              'observational',
-    observable_behavior: 'people',
-    implied_viewer:      'everyone',
-    why_now:             'now',
-    remixability_note:   'can remix',
-    why_might_fail:      'might fail',
+    content:        'modern life',
+    form:           'meme',
+    stance:         'observational',
+    template_type:  'meme',
+    implied_viewer: 'everyone',
+    remixability:   'can remix',
+    why_now:        'now',
   },
 }
 
 const MEMEY_BRIEF = {
-  cultural_tension:   'every centrist tries to cosplay as local and anti-system while being pure system',
-  underlying_feeling: 'fatigue of watching ambition rebrand itself as authenticity',
-  contradiction:      'announcing a presidential campaign as if it were a spiritual retreat',
-  meme_compression:   'moi après avoir changé ma localisation linkedin en aveyron',
-  visual_direction:   'fake LinkedIn update screenshot, countryside selfie thumbnail, overly sincere caption about returning to what matters',
-  caption_seed:       'le revival post-Matignon est très Aveyron core',
-  why_it_is_memeable: 'everyone has seen a friend rebrand a career move as a personal transformation; the politician version is the same gesture at a national scale',
+  cultural_tension:    'every centrist tries to cosplay as local and anti-system while being pure system',
+  underlying_feeling:  'fatigue of watching ambition rebrand itself as authenticity',
+  contradiction:       'announcing a presidential campaign as if it were a spiritual retreat',
+  observable_behavior: 'rebranding a career move as a spiritual relocation by changing your LinkedIn location',
+  meme_compression:    'moi après avoir changé ma localisation linkedin en aveyron',
+  visual_direction:    'fake LinkedIn update screenshot, countryside selfie thumbnail, overly sincere caption about returning to what matters',
+  caption_seed:        'le revival post-Matignon est très Aveyron core',
+  why_it_is_memeable:  'everyone has seen a friend rebrand a career move as a personal transformation; the politician version is the same gesture at a national scale',
+  why_it_might_fail:   'if the audience reads it as partisan rather than behavioral',
   meme_grammar: {
-    template_type:       'fake LinkedIn screenshot / POV post-resignation',
-    stance:              'dry disbelief, not partisan outrage',
-    observable_behavior: 'rebranding a career move as a spiritual relocation',
-    implied_viewer:      'online viewer fluent in LinkedIn cringe',
-    why_now:             'fresh announcement, narrative still wet',
-    remixability_note:   'format scales to any career-move-as-rebirth scenario',
-    why_might_fail:      'if the audience reads it as partisan rather than behavioral',
+    content:        'political rebranding as rural authenticity',
+    form:           'fake LinkedIn / location update',
+    stance:         'dry disbelief, not partisan outrage',
+    template_type:  'fake LinkedIn screenshot / POV post-resignation',
+    implied_viewer: 'online viewer fluent in LinkedIn cringe',
+    remixability:   'format scales to any career-move-as-rebirth scenario',
+    why_now:        'fresh announcement, narrative still wet',
   },
 }
 
