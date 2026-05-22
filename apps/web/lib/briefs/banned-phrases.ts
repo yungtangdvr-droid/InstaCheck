@@ -57,10 +57,12 @@ const BRIEF_TEXT_FIELDS = [
   'cultural_tension',
   'underlying_feeling',
   'contradiction',
+  'observable_behavior',
   'meme_compression',
   'visual_direction',
   'caption_seed',
   'why_it_is_memeable',
+  'why_it_might_fail',
   'risk_or_timing_caveat',
 ] as const
 
