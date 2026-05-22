@@ -58,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'À tester',    href: '/content-lab/ideas' },
       { label: 'Patterns',    href: '/content-lab/patterns' },
       { label: 'Meme Radar',  href: '/content-lab/radar' },
+      { label: 'Briefs',      href: '/content-lab/briefs' },
     ],
   },
   {

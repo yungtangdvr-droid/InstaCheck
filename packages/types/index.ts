@@ -993,3 +993,7 @@ export * from './radar'
 // --- Creative Taxonomy V1 (foundation, read-only) ---
 
 export * from './taxonomy'
+
+// --- Meme Briefs (Zeitgeist Signals V1) ---
+
+export * from './briefs'

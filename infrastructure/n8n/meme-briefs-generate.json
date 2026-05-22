@@ -1,0 +1,72 @@
+{
+  "name": "meme-briefs-generate",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON 08:00 UTC daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREATOR_HUB_URL }}/api/content-lab/briefs/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization",  "value": "=Bearer {{ $env.N8N_API_KEY }}" },
+            { "name": "Content-Type",   "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"limit\": 5\n}",
+        "options": {
+          "timeout": 300000,
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "http-generate-briefs",
+      "name": "POST /api/content-lab/briefs/generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "CRON 08:00 UTC daily": {
+      "main": [[{ "node": "POST /api/content-lab/briefs/generate", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "creator-hub",
+    "notes": "Daily Meme Brief batch generation. Calls POST /api/content-lab/briefs/generate which selects up to 5 radar items (preferring decision='saved', filling with recent high-composite items), runs the Gemini → OpenAI brief pipeline, and persists results to meme_briefs. Reuses N8N_API_KEY shared with the other automation routes. Import-only and remains INACTIVE until enabled manually in n8n — Zeitgeist Signals V1 ships as a manual feature; this workflow is provided so the operator can opt into a daily cadence later without code changes."
+  },
+  "tags": [
+    { "name": "content-lab", "createdAt": "2026-05-22" },
+    { "name": "briefs",      "createdAt": "2026-05-22" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-22T00:00:00.000Z",
+  "versionId": "1",
+  "active": false
+}
