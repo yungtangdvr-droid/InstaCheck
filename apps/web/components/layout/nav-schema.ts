@@ -50,13 +50,14 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'content-lab',
     label: 'Content Lab',
     icon: FlaskConical,
+    // Only daily decision surfaces here. Back-office routes
+    // (taxonomy, archive, archive/review, archive/coverage, themes index)
+    // stay reachable by URL and are linked from the cockpit footer.
     items: [
       { label: 'Content Lab', href: '/content-lab' },
-      { label: 'Radar', href: '/content-lab/radar' },
-      { label: 'Themes', href: '/content-lab/themes' },
-      { label: 'Taxonomy', href: '/content-lab/taxonomy' },
-      { label: 'Archive', href: '/content-lab/archive' },
-      { label: 'Archive Review', href: '/content-lab/archive/review' },
+      { label: 'À tester',    href: '/content-lab/ideas' },
+      { label: 'Patterns',    href: '/content-lab/patterns' },
+      { label: 'Meme Radar',  href: '/content-lab/radar' },
     ],
   },
   {
