@@ -15,6 +15,29 @@ interface Props {
   briefId:     string | null
 }
 
+// Map machine-readable error codes returned by `generateBriefForRadarItem`
+// to short French messages. Falls back to the raw code when unknown so
+// debugging stays possible. Never display `explicit_item_skipped_or_unknown`
+// — that code no longer exists; older codes are kept here defensively.
+function formatGenerateError(raw: string): string {
+  const head = raw.split(':')[0] ?? raw
+  switch (head) {
+    case 'unauthorized':                    return 'Session expirée · reconnecte-toi'
+    case 'missing_radar_item_id':           return 'Item radar manquant'
+    case 'missing_radar_item':              return 'Item radar introuvable'
+    case 'missing_required_signal_text':    return 'Signal incomplet · titre + résumé/url manquants'
+    case 'unsafe_signal':                   return 'Signal non éligible · sujet sensible (drame, controverse, désinformation)'
+    case 'already_has_recent_brief':        return 'Un brief récent existe déjà pour ce signal'
+    case 'no_eligible_candidates':          return 'Aucun candidat éligible'
+    case 'missing_env':                     return 'Configuration serveur incomplète'
+    case 'provider_error':                  return 'Échec génération · Gemini et OpenAI ont échoué'
+    case 'generation_failed':               return 'Échec génération'
+    // legacy code, should no longer appear after v1.1 hotfix.
+    case 'explicit_item_skipped_or_unknown':return 'Génération impossible · raison inconnue'
+    default:                                return raw.slice(0, 160)
+  }
+}
+
 export function RadarBriefButton({ radarItemId, briefId }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -37,7 +60,7 @@ export function RadarBriefButton({ radarItemId, briefId }: Props) {
     startTransition(async () => {
       const result = await generateBriefForRadarItem(radarItemId)
       if (result.error) {
-        setError(result.error)
+        setError(formatGenerateError(result.error))
         return
       }
       if (result.data?.briefId) {
