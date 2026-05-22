@@ -113,6 +113,57 @@ function toParisDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' })
 }
 
+// Conservative previous-period totals for KPI deltas. Returns null when the
+// previous window has fewer than MIN_SAMPLE posts so the UI can hide the delta
+// rather than render a noisy ratio. Same bucket basis as getReachSeries:
+// posts.posted_at in [now − 2·period, now − period).
+const PREV_PERIOD_MIN_SAMPLE = 3
+
+export type TPeriodTotals = {
+  postsCount: number
+  reach:      number
+  saves:      number
+  shares:     number
+}
+
+export async function getPreviousPeriodTotals(
+  supabase: Supabase,
+  period: TAnalyticsPeriod,
+): Promise<ActionResult<TPeriodTotals | null>> {
+  const now = new Date()
+  const start = new Date(now); start.setDate(now.getDate() - period * 2)
+  const end   = new Date(now); end.setDate(now.getDate() - period)
+
+  const { data: posts, error: postsError } = await supabase
+    .from('posts')
+    .select('id')
+    .gte('posted_at', start.toISOString())
+    .lt('posted_at', end.toISOString())
+
+  if (postsError) return { data: null, error: postsError.message }
+  const postsCount = posts?.length ?? 0
+  if (postsCount < PREV_PERIOD_MIN_SAMPLE) {
+    return { data: null, error: null }
+  }
+
+  const ids = posts!.map(p => p.id)
+  const { data: metrics, error: metricsError } = await supabase
+    .from('post_metrics_daily')
+    .select('reach, saves, shares')
+    .in('post_id', ids)
+
+  if (metricsError) return { data: null, error: metricsError.message }
+
+  let reach = 0, saves = 0, shares = 0
+  for (const m of metrics ?? []) {
+    reach  += m.reach  ?? 0
+    saves  += m.saves  ?? 0
+    shares += m.shares ?? 0
+  }
+
+  return { data: { postsCount, reach, saves, shares }, error: null }
+}
+
 /**
  * Aggregate reach/saves/shares grouped by media_type for posts in the period.
  * Reads mart_format_performance (v_mart_format_performance).
