@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { setDecision } from './actions'
 import { humanizeFormat, type RadarFeedRow, type TRadarView } from './get-radar-feed'
 import { SensitivityChips } from './SensitivityChips'
+import { RadarBriefButton } from '@/features/content-lab/briefs/RadarBriefButton'
 
 type RadarItemCardProps = {
   item: RadarFeedRow
@@ -172,6 +173,7 @@ export function RadarItemCard({ item, view }: RadarItemCardProps) {
             <ExternalLink />
             Open source
           </a>
+          <RadarBriefButton radarItemId={item.id} briefId={item.briefId} />
           <Button
             variant="ghost"
             size="sm"

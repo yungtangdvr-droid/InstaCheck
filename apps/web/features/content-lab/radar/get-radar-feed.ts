@@ -8,6 +8,7 @@ import {
   type RadarItemScoreRow,
   type RadarSourceRow,
 } from '@/lib/radar/persist'
+import { fetchActiveBriefsBySourceIds } from '@/lib/briefs/persist'
 
 // Window keys exposed on the URL. Mapped to ISO `since` timestamps when the
 // page resolves searchParams. Kept narrow so any new value forces an update
@@ -114,6 +115,8 @@ export type RadarFeedRow = {
   provider:           string | null
   model:              string | null
   promptVersion:      string | null
+
+  briefId:            string | null
 }
 
 export type RadarFeedKpis = {
@@ -266,6 +269,17 @@ export async function getRadarFeed(
     }
   }
 
+  // Brief lookup — soft-fails to empty so a briefs-table read error
+  // cannot break the radar feed.
+  let briefsBySource = new Map<string, { id: string }>()
+  if (ids.length > 0) {
+    try {
+      briefsBySource = await fetchActiveBriefsBySourceIds(supabase, ids)
+    } catch {
+      briefsBySource = new Map()
+    }
+  }
+
   const rows: RadarFeedRow[] = items.map((item) => {
     const score = scoresById.get(item.id) ?? null
     const composite = score?.composite ?? null
@@ -318,6 +332,8 @@ export async function getRadarFeed(
       provider:      score?.provider       ?? null,
       model:         score?.model          ?? null,
       promptVersion: score?.prompt_version ?? null,
+
+      briefId:       briefsBySource.get(item.id)?.id ?? null,
     }
   })
 
